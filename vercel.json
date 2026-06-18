@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "routes": [
+    { "src": "/api/analyze", "dest": "/api/analyze.py" },
+    { "src": "/api/health", "dest": "/api/health.py" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+}
