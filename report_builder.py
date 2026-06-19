@@ -48,29 +48,75 @@ def _infer_summary(tb: pd.DataFrame) -> Dict[str, float]:
     summary = {"sales": 0.0, "cost": 0.0, "expense": 0.0, "operating_profit": 0.0, "assets": 0.0, "liabilities": 0.0, "equity": 0.0}
     if tb.empty:
         return summary
-    amount_col = _detect_amount_col(tb)
-    if amount_col is None:
-        return summary
+
+    # ACB0021 합계잔액시산표 구조 파악:
+    # 컬럼 순서: 차변잔액 | 차변합계 | 계정과목 | 대변합계 | 대변잔액
+    # 매출액(수익계정)은 대변에 기록 → 대변잔액(col 4) 또는 대변합계(col 3) 사용
+    # 비용계정은 차변에 기록 → 차변잔액(col 0) 사용
+
+    def clean(v):
+        return ''.join(str(v).split())  # 공백 완전 제거
+
     for _, row in tb.iterrows():
-        line = ' '.join(str(x) for x in row.tolist() if not pd.isna(x))
-        amount = _num(row.get(amount_col, 0))
-        amount_abs = abs(amount)
-        if any(k in line for k in ['수출매출', '특판매출', '상품매출', '제품매출', '매출액']):
-            summary['sales'] += amount_abs
-        elif any(k in line for k in ['매출원가', '상품매출원가', '제품매출원가']):
-            summary['cost'] += amount_abs
-        elif any(k in line for k in ['급여', '복리후생비', '세금과공과', '지급수수료', '차량유지비', '지급임차료', '감가상각비', '여비교통비']):
-            summary['expense'] += amount_abs
-        if '영업이익' in line:
-            summary['operating_profit'] = amount
-        if '자산총계' in line or '자산 합계' in line:
-            summary['assets'] = amount_abs
-        if '부채총계' in line or '부채 합계' in line:
-            summary['liabilities'] = amount_abs
-        if '자본총계' in line or '자본 합계' in line:
-            summary['equity'] = amount_abs
-    if summary['operating_profit'] == 0 and summary['sales']:
+        vals = row.tolist()
+        # 계정과목명 (공백 제거)
+        name = ''
+        for v in vals:
+            s = clean(v)
+            if s and not s.replace(',','').replace('.','').replace('-','').replace('△','').replace('▲','').lstrip('-').isnumeric():
+                name = s
+                break
+
+        # 숫자 추출 (모든 컬럼)
+        nums = [_num(v) for v in vals]
+
+        # 대변잔액 (col 4), 대변합계 (col 3), 차변잔액 (col 0)
+        debit_bal  = nums[0] if len(nums) > 0 else 0   # 차변잔액
+        credit_bal = nums[4] if len(nums) > 4 else 0   # 대변잔액
+        credit_sum = nums[3] if len(nums) > 3 else 0   # 대변합계
+
+        # 매출액: <매출액> 합계 행만 사용 (세부 항목 중복 방지)
+        if name in ['<매출액>', '매출액'] or name == '<매출액>':
+            if credit_bal > 0:
+                summary['sales'] = credit_bal
+            elif credit_sum > 0:
+                summary['sales'] = credit_sum
+        # <매출액> 합계가 없을 경우 세부 항목 합산
+        elif any(k in name for k in ['40100', '40200', '40700', '40800']) and summary['sales'] == 0:
+            if credit_bal > 0:
+                summary['sales'] += credit_bal
+            elif credit_sum > 0:
+                summary['sales'] += credit_sum
+
+        # 매출원가: <매출원가> 합계 행 우선, 없으면 세부 항목
+        elif any(k in name for k in ['매출원가', '상품매출원가', '제품매출원가']):
+            if '<' in name or '>' in name:  # 합계 행
+                if debit_bal > 0:
+                    summary['cost'] = debit_bal
+            elif summary['cost'] == 0:  # 합계 행 없을 때만 세부 항목
+                if debit_bal > 0:
+                    summary['cost'] += debit_bal
+        elif any(k in name for k in ['45100', '45200']) and summary['cost'] == 0:
+            if debit_bal > 0:
+                summary['cost'] += debit_bal
+
+        # 판관비 (차변잔액 사용)
+        elif any(k in name for k in ['급여', '복리후생비', '세금과공과', '지급수수료', '차량유지비', '지급임차료', '감가상각비', '여비교통비', '접대비', '통신비', '보험료', '운반비', '소모품비']):
+            if debit_bal > 0:
+                summary['expense'] += debit_bal
+
+        # 자산/부채/자본 (합계 행)
+        if any(k in name for k in ['자산총계', '자산합계']):
+            summary['assets'] = max(debit_bal, credit_bal)
+        if any(k in name for k in ['부채총계', '부채합계']):
+            summary['liabilities'] = max(debit_bal, credit_bal)
+        if any(k in name for k in ['자본총계', '자본합계']):
+            summary['equity'] = max(debit_bal, credit_bal)
+
+    # 영업이익 계산
+    if summary['sales'] > 0:
         summary['operating_profit'] = summary['sales'] - summary['cost'] - summary['expense']
+
     return summary
 
 
