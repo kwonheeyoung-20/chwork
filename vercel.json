@@ -1,9 +1,20 @@
 {
   "version": 2,
+  "builds": [
+    {
+      "src": "api/health.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "50mb" }
+    },
+    {
+      "src": "api/analyze.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "50mb" }
+    }
+  ],
   "routes": [
-    { "src": "/api/analyze", "dest": "/api/analyze.py" },
-    { "src": "/api/health", "dest": "/api/health.py" },
+    { "src": "/api/health", "dest": "api/health.py" },
+    { "src": "/api/analyze", "dest": "api/analyze.py" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
-
