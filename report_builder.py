@@ -100,8 +100,11 @@ def _infer_summary(tb: pd.DataFrame) -> Dict[str, float]:
             if debit_bal > 0:
                 summary['cost'] += debit_bal
 
-        # 판관비 (차변잔액 사용)
-        elif any(k in name for k in ['급여', '복리후생비', '세금과공과', '지급수수료', '차량유지비', '지급임차료', '감가상각비', '여비교통비', '접대비', '통신비', '보험료', '운반비', '소모품비']):
+        # 판관비: <판매관리비> 합계 행 우선 사용
+        elif any(k in name for k in ['판매관리비', '판관비']):
+            if ('<' in name or '>' in name) and debit_bal > 0:
+                summary['expense'] = debit_bal
+        elif any(k in name for k in ['급여', '복리후생비', '세금과공과', '지급수수료', '차량유지비', '지급임차료', '감가상각비', '여비교통비', '접대비', '통신비', '보험료', '운반비', '소모품비', '퇴직급여', '수도광열비', '전력비', '수출제비용']) and summary['expense'] == 0:
             if debit_bal > 0:
                 summary['expense'] += debit_bal
 
