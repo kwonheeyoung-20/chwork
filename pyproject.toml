@@ -1,2 +1,6 @@
+[project]
+name = "chwork"
+version = "1.0.0"
+
 [tool.vercel]
 entrypoint = "api/analyze:handler"
