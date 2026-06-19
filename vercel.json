@@ -3,11 +3,13 @@
   "builds": [
     {
       "src": "api/health.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "50mb" }
     },
     {
       "src": "api/analyze.py",
-      "use": "@vercel/python"
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "50mb" }
     },
     {
       "src": "**/*.html",
