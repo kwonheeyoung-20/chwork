@@ -1,198 +1,129 @@
-/* ───────── hr.js ───────── */
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>인사관리 | 창현 Dashboard</title>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/hr.css">
+</head>
+<body>
+<div class="layout">
 
-const $ = id => document.getElementById(id);
-const fmt = n => (n == null || isNaN(n)) ? '-' : Math.round(n).toLocaleString('ko-KR');
+  <aside class="sidebar">
+    <div class="brand">창현 Dashboard</div>
+    <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
+    <nav class="nav">
+      <a href="index.html">대시보드</a>
+      <a href="corporate-profit.html">기업손익분석</a>
+      <a class="active" href="hr.html">인사/급여관리</a>
+      <a href="#">계약/증빙관리</a>
+      <a href="#">월간 보고서</a>
+      <a href="#">설정</a>
+    </nav>
+  </aside>
 
-function apiBase() { return window.location.origin; }
-function hrPassword() { return sessionStorage.getItem('chwork_hr_pw') || ''; }
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1>인사관리 — 직원마스터</h1>
+        <p>급여관리·퇴직연금 공통 직원 기준정보를 관리합니다.</p>
+      </div>
+      <div class="pill">Vercel 배포</div>
+    </header>
 
-/* ── 로그인 ── */
-async function hrLogin() {
-  const pw = $('pwInput').value;
-  $('loginMsg').textContent = '';
-  try {
-    const res = await fetch(`${apiBase()}/api/hr_login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      sessionStorage.setItem('chwork_hr_pw', pw);
-      showMain();
-    } else {
-      $('loginMsg').textContent = '비밀번호가 올바르지 않습니다.';
-    }
-  } catch (e) {
-    $('loginMsg').textContent = '서버 연결에 실패했습니다.';
-  }
-}
+    <div class="content">
 
-function showMain() {
-  $('loginPanel').style.display = 'none';
-  $('hrMain').style.display = 'flex';
-  loadEmployees();
-}
+      <!-- 로그인 게이트 -->
+      <section id="loginPanel" class="panel" style="max-width:360px;">
+        <h2>담당자 로그인</h2>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <input id="pwInput" type="password" placeholder="비밀번호" class="hr-input" autocomplete="current-password">
+          <button class="primary" onclick="hrLogin()">로그인</button>
+          <div id="loginMsg" class="hr-msg"></div>
+        </div>
+      </section>
 
-/* 페이지 로드시 이미 로그인된 세션이면 바로 목록 표시 */
-window.addEventListener('DOMContentLoaded', () => {
-  if (hrPassword()) showMain();
-  $('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') hrLogin(); });
-});
+      <!-- 인사 메인 화면 (로그인 후 표시) -->
+      <div id="hrMain" style="display:none; flex-direction:column; gap:20px;">
 
-/* ── 직원 목록 ── */
-async function loadEmployees() {
-  const showAll = $('showAllToggle').checked;
-  const tbody = $('empTbody');
-  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+        <section class="panel">
+          <div class="panel-header">
+            <h2>직원 목록 <span id="empCount" class="hr-count"></span></h2>
+            <div style="display:flex; gap:8px;">
+              <label class="hr-checkbox">
+                <input type="checkbox" id="showAllToggle" onchange="loadEmployees()">
+                퇴사자 포함
+              </label>
+              <button class="primary" onclick="openAddModal()">+ 직원 추가</button>
+            </div>
+          </div>
 
-  try {
-    const res = await fetch(`${apiBase()}/api/hr_employees${showAll ? '?all=1' : ''}`, {
-      headers: { 'X-HR-Password': hrPassword() },
-    });
-    if (res.status === 401) {
-      sessionStorage.removeItem('chwork_hr_pw');
-      $('loginPanel').style.display = 'block';
-      $('hrMain').style.display = 'none';
-      $('loginMsg').textContent = '세션이 만료되었습니다. 다시 로그인해주세요.';
-      return;
-    }
-    const data = await res.json();
-    renderEmployees(data.employees || []);
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
-  }
-}
+          <div class="table-wrap">
+            <table class="table" id="empTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>직급</th><th>지사</th><th>부서</th>
+                  <th>입사일</th><th>재직상태</th>
+                  <th class="num">현재 연봉(천원)</th>
+                  <th>DC가입</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="empTbody">
+                <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-let employeesCache = [];
+      </div>
 
-function renderEmployees(list) {
-  employeesCache = list;
-  $('empCount').textContent = `총 ${list.length}명`;
-  const tbody = $('empTbody');
-  if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">직원이 없습니다.</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = list.map(emp => `
-    <tr>
-      <td>${esc(emp.name)}</td>
-      <td>${esc(emp.position || '-')}</td>
-      <td>${esc(emp.branch || '-')}</td>
-      <td>${esc(emp.department || '-')}</td>
-      <td>${esc(emp.hire_date || '-')}</td>
-      <td><span class="hr-badge ${emp.status === '재직' ? 'active' : 'retired'}">${esc(emp.status)}</span></td>
-      <td class="num">${fmt(emp.current_salary_thousand)}</td>
-      <td><span class="hr-badge ${emp.pension_enrolled ? 'yes' : 'no'}">${emp.pension_enrolled ? '가입' : '미가입'}</span></td>
-      <td><a class="hr-edit-link" onclick="openEditModal('${emp.id}')">수정</a></td>
-    </tr>
-  `).join('');
-}
+    </div>
+  </main>
+</div>
 
-function esc(s) {
-  if (s == null) return '';
-  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
+<!-- 직원 추가/수정 모달 -->
+<div id="empModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal">
+    <h2 id="modalTitle">직원 추가</h2>
+    <div class="hr-form-grid">
+      <label>이름 <input id="f_name" class="hr-input"></label>
+      <label>직급 <input id="f_position" class="hr-input"></label>
+      <label>지사 <input id="f_branch" class="hr-input"></label>
+      <label>부서 <input id="f_department" class="hr-input"></label>
+      <label>입사일 <input id="f_hire_date" type="date" class="hr-input"></label>
+      <label>재직상태
+        <select id="f_status" class="hr-input">
+          <option value="재직">재직</option>
+          <option value="퇴사">퇴사</option>
+        </select>
+      </label>
+      <label>퇴사일 <input id="f_retire_date" type="date" class="hr-input"></label>
+      <label>고용형태 <input id="f_employment_type" class="hr-input" placeholder="정규직/계약직/수습"></label>
+      <label>퇴직연금(DC) 가입
+        <select id="f_pension_enrolled" class="hr-input">
+          <option value="true">가입</option>
+          <option value="false">미가입</option>
+        </select>
+      </label>
+      <label>퇴직연금 가입일 <input id="f_pension_enrollment_date" type="date" class="hr-input"></label>
+      <label class="hr-span2">비고 <input id="f_note" class="hr-input"></label>
+    </div>
 
-/* ── 추가/수정 모달 ── */
-let editingId = null;
+    <div class="hr-form-grid" style="margin-top:14px; border-top: 0.5px solid var(--border); padding-top:14px;">
+      <label>연봉(천원) <input id="f_salary" type="number" class="hr-input"></label>
+      <label>적용 시작월 <input id="f_salary_month" type="date" class="hr-input"></label>
+      <label class="hr-span2">변경 사유 <input id="f_salary_reason" class="hr-input" placeholder="예: 신규입사, 2026년 연봉재협상"></label>
+    </div>
 
-function openAddModal() {
-  editingId = null;
-  $('modalTitle').textContent = '직원 추가';
-  ['name','position','branch','department','hire_date','retire_date','employment_type','note',
-   'salary','salary_month','salary_reason'].forEach(f => $('f_' + f).value = '');
-  $('f_status').value = '재직';
-  $('f_pension_enrolled').value = 'true';
-  $('modalMsg').textContent = '';
-  $('empModal').style.display = 'flex';
-}
+    <div id="modalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeModal()">취소</button>
+      <button class="primary" onclick="saveEmployee()">저장</button>
+    </div>
+  </div>
+</div>
 
-function openEditModal(id) {
-  const emp = employeesCache.find(e => e.id === id);
-  if (!emp) return;
-  editingId = id;
-  $('modalTitle').textContent = `직원 수정 — ${emp.name}`;
-  $('f_name').value = emp.name || '';
-  $('f_position').value = emp.position || '';
-  $('f_branch').value = emp.branch || '';
-  $('f_department').value = emp.department || '';
-  $('f_hire_date').value = emp.hire_date || '';
-  $('f_status').value = emp.status || '재직';
-  $('f_retire_date').value = emp.retire_date || '';
-  $('f_employment_type').value = emp.employment_type || '';
-  $('f_pension_enrolled').value = emp.pension_enrolled ? 'true' : 'false';
-  $('f_note').value = emp.note || '';
-  $('f_salary').value = '';
-  $('f_salary_month').value = '';
-  $('f_salary_reason').value = '';
-  $('modalMsg').textContent = `현재 연봉: ${fmt(emp.current_salary_thousand)}천원 — 아래는 "변경"이 있을 때만 입력하세요.`;
-  $('modalMsg').className = 'hr-msg';
-  $('empModal').style.display = 'flex';
-}
-
-function closeModal() {
-  $('empModal').style.display = 'none';
-}
-
-async function saveEmployee() {
-  const payload = {
-    name: $('f_name').value.trim(),
-    position: $('f_position').value.trim(),
-    branch: $('f_branch').value.trim(),
-    department: $('f_department').value.trim(),
-    hire_date: $('f_hire_date').value || null,
-    status: $('f_status').value,
-    retire_date: $('f_retire_date').value || null,
-    employment_type: $('f_employment_type').value.trim() || null,
-    pension_enrolled: $('f_pension_enrolled').value === 'true',
-    note: $('f_note').value.trim() || null,
-  };
-
-  if (!payload.name) {
-    $('modalMsg').textContent = '이름은 필수입니다.';
-    $('modalMsg').className = 'hr-msg';
-    return;
-  }
-
-  const salaryVal = $('f_salary').value;
-  const isNew = editingId === null;
-
-  try {
-    if (isNew) {
-      if (salaryVal) {
-        payload.annual_salary_thousand = Number(salaryVal);
-        payload.effective_month = $('f_salary_month').value || payload.hire_date;
-      }
-      const res = await fetch(`${apiBase()}/api/hr_employees`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error('save failed');
-    } else {
-      payload.id = editingId;
-      if (salaryVal) {
-        payload.new_salary_thousand = Number(salaryVal);
-        payload.new_salary_effective_month = $('f_salary_month').value;
-        payload.new_salary_reason = $('f_salary_reason').value.trim() || null;
-        if (!payload.new_salary_effective_month) {
-          $('modalMsg').textContent = '연봉을 변경하려면 적용 시작월을 입력해주세요.';
-          $('modalMsg').className = 'hr-msg';
-          return;
-        }
-      }
-      const res = await fetch(`${apiBase()}/api/hr_employees`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error('save failed');
-    }
-    closeModal();
-    loadEmployees();
-  } catch (e) {
-    $('modalMsg').textContent = '저장 중 오류가 발생했습니다.';
-    $('modalMsg').className = 'hr-msg';
-  }
-}
+<script src="assets/hr.js"></script>
+</body>
+</html>
