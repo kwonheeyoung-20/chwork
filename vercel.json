@@ -22,6 +22,11 @@
       "config": { "maxLambdaSize": "50mb" }
     },
     {
+      "src": "api/hr_pension.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "50mb" }
+    },
+    {
       "src": "**/*.html",
       "use": "@vercel/static"
     },
@@ -35,6 +40,7 @@
     { "src": "/api/analyze", "dest": "api/analyze.py" },
     { "src": "/api/hr_login", "dest": "api/hr_login.py" },
     { "src": "/api/hr_employees", "dest": "api/hr_employees.py" },
+    { "src": "/api/hr_pension", "dest": "api/hr_pension.py" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
