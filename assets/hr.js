@@ -34,6 +34,14 @@ function showMain() {
   loadEmployees();
 }
 
+/* ── 탭 전환 ── */
+function switchHrTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  $('tab-employees').style.display = name === 'employees' ? 'block' : 'none';
+  $('tab-pension').style.display = name === 'pension' ? 'block' : 'none';
+  if (name === 'pension') loadPension();
+}
+
 /* 페이지 로드시 이미 로그인된 세션이면 바로 목록 표시 */
 window.addEventListener('DOMContentLoaded', () => {
   if (hrPassword()) showMain();
@@ -101,7 +109,7 @@ function openAddModal() {
   editingId = null;
   $('modalTitle').textContent = '직원 추가';
   ['name','position','branch','department','hire_date','retire_date','employment_type','note',
-   'salary','salary_month','salary_reason'].forEach(f => $('f_' + f).value = '');
+   'pension_enrollment_date','salary','salary_month','salary_reason'].forEach(f => $('f_' + f).value = '');
   $('f_status').value = '재직';
   $('f_pension_enrolled').value = 'true';
   $('modalMsg').textContent = '';
@@ -122,6 +130,7 @@ function openEditModal(id) {
   $('f_retire_date').value = emp.retire_date || '';
   $('f_employment_type').value = emp.employment_type || '';
   $('f_pension_enrolled').value = emp.pension_enrolled ? 'true' : 'false';
+  $('f_pension_enrollment_date').value = emp.pension_enrollment_date || '';
   $('f_note').value = emp.note || '';
   $('f_salary').value = '';
   $('f_salary_month').value = '';
@@ -146,6 +155,7 @@ async function saveEmployee() {
     retire_date: $('f_retire_date').value || null,
     employment_type: $('f_employment_type').value.trim() || null,
     pension_enrolled: $('f_pension_enrolled').value === 'true',
+    pension_enrollment_date: $('f_pension_enrollment_date').value || null,
     note: $('f_note').value.trim() || null,
   };
 
@@ -194,5 +204,91 @@ async function saveEmployee() {
   } catch (e) {
     $('modalMsg').textContent = '저장 중 오류가 발생했습니다.';
     $('modalMsg').className = 'hr-msg';
+  }
+}
+
+/* ── 퇴직연금 현황 ── */
+async function loadPension() {
+  const tbody = $('pensionTbody');
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (res.status === 401) {
+      sessionStorage.removeItem('chwork_hr_pw');
+      $('loginPanel').style.display = 'block';
+      $('hrMain').style.display = 'none';
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      return;
+    }
+    renderPension(data.pension || []);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function renderPension(list) {
+  $('pensionCount').textContent = `총 ${list.length}명`;
+  const tbody = $('pensionTbody');
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(p => `
+    <tr>
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.branch || '-')}</td>
+      <td>${esc(p.department || '-')}</td>
+      <td>${esc(p.pension_enrollment_date || p.hire_date || '-')}</td>
+      <td class="num">${fmt(p.cumulative_estimate)}</td>
+      <td class="num">${fmt(p.total_contributed)}</td>
+      <td class="num ${p.balance > 0 ? 'negative' : ''}">${fmt(p.balance)}</td>
+    </tr>
+  `).join('');
+
+  // 불입 모달용 직원 셀렉트도 채워두기
+  const sel = $('c_employee_id');
+  sel.innerHTML = list.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+}
+
+/* ── 불입 기록 추가 ── */
+function openContribModal() {
+  $('c_date').value = '';
+  $('c_amount').value = '';
+  $('c_note').value = '';
+  $('contribMsg').textContent = '';
+  $('contribModal').style.display = 'flex';
+}
+function closeContribModal() {
+  $('contribModal').style.display = 'none';
+}
+
+async function saveContribution() {
+  const payload = {
+    employee_id: $('c_employee_id').value,
+    contribution_date: $('c_date').value,
+    amount: Number($('c_amount').value),
+    note: $('c_note').value.trim() || null,
+  };
+  if (!payload.employee_id || !payload.contribution_date || !payload.amount) {
+    $('contribMsg').textContent = '직원, 입금일, 금액은 필수입니다.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('save failed');
+    closeContribModal();
+    loadPension();
+  } catch (e) {
+    $('contribMsg').textContent = '저장 중 오류가 발생했습니다.';
   }
 }
