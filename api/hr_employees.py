@@ -6,11 +6,56 @@ POST   -> 신규 직원 추가
 PATCH  -> 기존 직원 정보 수정 (body에 id 포함)
 
 모든 요청에 X-HR-Password 헤더 필요 (hr_login에서 확인한 비밀번호).
+
+(외부 모듈을 import하지 않는 독립형 파일입니다 — Vercel 배포시
+같은 폴더의 다른 .py 파일을 못 불러오는 문제를 피하기 위함)
 """
 from http.server import BaseHTTPRequestHandler
+import os
 import json
+import urllib.request
+import urllib.error
 from urllib.parse import urlparse, parse_qs, quote
-from _supabase import rest_request, SupabaseError, check_password
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
+HR_PASSWORD = os.environ.get("HR_PASSWORD", "")
+
+
+class SupabaseError(Exception):
+    def __init__(self, status, body):
+        self.status = status
+        self.body = body
+        super().__init__(f"Supabase error {status}: {body}")
+
+
+def _sb_headers(prefer=None):
+    h = {
+        "apikey": SUPABASE_SECRET_KEY,
+        "Authorization": f"Bearer {SUPABASE_SECRET_KEY}",
+        "Content-Type": "application/json",
+    }
+    if prefer:
+        h["Prefer"] = prefer
+    return h
+
+
+def rest_request(method, path, body=None, prefer=None):
+    url = f"{SUPABASE_URL}/rest/v1/{path}"
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(url, data=data, method=method, headers=_sb_headers(prefer))
+    try:
+        with urllib.request.urlopen(req) as resp:
+            raw = resp.read()
+            return json.loads(raw) if raw else None
+    except urllib.error.HTTPError as e:
+        raise SupabaseError(e.code, e.read().decode("utf-8", "ignore"))
+
+
+def check_password(candidate: str) -> bool:
+    if not HR_PASSWORD:
+        return False
+    return candidate == HR_PASSWORD
 
 
 def _cors_headers():
@@ -55,7 +100,6 @@ class handler(BaseHTTPRequestHandler):
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "detail": e.body})
 
-        # 각 직원의 최신 연봉만 뽑아서 편의 필드로 추가
         for emp in data:
             hist = sorted(emp.get("salary_history") or [], key=lambda h: h["effective_month"])
             emp["current_salary_thousand"] = hist[-1]["annual_salary_thousand"] if hist else None
@@ -72,7 +116,7 @@ class handler(BaseHTTPRequestHandler):
         emp_fields = {k: payload.get(k) for k in (
             "name", "position", "branch", "department", "hire_date", "retire_date",
             "status", "employment_type", "contract_fixed_salary", "unused_leave_days",
-            "pension_enrolled", "note"
+            "pension_enrolled", "pension_enrollment_date", "note"
         ) if payload.get(k) is not None}
         emp_fields.setdefault("status", "재직")
 
