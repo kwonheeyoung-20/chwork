@@ -2,12 +2,13 @@
 POST /api/hr_login
 body: {"password": "..."}
 성공 시 {"ok": true}, 실패 시 401
-프론트엔드는 이 결과를 sessionStorage에 저장해두고,
-이후 모든 인사 API 요청에 X-HR-Password 헤더로 같이 보냅니다.
+
+(외부 모듈을 import하지 않는 독립형 파일입니다 — Vercel 배포시
+같은 폴더의 다른 .py 파일을 못 불러오는 문제를 피하기 위함)
 """
 from http.server import BaseHTTPRequestHandler
+import os
 import json
-from _supabase import check_password
 
 
 def _cors_headers():
@@ -17,6 +18,13 @@ def _cors_headers():
         "Access-Control-Allow-Headers": "Content-Type",
         "Content-Type": "application/json",
     }
+
+
+def check_password(candidate: str) -> bool:
+    hr_password = os.environ.get("HR_PASSWORD", "")
+    if not hr_password:
+        return False
+    return candidate == hr_password
 
 
 class handler(BaseHTTPRequestHandler):
