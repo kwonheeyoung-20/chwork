@@ -47,7 +47,12 @@
       <!-- 인사 메인 화면 (로그인 후 표시) -->
       <div id="hrMain" style="display:none; flex-direction:column; gap:20px;">
 
-        <section class="panel">
+        <div style="display:flex; gap:4px; border-bottom: 0.5px solid var(--border);">
+          <button class="tab-btn active" data-tab="employees" onclick="switchHrTab('employees')">직원마스터</button>
+          <button class="tab-btn" data-tab="pension" onclick="switchHrTab('pension')">퇴직연금 현황</button>
+        </div>
+
+        <section class="panel" id="tab-employees">
           <div class="panel-header">
             <h2>직원 목록 <span id="empCount" class="hr-count"></span></h2>
             <div style="display:flex; gap:8px;">
@@ -76,10 +81,56 @@
           </div>
         </section>
 
+        <section class="panel" id="tab-pension" style="display:none;">
+          <div class="panel-header">
+            <h2>퇴직연금(DC) 현황 <span id="pensionCount" class="hr-count"></span></h2>
+            <button class="primary" onclick="openContribModal()">+ 불입 기록 추가</button>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            누적추계액은 연봉 이력을 기준으로 매번 자동 계산됩니다 (별도 고정 작업 불필요).
+          </p>
+
+          <div class="table-wrap">
+            <table class="table" id="pensionTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>지사</th><th>부서</th><th>가입일</th>
+                  <th class="num">누적추계액</th>
+                  <th class="num">실불입액 합계</th>
+                  <th class="num">잔액</th>
+                </tr>
+              </thead>
+              <tbody id="pensionTbody">
+                <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
       </div>
 
     </div>
   </main>
+</div>
+
+<!-- 불입 기록 추가 모달 -->
+<div id="contribModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:420px;">
+    <h2>퇴직연금 불입 기록 추가</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>직원
+        <select id="c_employee_id" class="hr-input"></select>
+      </label>
+      <label>입금일 <input id="c_date" type="date" class="hr-input"></label>
+      <label>금액(원) <input id="c_amount" type="number" class="hr-input"></label>
+      <label>비고 <input id="c_note" class="hr-input" placeholder="예: 2026년 상반기"></label>
+    </div>
+    <div id="contribMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeContribModal()">취소</button>
+      <button class="primary" onclick="saveContribution()">저장</button>
+    </div>
+  </div>
 </div>
 
 <!-- 직원 추가/수정 모달 -->
