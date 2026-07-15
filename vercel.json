@@ -1,28 +1,128 @@
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/health.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "50mb" }
-    },
-    {
-      "src": "api/analyze.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "50mb" }
-    },
-    {
-      "src": "**/*.html",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "assets/**",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    { "src": "/api/health", "dest": "api/health.py" },
-    { "src": "/api/analyze", "dest": "api/analyze.py" },
-    { "src": "/(.*)", "dest": "/$1" }
-  ]
-}
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>인사관리 | 창현 Dashboard</title>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/hr.css">
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">창현 Dashboard</div>
+    <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
+    <nav class="nav">
+      <a href="index.html">대시보드</a>
+      <a href="corporate-profit.html">기업손익분석</a>
+      <a class="active" href="hr.html">인사/급여관리</a>
+      <a href="#">계약/증빙관리</a>
+      <a href="#">월간 보고서</a>
+      <a href="#">설정</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1>인사관리 — 직원마스터</h1>
+        <p>급여관리·퇴직연금 공통 직원 기준정보를 관리합니다.</p>
+      </div>
+      <div class="pill">Vercel 배포</div>
+    </header>
+
+    <div class="content">
+
+      <!-- 로그인 게이트 -->
+      <section id="loginPanel" class="panel" style="max-width:360px;">
+        <h2>담당자 로그인</h2>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <input id="pwInput" type="password" placeholder="비밀번호" class="hr-input" autocomplete="current-password">
+          <button class="primary" onclick="hrLogin()">로그인</button>
+          <div id="loginMsg" class="hr-msg"></div>
+        </div>
+      </section>
+
+      <!-- 인사 메인 화면 (로그인 후 표시) -->
+      <div id="hrMain" style="display:none; flex-direction:column; gap:20px;">
+
+        <section class="panel">
+          <div class="panel-header">
+            <h2>직원 목록 <span id="empCount" class="hr-count"></span></h2>
+            <div style="display:flex; gap:8px;">
+              <label class="hr-checkbox">
+                <input type="checkbox" id="showAllToggle" onchange="loadEmployees()">
+                퇴사자 포함
+              </label>
+              <button class="primary" onclick="openAddModal()">+ 직원 추가</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="empTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>직급</th><th>지사</th><th>부서</th>
+                  <th>입사일</th><th>재직상태</th>
+                  <th class="num">현재 연봉(천원)</th>
+                  <th>DC가입</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="empTbody">
+                <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- 직원 추가/수정 모달 -->
+<div id="empModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal">
+    <h2 id="modalTitle">직원 추가</h2>
+    <div class="hr-form-grid">
+      <label>이름 <input id="f_name" class="hr-input"></label>
+      <label>직급 <input id="f_position" class="hr-input"></label>
+      <label>지사 <input id="f_branch" class="hr-input"></label>
+      <label>부서 <input id="f_department" class="hr-input"></label>
+      <label>입사일 <input id="f_hire_date" type="date" class="hr-input"></label>
+      <label>재직상태
+        <select id="f_status" class="hr-input">
+          <option value="재직">재직</option>
+          <option value="퇴사">퇴사</option>
+        </select>
+      </label>
+      <label>퇴사일 <input id="f_retire_date" type="date" class="hr-input"></label>
+      <label>고용형태 <input id="f_employment_type" class="hr-input" placeholder="정규직/계약직/수습"></label>
+      <label>퇴직연금(DC) 가입
+        <select id="f_pension_enrolled" class="hr-input">
+          <option value="true">가입</option>
+          <option value="false">미가입</option>
+        </select>
+      </label>
+      <label class="hr-span2">비고 <input id="f_note" class="hr-input"></label>
+    </div>
+
+    <div class="hr-form-grid" style="margin-top:14px; border-top: 0.5px solid var(--border); padding-top:14px;">
+      <label>연봉(천원) <input id="f_salary" type="number" class="hr-input"></label>
+      <label>적용 시작월 <input id="f_salary_month" type="date" class="hr-input"></label>
+      <label class="hr-span2">변경 사유 <input id="f_salary_reason" class="hr-input" placeholder="예: 신규입사, 2026년 연봉재협상"></label>
+    </div>
+
+    <div id="modalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeModal()">취소</button>
+      <button class="primary" onclick="saveEmployee()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/hr.js"></script>
+</body>
+</html>
