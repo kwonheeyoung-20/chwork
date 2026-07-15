@@ -1,0 +1,59 @@
+/* hr.css — 인사 모듈 전용 스타일 (기존 styles.css 디자인 토큰 재사용) */
+
+.hr-input {
+  width: 100%;
+  border: 0.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+}
+.hr-input:focus { border-color: var(--accent-mid); background: var(--surface); }
+
+.hr-msg { font-size: 12px; color: var(--red); min-height: 16px; }
+.hr-msg.success { color: var(--green); }
+
+.hr-count { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
+
+.hr-checkbox { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+
+.hr-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+.hr-badge.active { background: var(--green-light); color: var(--green); }
+.hr-badge.retired { background: var(--bg); color: var(--text-muted); }
+.hr-badge.yes { background: var(--accent-light); color: var(--accent); }
+.hr-badge.no { background: var(--bg); color: var(--text-muted); }
+
+.hr-edit-link { font-size: 12px; color: var(--accent); cursor: pointer; text-decoration: none; }
+.hr-edit-link:hover { text-decoration: underline; }
+
+/* 모달 */
+.hr-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.hr-modal {
+  background: var(--surface); border-radius: var(--radius-lg);
+  padding: 24px 26px; width: 560px; max-width: 92vw;
+  max-height: 88vh; overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+}
+.hr-modal h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+
+.hr-form-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+}
+.hr-form-grid label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 12px; color: var(--text-secondary); font-weight: 500;
+}
+.hr-form-grid .hr-span2 { grid-column: span 2; }
+
+@media (max-width: 520px) {
+  .hr-form-grid { grid-template-columns: 1fr; }
+  .hr-form-grid .hr-span2 { grid-column: span 1; }
+}
