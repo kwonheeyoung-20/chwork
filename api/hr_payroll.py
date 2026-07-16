@@ -65,6 +65,11 @@ def check_password(candidate: str) -> bool:
     return candidate == HR_PASSWORD
 
 
+def is_period_locked(period_key):
+    rows = rest_request("GET", f"period_locks?module=eq.payroll&period_key=eq.{period_key}&select=locked") or []
+    return bool(rows) and rows[0].get("locked", False)
+
+
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
@@ -99,6 +104,11 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
             year_month = qs.get("year_month", [None])[0]
+
+            if qs.get("locks", ["0"])[0] == "1":
+                locks = rest_request("GET", "period_locks?module=eq.payroll&select=*&order=period_key.desc")
+                return self._send(200, {"locks": locks})
+
             if not year_month:
                 return self._send(400, {"error": "year_month는 필수입니다 (예: 2026-07-01)"})
 
@@ -135,9 +145,25 @@ class handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
+
+            # 마감/마감해제: {"type": "lock", period_key: "2026-07", locked: true/false, note}
+            if isinstance(payload, dict) and payload.get("type") == "lock":
+                period_key = payload.get("period_key")
+                locked = payload.get("locked", True)
+                if not period_key:
+                    return self._send(400, {"error": "period_key는 필수입니다"})
+                rest_request(
+                    "POST", "period_locks",
+                    body={"module": "payroll", "period_key": period_key, "locked": locked, "note": payload.get("note")},
+                    prefer="resolution=merge-duplicates",
+                )
+                return self._send(200, {"ok": True})
+
             year_month = payload.get("year_month")
             if not year_month:
                 return self._send(400, {"error": "year_month는 필수입니다"})
+            if is_period_locked(year_month[:7]):
+                return self._send(423, {"error": f"{year_month[:7]}은(는) 마감되어 있습니다. 먼저 마감해제해주세요."})
 
             employees = rest_request(
                 "GET", f"employees?status=eq.{quote('재직')}&select=id"
