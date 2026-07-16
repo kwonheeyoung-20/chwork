@@ -53,6 +53,7 @@
           <button class="tab-btn" data-tab="pension" onclick="switchHrTab('pension')">퇴직연금 현황</button>
           <button class="tab-btn" data-tab="settlement" onclick="switchHrTab('settlement')">퇴사자 정산</button>
           <button class="tab-btn" data-tab="payroll" onclick="switchHrTab('payroll')">월별 급여명세</button>
+          <button class="tab-btn" data-tab="otherpay" onclick="switchHrTab('otherpay')">성과급/기타지급</button>
         </div>
 
         <section class="panel" id="tab-employees">
@@ -95,6 +96,14 @@
           <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
             누적추계액은 연봉 이력을 기준으로 매번 자동 계산됩니다 (별도 고정 작업 불필요).
           </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">연도 마감:</label>
+            <select id="pensionLockYear" class="hr-input" style="width:100px;"></select>
+            <button class="secondary" onclick="lockPensionYear(true)">마감</button>
+            <button class="secondary" onclick="lockPensionYear(false)">마감해제</button>
+            <span id="pensionLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
+          </div>
 
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
             <label style="font-size:13px; color:var(--text-secondary);">기준일자(반기 마감일 등):</label>
@@ -213,6 +222,13 @@
             1단계: 정상 재직자 기준 기본 계산만 반영됩니다 (신규/퇴사자 일할계산·수습요율·휴직조정은 다음 단계에서 추가 예정).
           </p>
 
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">월 마감:</label>
+            <button class="secondary" onclick="lockPayrollMonth(true)">이 달 마감</button>
+            <button class="secondary" onclick="lockPayrollMonth(false)">마감해제</button>
+            <span id="payrollLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
+          </div>
+
           <div class="table-wrap">
             <table class="table" id="payrollTable">
               <thead>
@@ -232,10 +248,76 @@
           </div>
         </section>
 
+        <section class="panel" id="tab-otherpay" style="display:none;">
+          <div class="panel-header">
+            <h2>성과급/기타지급 <span id="otherpayCount" class="hr-count"></span></h2>
+            <div style="display:flex; gap:8px;">
+              <button class="secondary" onclick="downloadOtherPaymentsExcel()">엑셀 다운로드</button>
+              <button class="primary" onclick="openOtherPayModal()">+ 지급 내역 추가</button>
+            </div>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            성과급(1차/2차)·상여금·기타수당·연차수당처럼 매달 정기적이지 않은 지급을 기록합니다. (급여명세와는 별도로 관리, 나중에 연도별/유형별 비교표에 활용)
+          </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">조회 연도:</label>
+            <select id="otherpayYear" class="hr-input" style="width:100px;" onchange="loadOtherPayments()"></select>
+            <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
+            <label style="font-size:13px; color:var(--text-secondary);">연도 마감:</label>
+            <button class="secondary" onclick="lockOtherPayYear(true)">마감</button>
+            <button class="secondary" onclick="lockOtherPayYear(false)">마감해제</button>
+            <span id="otherpayLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="otherpayTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>지사</th><th>부서</th><th>지급유형</th>
+                  <th>지급일</th><th class="num">금액</th><th>비고</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="otherpayTbody">
+                <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
       </div>
 
     </div>
   </main>
+</div>
+
+<!-- 성과급/기타지급 추가 모달 -->
+<div id="otherPayModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:480px;">
+    <h2>성과급/기타지급 추가</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>직원
+        <select id="op_employee_id" class="hr-input"></select>
+      </label>
+      <label>지급유형
+        <select id="op_payment_type" class="hr-input">
+          <option value="성과급1차">성과급1차</option>
+          <option value="성과급2차">성과급2차</option>
+          <option value="상여금">상여금</option>
+          <option value="기타수당">기타수당</option>
+          <option value="연차수당">연차수당</option>
+        </select>
+      </label>
+      <label>지급일 <input id="op_date" type="date" class="hr-input"></label>
+      <label>금액 <input id="op_amount" type="number" class="hr-input"></label>
+      <label>비고 <input id="op_note" class="hr-input"></label>
+    </div>
+    <div id="otherPayMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeOtherPayModal()">취소</button>
+      <button class="primary" onclick="saveOtherPayment()">저장</button>
+    </div>
+  </div>
 </div>
 
 <!-- 불입 기록 추가 모달 -->
@@ -302,44 +384,37 @@
 
 <!-- 불입 내역 조회/삭제 모달 -->
 <div id="historyModal" class="hr-modal-backdrop" style="display:none;">
-  <div class="hr-modal" style="width:480px;">
-    <h2 id="historyModalTitle">불입 내역</h2>
+  <div class="hr-modal" style="width:520px;">
+    <h2 id="historyModalTitle">불입/보정 내역</h2>
+
+    <h3 style="font-size:13px; margin-bottom:8px;">불입 기록</h3>
     <div class="table-wrap">
       <table class="table" id="contribHistoryTable">
         <thead><tr><th>입금일</th><th class="num">금액</th><th>비고</th><th></th></tr></thead>
         <tbody id="contribHistoryTbody"></tbody>
       </table>
     </div>
-    <div style="display:flex; justify-content:flex-end; margin-top:16px;">
-      <button class="secondary" onclick="closeHistoryModal()">닫기</button>
-    </div>
-  </div>
-</div>
 
-<!-- 퇴직연금 개별 보정 모달 -->
-<div id="adjustModal" class="hr-modal-backdrop" style="display:none;">
-  <div class="hr-modal" style="width:480px;">
-    <h2 id="adjustModalTitle">개별 보정</h2>
-    <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+    <h3 style="font-size:13px; margin-top:24px; padding-top:16px; border-top:0.5px solid var(--border); margin-bottom:4px;">발생액 보정</h3>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
       상여금 포함 등 정해진 공식으로 안 맞는 경우, 특정 시점부터 누적추계액에 금액을 더하거나(+) 뺄(-) 수 있습니다.
     </p>
-    <div class="hr-form-grid" style="grid-template-columns:1fr;">
-      <label>적용 시작일 <input id="adj_date" type="date" class="hr-input"></label>
-      <label>보정 금액 (더할 땐 양수, 뺄 땐 음수) <input id="adj_amount" type="number" class="hr-input" placeholder="예: 5000000 또는 -2000000"></label>
-      <label>사유 <input id="adj_note" class="hr-input" placeholder="예: 2026년 상여금 반영"></label>
+    <div class="hr-form-grid" style="grid-template-columns:1fr 1fr 1fr auto; align-items:end; gap:8px;">
+      <label style="font-size:12px;">적용 시작일 <input id="adj_date" type="date" class="hr-input"></label>
+      <label style="font-size:12px;">보정 금액(+/-) <input id="adj_amount" type="number" class="hr-input" placeholder="예: 5000000"></label>
+      <label style="font-size:12px;">사유 <input id="adj_note" class="hr-input" placeholder="예: 상여금 반영"></label>
+      <button class="primary" onclick="saveAdjustment()" style="height:34px;">추가</button>
     </div>
     <div id="adjustMsg" class="hr-msg"></div>
-    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-      <button class="secondary" onclick="closeAdjustModal()">취소</button>
-      <button class="primary" onclick="saveAdjustment()">저장</button>
-    </div>
-
-    <h3 style="margin-top:20px; padding-top:16px; border-top:0.5px solid var(--border); font-size:13px;">기존 보정 내역</h3>
-    <div class="table-wrap">
+    <div class="table-wrap" style="margin-top:8px;">
       <table class="table" id="adjustHistoryTable">
         <thead><tr><th>적용일</th><th class="num">금액</th><th>사유</th><th></th></tr></thead>
         <tbody id="adjustHistoryTbody"></tbody>
       </table>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeHistoryModal()">닫기</button>
     </div>
   </div>
 </div>
