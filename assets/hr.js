@@ -421,7 +421,7 @@ async function saveSettlement() {
 
 async function loadSettlementHistory() {
   const tbody = $('historyTbody');
-  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_settlement?list=1`, {
       headers: { 'X-HR-Password': hrPassword() },
@@ -429,7 +429,7 @@ async function loadSettlementHistory() {
     const data = await res.json();
     const list = data.settlements || [];
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">확정된 정산 내역이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">확정된 정산 내역이 없습니다.</td></tr>`;
       return;
     }
     tbody.innerHTML = list.map(s => `
@@ -441,10 +441,28 @@ async function loadSettlementHistory() {
         <td class="num">${fmt(s.additional_payment)}</td>
         <td class="num">${fmt(s.net_payment)}</td>
         <td>${esc((s.created_at || '').slice(0, 10))}</td>
+        <td><a class="hr-edit-link" onclick="revertSettlement('${s.id}', '${esc(s.employees?.name || '')}')">되돌리기</a></td>
       </tr>
     `).join('');
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+async function revertSettlement(id, name) {
+  if (!confirm(`${name}님의 정산 확정을 되돌리시겠습니까?\n이 정산 기록이 삭제되고, 해당 직원은 다시 "재직" 상태로 복구됩니다.`)) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_settlement?id=${id}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('revert failed');
+    alert('되돌렸습니다.');
+    loadSettlementHistory();
+    $('s_employee_id').dataset.loaded = '0';
+    populateSettlementEmployeeSelect();
+  } catch (e) {
+    alert('되돌리는 중 오류가 발생했습니다.');
   }
 }
 
