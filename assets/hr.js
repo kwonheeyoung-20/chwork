@@ -41,12 +41,29 @@ function switchHrTab(name) {
   $('tab-pension').style.display = name === 'pension' ? 'block' : 'none';
   $('tab-settlement').style.display = name === 'settlement' ? 'block' : 'none';
   $('tab-payroll').style.display = name === 'payroll' ? 'block' : 'none';
-  if (name === 'pension') loadPension();
+  $('tab-otherpay').style.display = name === 'otherpay' ? 'block' : 'none';
+  if (name === 'pension') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
   if (name === 'payroll' && !$('payrollMonth').value) {
     const now = new Date();
     $('payrollMonth').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   }
+  if (name === 'otherpay') {
+    populateYearSelect('otherpayYear');
+    populateOtherPayEmployeeSelect();
+    loadOtherPayments();
+  }
+}
+
+function populateYearSelect(elId) {
+  const sel = $(elId);
+  if (sel.dataset.loaded === '1') return;
+  const thisYear = new Date().getFullYear();
+  let opts = '';
+  for (let y = thisYear + 1; y >= 2026; y--) opts += `<option value="${y}">${y}년</option>`;
+  sel.innerHTML = opts;
+  sel.value = thisYear;
+  sel.dataset.loaded = '1';
 }
 
 /* 페이지 로드시 이미 로그인된 세션이면 바로 목록 표시 */
@@ -259,7 +276,9 @@ function renderPension(list, asOf) {
     tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
     return;
   }
-  tbody.innerHTML = list.map(p => `
+
+  const sum = (arr, key) => arr.reduce((s, p) => s + (Number(p[key]) || 0), 0);
+  const rowHtml = (p) => `
     <tr data-emp-id="${p.id}" data-emp-name="${esc(p.name)}" data-balance="${p.balance}" data-asofbalance="${asOf ? (p.as_of_balance ?? 0) : ''}">
       <td>${esc(p.name)}</td>
       <td>${esc(p.branch || '-')}</td>
@@ -272,23 +291,49 @@ function renderPension(list, asOf) {
       <td class="num">${asOf ? fmt(p.period_accrual) : '-'}</td>
       <td class="num ${asOf && p.as_of_balance > 0 ? 'negative' : ''}">${asOf ? fmt(p.as_of_balance) : '-'}</td>
       <td class="num"><input type="number" class="hr-input bulk-amount" style="width:120px; text-align:right;" placeholder="0"></td>
-      <td><a class="hr-edit-link" onclick="openHistoryModal('${p.id}', '${esc(p.name)}')">이력</a> · <a class="hr-edit-link" onclick="openAdjustModal('${p.id}', '${esc(p.name)}')">보정</a></td>
+      <td><a class="hr-edit-link" onclick="openHistoryModal('${p.id}', '${esc(p.name)}')">이력/보정</a></td>
     </tr>
-  `).join('');
-
-  const sum = (key) => list.reduce((s, p) => s + (Number(p[key]) || 0), 0);
-  tbody.innerHTML += `
-    <tr class="hr-total-row">
-      <td colspan="4">합계 (${list.length}명)</td>
-      <td class="num">${fmt(sum('cumulative_estimate'))}</td>
-      <td class="num">${fmt(sum('total_contributed'))}</td>
-      <td class="num">${fmt(sum('balance'))}</td>
-      <td class="num">${asOf ? fmt(sum('as_of_cumulative_estimate')) : '-'}</td>
-      <td class="num">${asOf ? fmt(sum('period_accrual')) : '-'}</td>
-      <td class="num">${asOf ? fmt(sum('as_of_balance')) : '-'}</td>
+  `;
+  const subtotalHtml = (branch, arr) => `
+    <tr class="hr-total-row" style="background:var(--surface);">
+      <td colspan="4">${esc(branch)} 소계 (${arr.length}명)</td>
+      <td class="num">${fmt(sum(arr,'cumulative_estimate'))}</td>
+      <td class="num">${fmt(sum(arr,'total_contributed'))}</td>
+      <td class="num">${fmt(sum(arr,'balance'))}</td>
+      <td class="num">${asOf ? fmt(sum(arr,'as_of_cumulative_estimate')) : '-'}</td>
+      <td class="num">${asOf ? fmt(sum(arr,'period_accrual')) : '-'}</td>
+      <td class="num">${asOf ? fmt(sum(arr,'as_of_balance')) : '-'}</td>
       <td colspan="2"></td>
     </tr>
   `;
+
+  // 지사별로 그룹 (원래 정렬 순서 유지, 지사 첫 등장 순서대로)
+  const branches = [];
+  const byBranch = {};
+  list.forEach(p => {
+    const b = p.branch || '(미지정)';
+    if (!byBranch[b]) { byBranch[b] = []; branches.push(b); }
+    byBranch[b].push(p);
+  });
+
+  let html = '';
+  branches.forEach(b => {
+    byBranch[b].forEach(p => { html += rowHtml(p); });
+    html += subtotalHtml(b, byBranch[b]);
+  });
+  html += `
+    <tr class="hr-total-row">
+      <td colspan="4">전체 합계 (${list.length}명)</td>
+      <td class="num">${fmt(sum(list,'cumulative_estimate'))}</td>
+      <td class="num">${fmt(sum(list,'total_contributed'))}</td>
+      <td class="num">${fmt(sum(list,'balance'))}</td>
+      <td class="num">${asOf ? fmt(sum(list,'as_of_cumulative_estimate')) : '-'}</td>
+      <td class="num">${asOf ? fmt(sum(list,'period_accrual')) : '-'}</td>
+      <td class="num">${asOf ? fmt(sum(list,'as_of_balance')) : '-'}</td>
+      <td colspan="2"></td>
+    </tr>
+  `;
+  tbody.innerHTML = html;
 
   // 불입 모달용 직원 셀렉트도 채워두기
   const sel = $('c_employee_id');
@@ -536,15 +581,15 @@ function downloadSettlementExcel() {
 /* ── 퇴직연금 현황 엑셀 다운로드 ── */
 function downloadPensionExcel() {
   const rows = [['이름', '지사', '부서', '가입일', '누적추계액(현재기준)', '실불입액 합계', '잔액', $('asOfCumHeader').textContent, $('periodAccrualHeader').textContent, $('asOfBalanceHeader').textContent]];
-  document.querySelectorAll('#pensionTbody tr:not(.hr-total-row)').forEach(tr => {
+  document.querySelectorAll('#pensionTbody tr').forEach(tr => {
+    if (tr.classList.contains('hr-total-row')) {
+      const tds = Array.from(tr.children).map(td => td.textContent.trim());
+      rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5], tds[6]]);
+      return;
+    }
     const cells = Array.from(tr.children).slice(0, 10).map(td => td.textContent.trim());
     if (cells.length === 10) rows.push(cells);
   });
-  const totalRow = document.querySelector('#pensionTbody tr.hr-total-row');
-  if (totalRow) {
-    const tds = Array.from(totalRow.children).map(td => td.textContent.trim());
-    rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5], tds[6]]);
-  }
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '퇴직연금현황');
@@ -613,12 +658,20 @@ async function saveBulkContributions() {
 /* ── 불입 내역 조회/취소(삭제) ── */
 let currentHistoryEmployeeId = null;
 let currentHistoryEmployeeName = null;
+let currentAdjustEmployeeId = null;
+let currentAdjustEmployeeName = null;
 
 async function openHistoryModal(employeeId, name) {
   currentHistoryEmployeeId = employeeId;
   currentHistoryEmployeeName = name;
-  $('historyModalTitle').textContent = `${name} — 불입 내역`;
+  currentAdjustEmployeeId = employeeId;
+  currentAdjustEmployeeName = name;
+  $('historyModalTitle').textContent = `${name} — 불입/보정 내역`;
   $('contribHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
+  $('adj_date').value = '';
+  $('adj_amount').value = '';
+  $('adj_note').value = '';
+  $('adjustMsg').textContent = '';
   $('historyModal').style.display = 'flex';
   try {
     const res = await fetch(`${apiBase()}/api/hr_pension?employee_id=${employeeId}`, {
@@ -628,22 +681,28 @@ async function openHistoryModal(employeeId, name) {
     const list = data.contributions || [];
     if (list.length === 0) {
       $('contribHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">불입 내역이 없습니다.</td></tr>`;
-      return;
+    } else {
+      $('contribHistoryTbody').innerHTML = list.map(c => {
+        const editable = c.contribution_date && c.contribution_date.slice(0,4) >= '2026';
+        return `
+        <tr data-id="${c.id}" data-date="${c.contribution_date}" data-amount="${c.amount}" data-note="${esc(c.note || '')}">
+          <td class="hview">${esc(c.contribution_date)}</td>
+          <td class="num hview">${fmt(c.amount)}</td>
+          <td class="hview">${esc(c.note || '-')}</td>
+          <td class="hview">
+            ${editable ? `
+              <a class="hr-edit-link" onclick="editContributionRow(this)">수정</a>
+              <a class="hr-edit-link" style="margin-left:8px;" onclick="deleteContribution('${c.id}', '${employeeId}', '${esc(name)}')">삭제</a>
+            ` : `<span style="color:var(--text-muted); font-size:11px;">2025년 이전 확정자료</span>`}
+          </td>
+        </tr>
+      `;
+      }).join('');
     }
-    $('contribHistoryTbody').innerHTML = list.map(c => `
-      <tr data-id="${c.id}" data-date="${c.contribution_date}" data-amount="${c.amount}" data-note="${esc(c.note || '')}">
-        <td class="hview">${esc(c.contribution_date)}</td>
-        <td class="num hview">${fmt(c.amount)}</td>
-        <td class="hview">${esc(c.note || '-')}</td>
-        <td class="hview">
-          <a class="hr-edit-link" onclick="editContributionRow(this)">수정</a>
-          <a class="hr-edit-link" style="margin-left:8px;" onclick="deleteContribution('${c.id}', '${employeeId}', '${esc(name)}')">삭제</a>
-        </td>
-      </tr>
-    `).join('');
   } catch (e) {
     $('contribHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
   }
+  await loadAdjustHistory(employeeId);
 }
 
 function closeHistoryModal() {
@@ -726,6 +785,7 @@ async function loadPayrollPreview() {
       return;
     }
     renderPayroll(data.payroll || []);
+    refreshPayrollLockStatus();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
@@ -776,11 +836,11 @@ async function generatePayroll() {
       body: JSON.stringify({ year_month: ym }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'save failed');
+    if (!res.ok) throw new Error(data.error || 'save failed');
     alert(`${data.count}명분 저장되었습니다.`);
     loadPayrollPreview();
   } catch (e) {
-    alert('저장 중 오류가 발생했습니다.');
+    alert(e.message || '저장 중 오류가 발생했습니다.');
   }
 }
 
@@ -803,25 +863,6 @@ function downloadPayrollExcel() {
 }
 
 /* ── 퇴직연금 개별 보정 ── */
-let currentAdjustEmployeeId = null;
-let currentAdjustEmployeeName = null;
-
-async function openAdjustModal(employeeId, name) {
-  currentAdjustEmployeeId = employeeId;
-  currentAdjustEmployeeName = name;
-  $('adjustModalTitle').textContent = `${name} — 개별 보정`;
-  $('adj_date').value = '';
-  $('adj_amount').value = '';
-  $('adj_note').value = '';
-  $('adjustMsg').textContent = '';
-  $('adjustModal').style.display = 'flex';
-  await loadAdjustHistory(employeeId);
-}
-
-function closeAdjustModal() {
-  $('adjustModal').style.display = 'none';
-  loadPension();
-}
 
 async function loadAdjustHistory(employeeId) {
   $('adjustHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:12px;">불러오는 중…</td></tr>`;
@@ -835,14 +876,22 @@ async function loadAdjustHistory(employeeId) {
       $('adjustHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:12px;">보정 내역이 없습니다.</td></tr>`;
       return;
     }
-    $('adjustHistoryTbody').innerHTML = list.map(a => `
-      <tr>
-        <td>${esc(a.effective_date)}</td>
-        <td class="num">${a.adjustment_amount > 0 ? '+' : ''}${fmt(a.adjustment_amount)}</td>
-        <td>${esc(a.note || '-')}</td>
-        <td><a class="hr-edit-link" onclick="deleteAdjustment('${a.id}')">삭제</a></td>
+    $('adjustHistoryTbody').innerHTML = list.map(a => {
+      const editable = a.effective_date && a.effective_date.slice(0,4) >= '2026';
+      return `
+      <tr data-id="${a.id}" data-date="${a.effective_date}" data-amount="${a.adjustment_amount}" data-note="${esc(a.note || '')}">
+        <td class="hview">${esc(a.effective_date)}</td>
+        <td class="num hview">${a.adjustment_amount > 0 ? '+' : ''}${fmt(a.adjustment_amount)}</td>
+        <td class="hview">${esc(a.note || '-')}</td>
+        <td class="hview">
+          ${editable ? `
+            <a class="hr-edit-link" onclick="editAdjustRow(this)">수정</a>
+            <a class="hr-edit-link" style="margin-left:8px;" onclick="deleteAdjustment('${a.id}')">삭제</a>
+          ` : `<span style="color:var(--text-muted); font-size:11px;">2025년 이전 확정자료</span>`}
+        </td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   } catch (e) {
     $('adjustHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:12px;">불러오기 실패</td></tr>`;
   }
@@ -893,4 +942,243 @@ async function deleteAdjustment(id) {
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
   }
+}
+
+/* ── 보정 내역 수정(인라인) ── */
+function editAdjustRow(linkEl) {
+  const tr = linkEl.closest('tr');
+  const id = tr.dataset.id;
+  const date = tr.dataset.date;
+  const amount = tr.dataset.amount;
+  const note = tr.dataset.note;
+
+  tr.innerHTML = `
+    <td><input type="date" class="hr-input" id="adjedit_date_${id}" value="${date}" style="width:130px;"></td>
+    <td class="num"><input type="number" class="hr-input" id="adjedit_amount_${id}" value="${amount}" style="width:110px; text-align:right;"></td>
+    <td><input type="text" class="hr-input" id="adjedit_note_${id}" value="${esc(note)}"></td>
+    <td>
+      <a class="hr-edit-link" onclick="saveAdjustEdit('${id}')">저장</a>
+      <a class="hr-edit-link" style="margin-left:8px;" onclick="loadAdjustHistory(currentAdjustEmployeeId)">취소</a>
+    </td>
+  `;
+}
+
+async function saveAdjustEdit(id) {
+  const date = $(`adjedit_date_${id}`).value;
+  const amount = Number($(`adjedit_amount_${id}`).value);
+  const note = $(`adjedit_note_${id}`).value.trim() || null;
+  if (!date || !amount) {
+    alert('적용일과 금액은 필수입니다.');
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension?id=${id}&type=adjustment`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ effective_date: date, adjustment_amount: amount, note }),
+    });
+    if (!res.ok) throw new Error('update failed');
+    loadAdjustHistory(currentAdjustEmployeeId);
+  } catch (e) {
+    alert('수정 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 연도/월 마감 공통 ── */
+async function lockPeriod(apiPath, periodKey, locked) {
+  try {
+    const res = await fetch(`${apiBase()}${apiPath}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'lock', period_key: periodKey, locked }),
+    });
+    if (!res.ok) throw new Error('lock failed');
+    return true;
+  } catch (e) {
+    alert('마감 처리 중 오류가 발생했습니다.');
+    return false;
+  }
+}
+
+async function fetchLocks(apiPath) {
+  try {
+    const res = await fetch(`${apiBase()}${apiPath}?locks=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    return data.locks || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/* ── 퇴직연금 연도 마감 ── */
+async function lockPensionYear(locked) {
+  const year = $('pensionLockYear').value;
+  if (!year) return;
+  if (!confirm(`${year}년 퇴직연금 자료를 ${locked ? '마감' : '마감해제'} 하시겠습니까?`)) return;
+  const ok = await lockPeriod('/api/hr_pension', year, locked);
+  if (ok) refreshPensionLockStatus();
+}
+
+async function refreshPensionLockStatus() {
+  const year = $('pensionLockYear').value;
+  const locks = await fetchLocks('/api/hr_pension');
+  const current = locks.find(l => l.period_key === year);
+  $('pensionLockStatus').textContent = current && current.locked ? `🔒 ${year}년 마감됨` : `${year}년 마감 전`;
+}
+
+/* ── 급여 월 마감 ── */
+async function lockPayrollMonth(locked) {
+  const ym = $('payrollMonth').value;
+  if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
+  if (!confirm(`${ym} 급여 자료를 ${locked ? '마감' : '마감해제'} 하시겠습니까?`)) return;
+  const ok = await lockPeriod('/api/hr_payroll', ym, locked);
+  if (ok) refreshPayrollLockStatus();
+}
+
+async function refreshPayrollLockStatus() {
+  const ym = $('payrollMonth').value;
+  const locks = await fetchLocks('/api/hr_payroll');
+  const current = locks.find(l => l.period_key === ym);
+  $('payrollLockStatus').textContent = current && current.locked ? `🔒 ${ym} 마감됨` : `${ym} 마감 전`;
+}
+
+/* ── 성과급/기타지급 연도 마감 ── */
+async function lockOtherPayYear(locked) {
+  const year = $('otherpayYear').value;
+  if (!year) return;
+  if (!confirm(`${year}년 성과급/기타지급 자료를 ${locked ? '마감' : '마감해제'} 하시겠습니까?`)) return;
+  const ok = await lockPeriod('/api/hr_other_payments', year, locked);
+  if (ok) refreshOtherPayLockStatus();
+}
+
+async function refreshOtherPayLockStatus() {
+  const year = $('otherpayYear').value;
+  const locks = await fetchLocks('/api/hr_other_payments');
+  const current = locks.find(l => l.period_key === year);
+  $('otherpayLockStatus').textContent = current && current.locked ? `🔒 ${year}년 마감됨` : `${year}년 마감 전`;
+}
+
+/* ── 성과급/기타지급 ── */
+async function populateOtherPayEmployeeSelect() {
+  const sel = $('op_employee_id');
+  if (sel.dataset.loaded === '1') return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees?all=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    sel.innerHTML = (data.employees || []).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+    sel.dataset.loaded = '1';
+  } catch (e) {
+    sel.innerHTML = '<option value="">불러오기 실패</option>';
+  }
+}
+
+async function loadOtherPayments() {
+  const year = $('otherpayYear').value;
+  const tbody = $('otherpayTbody');
+  tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_other_payments?year=${year}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.payments || [];
+    $('otherpayCount').textContent = `총 ${list.length}건`;
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">${year}년 지급 내역이 없습니다.</td></tr>`;
+    } else {
+      tbody.innerHTML = list.map(p => `
+        <tr>
+          <td>${esc(p.employees?.name || '-')}</td>
+          <td>${esc(p.employees?.branch || '-')}</td>
+          <td>${esc(p.employees?.department || '-')}</td>
+          <td>${esc(p.payment_type)}</td>
+          <td>${esc(p.payment_date)}</td>
+          <td class="num">${fmt(p.amount)}</td>
+          <td>${esc(p.note || '-')}</td>
+          <td><a class="hr-edit-link" onclick="deleteOtherPayment('${p.id}')">삭제</a></td>
+        </tr>
+      `).join('');
+      const total = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      tbody.innerHTML += `
+        <tr class="hr-total-row">
+          <td colspan="5">합계 (${list.length}건)</td>
+          <td class="num">${fmt(total)}</td>
+          <td colspan="2"></td>
+        </tr>
+      `;
+    }
+    refreshOtherPayLockStatus();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function openOtherPayModal() {
+  $('op_date').value = '';
+  $('op_amount').value = '';
+  $('op_note').value = '';
+  $('otherPayMsg').textContent = '';
+  $('otherPayModal').style.display = 'flex';
+}
+function closeOtherPayModal() {
+  $('otherPayModal').style.display = 'none';
+}
+
+async function saveOtherPayment() {
+  const payload = {
+    employee_id: $('op_employee_id').value,
+    payment_type: $('op_payment_type').value,
+    payment_date: $('op_date').value,
+    amount: Number($('op_amount').value),
+    note: $('op_note').value.trim() || null,
+  };
+  if (!payload.employee_id || !payload.payment_date || !payload.amount) {
+    $('otherPayMsg').textContent = '직원, 지급일, 금액은 필수입니다.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'save failed');
+    closeOtherPayModal();
+    loadOtherPayments();
+  } catch (e) {
+    $('otherPayMsg').textContent = e.message.includes('마감') ? e.message : '저장 중 오류가 발생했습니다.';
+  }
+}
+
+async function deleteOtherPayment(id) {
+  if (!confirm('이 지급 내역을 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_other_payments?id=${id}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'delete failed');
+    loadOtherPayments();
+  } catch (e) {
+    alert(e.message.includes('마감') ? e.message : '삭제 중 오류가 발생했습니다.');
+  }
+}
+
+function downloadOtherPaymentsExcel() {
+  const rows = [['이름', '지사', '부서', '지급유형', '지급일', '금액', '비고']];
+  document.querySelectorAll('#otherpayTbody tr:not(.hr-total-row)').forEach(tr => {
+    const cells = Array.from(tr.children).slice(0, 7).map(td => td.textContent.trim());
+    if (cells.length === 7) rows.push(cells);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  const year = $('otherpayYear').value;
+  XLSX.utils.book_append_sheet(wb, ws, `${year}년`);
+  XLSX.writeFile(wb, `성과급기타지급_${year}.xlsx`);
 }
