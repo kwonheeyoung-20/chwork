@@ -212,7 +212,7 @@ async function saveEmployee() {
 /* ── 퇴직연금 현황 ── */
 async function loadPension() {
   const tbody = $('pensionTbody');
-  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   const asOf = $('pensionAsOf').value;
   try {
     const url = `${apiBase()}/api/hr_pension${asOf ? `?as_of=${asOf}` : ''}`;
@@ -227,12 +227,12 @@ async function loadPension() {
     }
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
       return;
     }
     renderPension(data.pension || [], asOf);
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
@@ -242,11 +242,11 @@ function renderPension(list, asOf) {
   $('periodAccrualHeader').textContent = asOf ? `${asOf.slice(0,4)}년 1월~${asOf.slice(5)} 발생액` : '해당연도 1월~지정일 발생액';
   const tbody = $('pensionTbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(p => `
-    <tr>
+    <tr data-emp-id="${p.id}" data-balance="${p.balance}" data-accrual="${asOf ? (p.period_accrual ?? 0) : ''}">
       <td>${esc(p.name)}</td>
       <td>${esc(p.branch || '-')}</td>
       <td>${esc(p.department || '-')}</td>
@@ -256,6 +256,7 @@ function renderPension(list, asOf) {
       <td class="num ${p.balance > 0 ? 'negative' : ''}">${fmt(p.balance)}</td>
       <td class="num">${asOf ? fmt(p.as_of_cumulative_estimate) : '-'}</td>
       <td class="num">${asOf ? fmt(p.period_accrual) : '-'}</td>
+      <td class="num"><input type="number" class="hr-input bulk-amount" style="width:120px; text-align:right;" placeholder="0"></td>
     </tr>
   `).join('');
 
@@ -487,11 +488,65 @@ function downloadSettlementExcel() {
 function downloadPensionExcel() {
   const rows = [['이름', '지사', '부서', '가입일', '누적추계액(현재기준)', '실불입액 합계', '잔액', $('asOfCumHeader').textContent, $('periodAccrualHeader').textContent]];
   document.querySelectorAll('#pensionTbody tr').forEach(tr => {
-    const cells = Array.from(tr.children).map(td => td.textContent.trim());
+    const cells = Array.from(tr.children).slice(0, 9).map(td => td.textContent.trim());
     if (cells.length === 9) rows.push(cells);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '퇴직연금현황');
   XLSX.writeFile(wb, `퇴직연금현황_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+/* ── 일괄 불입 처리 ── */
+function fillBulkAmounts(mode) {
+  document.querySelectorAll('#pensionTbody tr').forEach(tr => {
+    const input = tr.querySelector('.bulk-amount');
+    if (!input) return;
+    if (mode === 'clear') {
+      input.value = '';
+      return;
+    }
+    if (mode === 'accrual') {
+      const v = tr.dataset.accrual;
+      input.value = (v === '' || v === 'undefined') ? '' : Math.round(Number(v));
+    } else if (mode === 'balance') {
+      const v = Math.round(Number(tr.dataset.balance || 0));
+      input.value = v > 0 ? v : '';
+    }
+  });
+}
+
+async function saveBulkContributions() {
+  const date = $('bulkContribDate').value;
+  if (!date) {
+    alert('입금일을 먼저 지정해주세요.');
+    return;
+  }
+  const items = [];
+  document.querySelectorAll('#pensionTbody tr').forEach(tr => {
+    const empId = tr.dataset.empId;
+    const input = tr.querySelector('.bulk-amount');
+    const amount = Number(input?.value || 0);
+    if (empId && amount > 0) {
+      items.push({ employee_id: empId, contribution_date: date, amount, note: '일괄 불입 처리' });
+    }
+  });
+  if (items.length === 0) {
+    alert('입력된 금액이 없습니다. "발생액으로 채우기" 또는 "잔액으로 채우기"를 먼저 눌러주세요.');
+    return;
+  }
+  if (!confirm(`${items.length}명에게 총 ${fmt(items.reduce((s, i) => s + i.amount, 0))}원을 ${date}자로 저장하시겠습니까?`)) return;
+
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ items }),
+    });
+    if (!res.ok) throw new Error('save failed');
+    alert('저장되었습니다.');
+    loadPension();
+  } catch (e) {
+    alert('저장 중 오류가 발생했습니다.');
+  }
 }
