@@ -102,6 +102,15 @@ function renderEmployees(list) {
       <td><a class="hr-edit-link" onclick="openEditModal('${emp.id}')">수정</a></td>
     </tr>
   `).join('');
+
+  const totalSalary = list.reduce((s, e) => s + (Number(e.current_salary_thousand) || 0), 0);
+  tbody.innerHTML += `
+    <tr class="hr-total-row">
+      <td colspan="6">합계 (${list.length}명)</td>
+      <td class="num">${fmt(totalSalary)}</td>
+      <td colspan="2"></td>
+    </tr>
+  `;
 }
 
 function esc(s) {
@@ -267,6 +276,20 @@ function renderPension(list, asOf) {
     </tr>
   `).join('');
 
+  const sum = (key) => list.reduce((s, p) => s + (Number(p[key]) || 0), 0);
+  tbody.innerHTML += `
+    <tr class="hr-total-row">
+      <td colspan="4">합계 (${list.length}명)</td>
+      <td class="num">${fmt(sum('cumulative_estimate'))}</td>
+      <td class="num">${fmt(sum('total_contributed'))}</td>
+      <td class="num">${fmt(sum('balance'))}</td>
+      <td class="num">${asOf ? fmt(sum('as_of_cumulative_estimate')) : '-'}</td>
+      <td class="num">${asOf ? fmt(sum('period_accrual')) : '-'}</td>
+      <td class="num">${asOf ? fmt(sum('as_of_balance')) : '-'}</td>
+      <td colspan="2"></td>
+    </tr>
+  `;
+
   // 불입 모달용 직원 셀렉트도 채워두기
   const sel = $('c_employee_id');
   sel.innerHTML = list.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
@@ -363,14 +386,15 @@ async function calcSettlement() {
 function renderYearlyTable(yearly) {
   const tbody = $('yearlyTbody');
   if (yearly.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px;">데이터 없음</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">데이터 없음</td></tr>`;
     return;
   }
   tbody.innerHTML = yearly.map(r => `
     <tr>
       <td>${r.year}년</td>
       <td class="num">${fmt(r.cumulative_estimate)}</td>
-      <td class="num">${fmt(r.contribution)}</td>
+      <td class="num">${fmt(r.cumulative_paid)}</td>
+      <td class="num ${r.balance > 0 ? 'negative' : ''}">${fmt(r.balance)}</td>
     </tr>
   `).join('');
 }
@@ -500,10 +524,10 @@ function downloadSettlementExcel() {
   XLSX.utils.book_append_sheet(wb, ws, '정산내역서');
 
   const yearly = JSON.parse($('settlementResult').dataset.yearly || '[]');
-  const yearlyRows = [['연도', '누적추계액', '그 해 불입액']];
-  yearly.forEach(r => yearlyRows.push([`${r.year}년`, r.cumulative_estimate, r.contribution]));
+  const yearlyRows = [['연도', '누적추계액', '누적불입액', '잔액']];
+  yearly.forEach(r => yearlyRows.push([`${r.year}년`, r.cumulative_estimate, r.cumulative_paid, r.balance]));
   const ws2 = XLSX.utils.aoa_to_sheet(yearlyRows);
-  ws2['!cols'] = [{ wch: 10 }, { wch: 16 }, { wch: 16 }];
+  ws2['!cols'] = [{ wch: 10 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(wb, ws2, '부속명세서');
 
   XLSX.writeFile(wb, `퇴직금정산내역서_${name}_${$('s_retire_display').textContent}.xlsx`);
@@ -512,10 +536,15 @@ function downloadSettlementExcel() {
 /* ── 퇴직연금 현황 엑셀 다운로드 ── */
 function downloadPensionExcel() {
   const rows = [['이름', '지사', '부서', '가입일', '누적추계액(현재기준)', '실불입액 합계', '잔액', $('asOfCumHeader').textContent, $('periodAccrualHeader').textContent, $('asOfBalanceHeader').textContent]];
-  document.querySelectorAll('#pensionTbody tr').forEach(tr => {
+  document.querySelectorAll('#pensionTbody tr:not(.hr-total-row)').forEach(tr => {
     const cells = Array.from(tr.children).slice(0, 10).map(td => td.textContent.trim());
     if (cells.length === 10) rows.push(cells);
   });
+  const totalRow = document.querySelector('#pensionTbody tr.hr-total-row');
+  if (totalRow) {
+    const tds = Array.from(totalRow.children).map(td => td.textContent.trim());
+    rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5], tds[6]]);
+  }
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '퇴직연금현황');
@@ -722,6 +751,18 @@ function renderPayroll(list) {
       <td class="num">${fmt(p.total_pay)}</td>
     </tr>
   `).join('');
+
+  const sum = (key) => list.reduce((s, p) => s + (Number(p[key]) || 0), 0);
+  tbody.innerHTML += `
+    <tr class="hr-total-row">
+      <td colspan="4">합계 (${list.length}명)</td>
+      <td class="num">${fmt(sum('base_pay'))}</td>
+      <td class="num">${fmt(sum('fixed_overtime_pay'))}</td>
+      <td class="num">${fmt(sum('attendance_allowance'))}</td>
+      <td class="num">${fmt(sum('meal_allowance'))}</td>
+      <td class="num">${fmt(sum('total_pay'))}</td>
+    </tr>
+  `;
 }
 
 async function generatePayroll() {
@@ -745,10 +786,15 @@ async function generatePayroll() {
 
 function downloadPayrollExcel() {
   const rows = [['이름', '지사', '부서', '직급', '기본급', '고정연장수당', '만근수당', '식대', '합계']];
-  document.querySelectorAll('#payrollTbody tr').forEach(tr => {
+  document.querySelectorAll('#payrollTbody tr:not(.hr-total-row)').forEach(tr => {
     const cells = Array.from(tr.children).map(td => td.textContent.trim());
     if (cells.length === 9) rows.push(cells);
   });
+  const totalRow = document.querySelector('#payrollTbody tr.hr-total-row');
+  if (totalRow) {
+    const tds = Array.from(totalRow.children).map(td => td.textContent.trim());
+    rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5]]);
+  }
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   const sheetName = $('payrollMonth').value || '급여명세';
