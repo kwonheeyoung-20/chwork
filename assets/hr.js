@@ -329,6 +329,8 @@ async function calcSettlement() {
       $('settlementMsg').textContent = data.detail || '계산 실패';
       return;
     }
+    $('s_name').textContent = $('s_employee_id').selectedOptions[0]?.textContent.replace(/\s*\(.*\)$/, '') || '-';
+    $('s_retire_display').textContent = retireDate;
     $('s_cum').textContent = fmt(data.cumulative_estimate) + '원';
     $('s_paid').textContent = fmt(data.total_contributed) + '원';
     $('s_add').textContent = fmt(data.additional_payment) + '원';
@@ -418,4 +420,47 @@ async function loadSettlementHistory() {
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
+}
+
+/* ── 정산내역서 출력/다운로드 ── */
+function printSettlement() {
+  window.print();
+}
+
+function downloadSettlementExcel() {
+  const name = $('s_name').textContent;
+  const rows = [
+    ['퇴직금(DC형 퇴직연금) 정산내역서'],
+    [],
+    ['성명', name],
+    ['퇴사일', $('s_retire_display').textContent],
+    [],
+    ['누적추계액 (퇴사일 기준)', Number($('settlementResult').dataset.cum || 0)],
+    ['기 불입액 (퇴사일까지)', Number($('settlementResult').dataset.paid || 0)],
+    ['추가불입(정산)액', Number($('settlementResult').dataset.add || 0)],
+    [],
+    ['공제금액 합계', Number($('s_deduction').value || 0)],
+    ['연말정산 환급금', Number($('s_tax_refund').value || 0)],
+    ['기타지급액', Number($('s_other').value || 0)],
+    [],
+    ['실 지급액', $('s_net').textContent.replace(/[^\d-]/g, '')],
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 22 }, { wch: 20 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '정산내역서');
+  XLSX.writeFile(wb, `퇴직금정산내역서_${name}_${$('s_retire_display').textContent}.xlsx`);
+}
+
+/* ── 퇴직연금 현황 엑셀 다운로드 ── */
+function downloadPensionExcel() {
+  const rows = [['이름', '지사', '부서', '가입일', '누적추계액', '실불입액 합계', '잔액']];
+  document.querySelectorAll('#pensionTbody tr').forEach(tr => {
+    const cells = Array.from(tr.children).map(td => td.textContent.trim());
+    if (cells.length === 7) rows.push(cells);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '퇴직연금현황');
+  XLSX.writeFile(wb, `퇴직연금현황_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
