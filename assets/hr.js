@@ -272,7 +272,7 @@ function renderPension(list, asOf) {
       <td class="num">${asOf ? fmt(p.period_accrual) : '-'}</td>
       <td class="num ${asOf && p.as_of_balance > 0 ? 'negative' : ''}">${asOf ? fmt(p.as_of_balance) : '-'}</td>
       <td class="num"><input type="number" class="hr-input bulk-amount" style="width:120px; text-align:right;" placeholder="0"></td>
-      <td><a class="hr-edit-link" onclick="openHistoryModal('${p.id}', '${esc(p.name)}')">이력</a></td>
+      <td><a class="hr-edit-link" onclick="openHistoryModal('${p.id}', '${esc(p.name)}')">이력</a> · <a class="hr-edit-link" onclick="openAdjustModal('${p.id}', '${esc(p.name)}')">보정</a></td>
     </tr>
   `).join('');
 
@@ -800,4 +800,97 @@ function downloadPayrollExcel() {
   const sheetName = $('payrollMonth').value || '급여명세';
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, `급여명세_${sheetName}.xlsx`);
+}
+
+/* ── 퇴직연금 개별 보정 ── */
+let currentAdjustEmployeeId = null;
+let currentAdjustEmployeeName = null;
+
+async function openAdjustModal(employeeId, name) {
+  currentAdjustEmployeeId = employeeId;
+  currentAdjustEmployeeName = name;
+  $('adjustModalTitle').textContent = `${name} — 개별 보정`;
+  $('adj_date').value = '';
+  $('adj_amount').value = '';
+  $('adj_note').value = '';
+  $('adjustMsg').textContent = '';
+  $('adjustModal').style.display = 'flex';
+  await loadAdjustHistory(employeeId);
+}
+
+function closeAdjustModal() {
+  $('adjustModal').style.display = 'none';
+  loadPension();
+}
+
+async function loadAdjustHistory(employeeId) {
+  $('adjustHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:12px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension?employee_id=${employeeId}&type=adjustment`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.adjustments || [];
+    if (list.length === 0) {
+      $('adjustHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:12px;">보정 내역이 없습니다.</td></tr>`;
+      return;
+    }
+    $('adjustHistoryTbody').innerHTML = list.map(a => `
+      <tr>
+        <td>${esc(a.effective_date)}</td>
+        <td class="num">${a.adjustment_amount > 0 ? '+' : ''}${fmt(a.adjustment_amount)}</td>
+        <td>${esc(a.note || '-')}</td>
+        <td><a class="hr-edit-link" onclick="deleteAdjustment('${a.id}')">삭제</a></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    $('adjustHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:12px;">불러오기 실패</td></tr>`;
+  }
+}
+
+async function saveAdjustment() {
+  const date = $('adj_date').value;
+  const amount = Number($('adj_amount').value);
+  const note = $('adj_note').value.trim() || null;
+  if (!date || !amount) {
+    $('adjustMsg').textContent = '적용 시작일과 금액은 필수입니다.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({
+        type: 'adjustment',
+        employee_id: currentAdjustEmployeeId,
+        effective_date: date,
+        adjustment_amount: amount,
+        note,
+      }),
+    });
+    if (!res.ok) throw new Error('save failed');
+    $('adj_date').value = '';
+    $('adj_amount').value = '';
+    $('adj_note').value = '';
+    $('adjustMsg').className = 'hr-msg success';
+    $('adjustMsg').textContent = '저장되었습니다.';
+    loadAdjustHistory(currentAdjustEmployeeId);
+  } catch (e) {
+    $('adjustMsg').className = 'hr-msg';
+    $('adjustMsg').textContent = '저장 중 오류가 발생했습니다.';
+  }
+}
+
+async function deleteAdjustment(id) {
+  if (!confirm('이 보정 내역을 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension?id=${id}&type=adjustment`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('delete failed');
+    loadAdjustHistory(currentAdjustEmployeeId);
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
 }
