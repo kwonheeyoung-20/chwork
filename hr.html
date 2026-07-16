@@ -95,20 +95,16 @@
             누적추계액은 연봉 이력을 기준으로 매번 자동 계산됩니다 (별도 고정 작업 불필요).
           </p>
 
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
-            <label style="font-size:13px; color:var(--text-secondary);">반기 마감일(기준일자) 지정:</label>
-            <input id="pensionAsOf" type="date" class="hr-input" style="width:160px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">기준일자(반기 마감일 등):</label>
+            <input id="pensionAsOf" type="date" class="hr-input" style="width:150px;">
             <button class="secondary" onclick="loadPension()">조회</button>
             <button class="secondary" onclick="$('pensionAsOf').value=''; loadPension();">초기화(오늘 기준)</button>
-          </div>
-
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm);">
-            <label style="font-size:13px; color:var(--text-secondary);">일괄 불입 처리 — 입금일:</label>
-            <input id="bulkContribDate" type="date" class="hr-input" style="width:150px;">
+            <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
             <button class="secondary" onclick="fillBulkAmounts('accrual')">지정일자 미지급잔액으로 채우기</button>
             <button class="secondary" onclick="fillBulkAmounts('balance')">오늘 기준 전체잔액으로 채우기</button>
             <button class="secondary" onclick="fillBulkAmounts('clear')">비우기</button>
-            <button class="primary" onclick="saveBulkContributions()">입력된 금액 일괄 저장</button>
+            <button class="primary" onclick="saveBulkContributions()">입력된 금액을 기준일자로 일괄 저장</button>
           </div>
 
           <div class="table-wrap">
@@ -123,10 +119,11 @@
                   <th class="num" id="periodAccrualHeader">해당연도 1월~지정일 발생액</th>
                   <th class="num" id="asOfBalanceHeader">지정일자 기준 미지급잔액</th>
                   <th class="num">이번 불입액(입력)</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="pensionTbody">
-                <tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+                <tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
               </tbody>
             </table>
           </div>
@@ -265,6 +262,22 @@
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
       <button class="secondary" onclick="closeModal()">취소</button>
       <button class="primary" onclick="saveEmployee()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 불입 내역 조회/삭제 모달 -->
+<div id="historyModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:480px;">
+    <h2 id="historyModalTitle">불입 내역</h2>
+    <div class="table-wrap">
+      <table class="table" id="contribHistoryTable">
+        <thead><tr><th>입금일</th><th class="num">금액</th><th>비고</th><th></th></tr></thead>
+        <tbody id="contribHistoryTbody"></tbody>
+      </table>
+    </div>
+    <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeHistoryModal()">닫기</button>
     </div>
   </div>
 </div>
