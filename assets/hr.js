@@ -559,7 +559,12 @@ async function saveBulkContributions() {
 }
 
 /* ── 불입 내역 조회/취소(삭제) ── */
+let currentHistoryEmployeeId = null;
+let currentHistoryEmployeeName = null;
+
 async function openHistoryModal(employeeId, name) {
+  currentHistoryEmployeeId = employeeId;
+  currentHistoryEmployeeName = name;
   $('historyModalTitle').textContent = `${name} — 불입 내역`;
   $('contribHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
   $('historyModal').style.display = 'flex';
@@ -574,11 +579,14 @@ async function openHistoryModal(employeeId, name) {
       return;
     }
     $('contribHistoryTbody').innerHTML = list.map(c => `
-      <tr>
-        <td>${esc(c.contribution_date)}</td>
-        <td class="num">${fmt(c.amount)}</td>
-        <td>${esc(c.note || '-')}</td>
-        <td><a class="hr-edit-link" onclick="deleteContribution('${c.id}', '${employeeId}', '${esc(name)}')">삭제</a></td>
+      <tr data-id="${c.id}" data-date="${c.contribution_date}" data-amount="${c.amount}" data-note="${esc(c.note || '')}">
+        <td class="hview">${esc(c.contribution_date)}</td>
+        <td class="num hview">${fmt(c.amount)}</td>
+        <td class="hview">${esc(c.note || '-')}</td>
+        <td class="hview">
+          <a class="hr-edit-link" onclick="editContributionRow(this)">수정</a>
+          <a class="hr-edit-link" style="margin-left:8px;" onclick="deleteContribution('${c.id}', '${employeeId}', '${esc(name)}')">삭제</a>
+        </td>
       </tr>
     `).join('');
   } catch (e) {
@@ -602,5 +610,45 @@ async function deleteContribution(contribId, employeeId, name) {
     openHistoryModal(employeeId, name);
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 불입 내역 수정(인라인) ── */
+function editContributionRow(linkEl) {
+  const tr = linkEl.closest('tr');
+  const id = tr.dataset.id;
+  const date = tr.dataset.date;
+  const amount = tr.dataset.amount;
+  const note = tr.dataset.note;
+
+  tr.innerHTML = `
+    <td><input type="date" class="hr-input" id="edit_date_${id}" value="${date}" style="width:130px;"></td>
+    <td class="num"><input type="number" class="hr-input" id="edit_amount_${id}" value="${amount}" style="width:110px; text-align:right;"></td>
+    <td><input type="text" class="hr-input" id="edit_note_${id}" value="${esc(note)}"></td>
+    <td>
+      <a class="hr-edit-link" onclick="saveContributionEdit('${id}')">저장</a>
+      <a class="hr-edit-link" style="margin-left:8px;" onclick="openHistoryModal(currentHistoryEmployeeId, currentHistoryEmployeeName)">취소</a>
+    </td>
+  `;
+}
+
+async function saveContributionEdit(id) {
+  const date = $(`edit_date_${id}`).value;
+  const amount = Number($(`edit_amount_${id}`).value);
+  const note = $(`edit_note_${id}`).value.trim() || null;
+  if (!date || !amount) {
+    alert('입금일과 금액은 필수입니다.');
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension?id=${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ contribution_date: date, amount, note }),
+    });
+    if (!res.ok) throw new Error('update failed');
+    openHistoryModal(currentHistoryEmployeeId, currentHistoryEmployeeName);
+  } catch (e) {
+    alert('수정 중 오류가 발생했습니다.');
   }
 }
