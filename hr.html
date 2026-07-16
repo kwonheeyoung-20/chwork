@@ -105,8 +105,8 @@
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm);">
             <label style="font-size:13px; color:var(--text-secondary);">일괄 불입 처리 — 입금일:</label>
             <input id="bulkContribDate" type="date" class="hr-input" style="width:150px;">
-            <button class="secondary" onclick="fillBulkAmounts('accrual')">발생액으로 채우기</button>
-            <button class="secondary" onclick="fillBulkAmounts('balance')">잔액으로 채우기</button>
+            <button class="secondary" onclick="fillBulkAmounts('accrual')">지정일자 미지급잔액으로 채우기</button>
+            <button class="secondary" onclick="fillBulkAmounts('balance')">오늘 기준 전체잔액으로 채우기</button>
             <button class="secondary" onclick="fillBulkAmounts('clear')">비우기</button>
             <button class="primary" onclick="saveBulkContributions()">입력된 금액 일괄 저장</button>
           </div>
@@ -121,11 +121,12 @@
                   <th class="num">잔액</th>
                   <th class="num" id="asOfCumHeader">지정일자 누적추계액</th>
                   <th class="num" id="periodAccrualHeader">해당연도 1월~지정일 발생액</th>
+                  <th class="num" id="asOfBalanceHeader">지정일자 기준 미지급잔액</th>
                   <th class="num">이번 불입액(입력)</th>
                 </tr>
               </thead>
               <tbody id="pensionTbody">
-                <tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+                <tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
               </tbody>
             </table>
           </div>
