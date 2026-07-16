@@ -142,34 +142,30 @@ class handler(BaseHTTPRequestHandler):
         hire_year = int(hire_date[:4])
         retire_year = int(retire_date[:4])
 
-        contributions = rest_request(
-            "GET", f"pension_contributions?employee_id=eq.{employee_id}&select=contribution_date,amount"
-        ) or []
-        contrib_by_year = {}
-        for c in contributions:
-            y = int(c["contribution_date"][:4])
-            contrib_by_year[y] = contrib_by_year.get(y, 0) + c["amount"]
-
         history = rest_request(
             "GET", f"pension_cumulative_history?employee_id=eq.{employee_id}&select=year,cumulative_estimate"
         ) or []
         history_by_year = {h["year"]: h["cumulative_estimate"] for h in history}
+        earliest_known_year = min(history_by_year.keys()) if history_by_year else 2026
+
+        start_year = max(hire_year, earliest_known_year)
 
         rows = []
-        earliest_known_year = min(history_by_year.keys()) if history_by_year else 2026
-        for y in range(hire_year, retire_year + 1):
+        for y in range(start_year, retire_year + 1):
             if y in history_by_year:
-                cum = history_by_year[y]
-            elif y < earliest_known_year:
-                # 2013년 DC 도입 이전 연도는 추계액 자료 자체가 없으므로 0으로 표시
-                cum = 0
+                cum_estimate = history_by_year[y]
             else:
                 as_of = retire_date if y == retire_year else f"{y}-12-31"
-                cum = rpc("pension_cumulative_estimate", {"p_employee_id": employee_id, "p_as_of": as_of}) or 0
+                cum_estimate = rpc("pension_cumulative_estimate", {"p_employee_id": employee_id, "p_as_of": as_of}) or 0
+
+            as_of_paid = retire_date if y == retire_year else f"{y}-12-31"
+            cum_paid = rpc("pension_contributed_as_of", {"p_employee_id": employee_id, "p_as_of": as_of_paid}) or 0
+
             rows.append({
                 "year": y,
-                "cumulative_estimate": round(cum),
-                "contribution": round(contrib_by_year.get(y, 0)),
+                "cumulative_estimate": round(cum_estimate),
+                "cumulative_paid": round(cum_paid),
+                "balance": round(cum_estimate - cum_paid),
             })
         return rows
 
