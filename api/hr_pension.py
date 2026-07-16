@@ -13,6 +13,7 @@ import json
 import traceback
 import urllib.request
 import urllib.error
+from urllib.parse import urlparse, parse_qs
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
@@ -125,6 +126,27 @@ class handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
 
+            # 목록형(일괄 저장): {"items": [{employee_id, contribution_date, amount, note}, ...]}
+            if isinstance(payload, dict) and "items" in payload:
+                items = payload["items"]
+                if not items:
+                    return self._send(400, {"error": "items가 비어있습니다"})
+                body = []
+                for it in items:
+                    if not it.get("employee_id") or not it.get("contribution_date") or it.get("amount") is None:
+                        continue
+                    body.append({
+                        "employee_id": it["employee_id"],
+                        "contribution_date": it["contribution_date"],
+                        "amount": it["amount"],
+                        "note": it.get("note"),
+                    })
+                if not body:
+                    return self._send(400, {"error": "유효한 항목이 없습니다"})
+                created = rest_request("POST", "pension_contributions", body=body, prefer="return=representation")
+                return self._send(201, {"contributions": created, "count": len(created) if created else 0})
+
+            # 단건 저장
             emp_id = payload.get("employee_id")
             contribution_date = payload.get("contribution_date")
             amount = payload.get("amount")
