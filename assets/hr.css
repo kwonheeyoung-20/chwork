@@ -44,6 +44,12 @@
 .settle-row b { font-size: 14px; color: var(--text-primary); font-weight: 500; }
 .settle-row.highlight { background: var(--bg-accent, var(--bg)); padding: 12px 8px; border-radius: var(--radius-sm); border-bottom: none; }
 
+@media print {
+  body * { visibility: hidden; }
+  #printArea, #printArea * { visibility: visible; }
+  #printArea { position: absolute; top: 0; left: 0; width: 100%; }
+}
+
 /* 모달 */
 .hr-modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.35);
