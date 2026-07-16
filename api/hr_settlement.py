@@ -187,6 +187,7 @@ class handler(BaseHTTPRequestHandler):
             }
             created = rest_request("POST", "pension_settlements", body=body, prefer="return=representation")
 
+            # 정산 확정 시 직원 재직상태도 자동으로 '퇴사' 처리
             rest_request("PATCH", f"employees?id=eq.{payload['employee_id']}", body={
                 "status": "퇴사", "retire_date": payload["retire_date"],
             })
