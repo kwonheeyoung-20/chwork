@@ -66,7 +66,7 @@ def check_password(candidate: str) -> bool:
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, X-HR-Password",
         "Content-Type": "application/json",
     }
@@ -97,6 +97,16 @@ class handler(BaseHTTPRequestHandler):
             if not self._authorized():
                 return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
+
+            if qs.get("salary_history", ["0"])[0] == "1":
+                emp_id = qs.get("employee_id", [None])[0]
+                if not emp_id:
+                    return self._send(400, {"error": "employee_id는 필수입니다"})
+                items = rest_request(
+                    "GET", f"salary_history?employee_id=eq.{emp_id}&select=*&order=effective_month.desc"
+                )
+                return self._send(200, {"salary_history": items})
+
             show_all = qs.get("all", ["0"])[0] == "1"
 
             select = "select=*,salary_history(effective_month,annual_salary_thousand,reason)"
@@ -150,9 +160,26 @@ class handler(BaseHTTPRequestHandler):
         try:
             if not self._authorized():
                 return self._send(401, {"error": "unauthorized"})
+            qs = parse_qs(urlparse(self.path).query)
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
+
+            # 연봉 이력 항목 자체 수정: PATCH ?salary_history_id=xxx
+            sh_id = qs.get("salary_history_id", [None])[0]
+            if sh_id:
+                update_fields = {}
+                if payload.get("effective_month"):
+                    update_fields["effective_month"] = payload["effective_month"]
+                if payload.get("annual_salary_thousand") is not None:
+                    update_fields["annual_salary_thousand"] = payload["annual_salary_thousand"]
+                if "reason" in payload:
+                    update_fields["reason"] = payload["reason"]
+                if not update_fields:
+                    return self._send(400, {"error": "수정할 항목이 없습니다"})
+                rest_request("PATCH", f"salary_history?id=eq.{sh_id}", body=update_fields)
+                return self._send(200, {"ok": True})
+
             emp_id = payload.get("id")
             if not emp_id:
                 return self._send(400, {"error": "id required"})
@@ -170,6 +197,21 @@ class handler(BaseHTTPRequestHandler):
                     "annual_salary_thousand": payload["new_salary_thousand"],
                     "reason": payload.get("new_salary_reason") or "연봉 변경",
                 })
+            return self._send(200, {"ok": True})
+        except SupabaseError as e:
+            return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
+        except Exception as e:
+            return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
+
+    def do_DELETE(self):
+        try:
+            if not self._authorized():
+                return self._send(401, {"error": "unauthorized"})
+            qs = parse_qs(urlparse(self.path).query)
+            sh_id = qs.get("salary_history_id", [None])[0]
+            if not sh_id:
+                return self._send(400, {"error": "salary_history_id는 필수입니다"})
+            rest_request("DELETE", f"salary_history?id=eq.{sh_id}")
             return self._send(200, {"ok": True})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
