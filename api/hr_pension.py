@@ -67,7 +67,7 @@ def rpc(fn_name, params):
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, X-HR-Password",
         "Content-Type": "application/json",
     }
@@ -98,22 +98,29 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
             as_of = qs.get("as_of", [None])[0]
+            employee_id = qs.get("employee_id", [None])[0]
+
+            # 특정 직원의 불입 내역 조회 (취소/정정용)
+            if employee_id:
+                items = rest_request(
+                    "GET",
+                    f"pension_contributions?employee_id=eq.{employee_id}&select=*&order=contribution_date.desc",
+                )
+                return self._send(200, {"contributions": items})
 
             data = rest_request("GET", "pension_status?select=*")
             if not isinstance(data, list):
                 return self._send(502, {"error": "unexpected_response", "detail": str(data)})
 
             if as_of:
-                year_start = f"{as_of[:4]}-01-01"
-                prev_year_end = f"{int(as_of[:4]) - 1}-12-31"
+                as_of_data = rpc("pension_status_as_of", {"p_as_of": as_of}) or []
+                as_of_map = {row["id"]: row for row in as_of_data}
                 for emp in data:
-                    as_of_cum = rpc("pension_cumulative_estimate", {"p_employee_id": emp["id"], "p_as_of": as_of}) or 0
-                    prev_cum = rpc("pension_cumulative_estimate", {"p_employee_id": emp["id"], "p_as_of": prev_year_end}) or 0
-                    as_of_paid = rpc("pension_contributed_as_of", {"p_employee_id": emp["id"], "p_as_of": as_of}) or 0
-                    emp["as_of_cumulative_estimate"] = round(as_of_cum)
-                    emp["period_accrual"] = round(as_of_cum - prev_cum)
-                    emp["as_of_paid"] = round(as_of_paid)
-                    emp["as_of_balance"] = round(as_of_cum - as_of_paid)
+                    extra = as_of_map.get(emp["id"], {})
+                    emp["as_of_cumulative_estimate"] = extra.get("as_of_cumulative_estimate", 0)
+                    emp["period_accrual"] = extra.get("period_accrual", 0)
+                    emp["as_of_paid"] = extra.get("as_of_paid", 0)
+                    emp["as_of_balance"] = extra.get("as_of_balance", 0)
 
             return self._send(200, {"pension": data})
         except SupabaseError as e:
@@ -163,6 +170,21 @@ class handler(BaseHTTPRequestHandler):
                 "note": payload.get("note"),
             }, prefer="return=representation")
             return self._send(201, {"contribution": created[0] if created else None})
+        except SupabaseError as e:
+            return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
+        except Exception as e:
+            return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
+
+    def do_DELETE(self):
+        try:
+            if not self._authorized():
+                return self._send(401, {"error": "unauthorized"})
+            qs = parse_qs(urlparse(self.path).query)
+            contrib_id = qs.get("id", [None])[0]
+            if not contrib_id:
+                return self._send(400, {"error": "id는 필수입니다"})
+            rest_request("DELETE", f"pension_contributions?id=eq.{contrib_id}")
+            return self._send(200, {"ok": True})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
         except Exception as e:
