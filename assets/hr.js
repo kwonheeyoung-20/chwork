@@ -146,6 +146,7 @@ function openAddModal() {
   $('f_status').value = '재직';
   $('f_pension_enrolled').value = 'true';
   $('modalMsg').textContent = '';
+  $('salaryHistorySection').style.display = 'none';
   $('empModal').style.display = 'flex';
 }
 
@@ -170,6 +171,8 @@ function openEditModal(id) {
   $('f_salary_reason').value = '';
   $('modalMsg').textContent = `현재 연봉: ${fmt(emp.current_salary_thousand)}천원 — 아래는 "변경"이 있을 때만 입력하세요.`;
   $('modalMsg').className = 'hr-msg';
+  $('salaryHistorySection').style.display = 'block';
+  loadSalaryHistoryInModal(id);
   $('empModal').style.display = 'flex';
 }
 
@@ -1096,7 +1099,7 @@ async function loadOtherPayments() {
           <td>${esc(p.employees?.branch || '-')}</td>
           <td>${esc(p.employees?.department || '-')}</td>
           <td>${esc(p.payment_type)}</td>
-          <td>${esc(p.payment_date)}</td>
+          <td>${esc((p.payment_date || '').slice(0,7))}</td>
           <td class="num">${fmt(p.amount)}</td>
           <td>${esc(p.note || '-')}</td>
           <td><a class="hr-edit-link" onclick="deleteOtherPayment('${p.id}')">삭제</a></td>
@@ -1132,12 +1135,12 @@ async function saveOtherPayment() {
   const payload = {
     employee_id: $('op_employee_id').value,
     payment_type: $('op_payment_type').value,
-    payment_date: $('op_date').value,
+    payment_date: $('op_date').value ? `${$('op_date').value}-01` : '',
     amount: Number($('op_amount').value),
     note: $('op_note').value.trim() || null,
   };
   if (!payload.employee_id || !payload.payment_date || !payload.amount) {
-    $('otherPayMsg').textContent = '직원, 지급일, 금액은 필수입니다.';
+    $('otherPayMsg').textContent = '직원, 지급월, 금액은 필수입니다.';
     return;
   }
   try {
@@ -1171,7 +1174,7 @@ async function deleteOtherPayment(id) {
 }
 
 function downloadOtherPaymentsExcel() {
-  const rows = [['이름', '지사', '부서', '지급유형', '지급일', '금액', '비고']];
+  const rows = [['이름', '지사', '부서', '지급유형', '지급월', '금액', '비고']];
   document.querySelectorAll('#otherpayTbody tr:not(.hr-total-row)').forEach(tr => {
     const cells = Array.from(tr.children).slice(0, 7).map(td => td.textContent.trim());
     if (cells.length === 7) rows.push(cells);
@@ -1181,4 +1184,236 @@ function downloadOtherPaymentsExcel() {
   const year = $('otherpayYear').value;
   XLSX.utils.book_append_sheet(wb, ws, `${year}년`);
   XLSX.writeFile(wb, `성과급기타지급_${year}.xlsx`);
+}
+
+/* ── 성과급/기타지급 일괄 입력 ── */
+async function loadBulkOtherPayList() {
+  const month = $('bulkOpDate').value;
+  if (!month) { alert('먼저 지급월을 선택해주세요.'); return; }
+  $('bulkOpWrap').style.display = 'block';
+  $('bulkOpWrap2').style.display = 'block';
+  $('bulkOpTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.employees || [];
+    $('bulkOpTbody').innerHTML = list.map(e => `
+      <tr data-emp-id="${e.id}">
+        <td>${esc(e.name)}</td>
+        <td>${esc(e.branch || '-')}</td>
+        <td>${esc(e.department || '-')}</td>
+        <td class="num"><input type="number" class="hr-input bulk-op-amount" style="width:130px; text-align:right;" placeholder="0"></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    $('bulkOpTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+  }
+}
+
+async function saveBulkOtherPayments() {
+  const paymentType = $('bulkOpType').value;
+  const month = $('bulkOpDate').value;
+  if (!month) { alert('지급월을 선택해주세요.'); return; }
+  const date = `${month}-01`;
+
+  const items = [];
+  document.querySelectorAll('#bulkOpTbody tr').forEach(tr => {
+    const empId = tr.dataset.empId;
+    const input = tr.querySelector('.bulk-op-amount');
+    const amount = Number(input?.value || 0);
+    if (empId && amount > 0) {
+      items.push({ employee_id: empId, payment_type: paymentType, payment_date: date, amount });
+    }
+  });
+  if (items.length === 0) {
+    $('otherPayBulkMsg').textContent = '입력된 금액이 없습니다.';
+    return;
+  }
+  if (!confirm(`${items.length}명에게 "${paymentType}" ${fmt(items.reduce((s,i)=>s+i.amount,0))}원을 ${month}월로 저장하시겠습니까?`)) return;
+
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ items }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'save failed');
+    $('otherPayBulkMsg').className = 'hr-msg success';
+    $('otherPayBulkMsg').textContent = `${data.count}건 저장되었습니다.`;
+    $('bulkOpWrap').style.display = 'none';
+    $('bulkOpWrap2').style.display = 'none';
+    loadOtherPayments();
+  } catch (e) {
+    $('otherPayBulkMsg').className = 'hr-msg';
+    $('otherPayBulkMsg').textContent = e.message.includes('마감') ? e.message : '저장 중 오류가 발생했습니다.';
+  }
+}
+
+/* ── 연봉 소급 정산 ── */
+async function loadRetroPreview() {
+  const from = $('retroFrom').value; // "2026-01"
+  const to = $('retroTo').value;
+  if (!from || !to) { alert('소급 적용 구간을 먼저 선택해주세요.'); return; }
+  const fromDate = `${from}-01`;
+  const toDate = `${to}-01`;
+
+  $('retroWrap').style.display = 'block';
+  $('retroTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">계산 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?retro_preview=1&from_month=${fromDate}&to_month=${toDate}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'calc failed');
+    const list = data.employees || [];
+    if (list.length === 0) {
+      $('retroTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">이 구간에 남은 차액이 있는 직원이 없습니다. (이미 소급 지급되었거나, 연봉 변경이 없는 경우입니다)</td></tr>`;
+    } else {
+      $('retroTbody').innerHTML = list.map(e => `
+        <tr data-emp-id="${e.id}" data-source-month="${e.source_month}">
+          <td>${esc(e.name)}</td>
+          <td>${esc(e.branch || '-')}</td>
+          <td>${esc(e.department || '-')}</td>
+          <td>${esc(e.source_month.slice(0,7))}</td>
+          <td class="num"><input type="number" class="hr-input retro-amount" style="width:140px; text-align:right;" value="${e.retroactive_diff}"></td>
+        </tr>
+      `).join('');
+      const total = list.reduce((s,e) => s + (Number(e.retroactive_diff)||0), 0);
+      $('retroTbody').innerHTML += `
+        <tr class="hr-total-row">
+          <td colspan="4">합계 (${list.length}건)</td>
+          <td class="num">${fmt(total)}</td>
+        </tr>
+      `;
+    }
+    $('retroSaveWrap').style.display = 'flex';
+  } catch (e) {
+    $('retroTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">계산 실패</td></tr>`;
+  }
+}
+
+async function saveRetroAdjustments() {
+  const targetMonth = $('retroTargetMonth').value;
+  if (!targetMonth) { alert('적용할 급여명세월을 선택해주세요.'); return; }
+  const targetMonthDate = `${targetMonth}-01`;
+
+  const items = [];
+  document.querySelectorAll('#retroTbody tr:not(.hr-total-row)').forEach(tr => {
+    const empId = tr.dataset.empId;
+    const sourceMonth = tr.dataset.sourceMonth;
+    const input = tr.querySelector('.retro-amount');
+    const amount = Number(input?.value || 0);
+    if (empId && sourceMonth && amount !== 0) {
+      items.push({ employee_id: empId, source_month: sourceMonth, amount });
+    }
+  });
+  if (items.length === 0) {
+    $('retroMsg').textContent = '적용할 금액이 없습니다.';
+    return;
+  }
+  const uniqueEmployees = new Set(items.map(i => i.employee_id)).size;
+  if (!confirm(`${uniqueEmployees}명, 총 ${fmt(items.reduce((s,i)=>s+i.amount,0))}원을 ${targetMonth} 급여명세에 소급인상분으로 반영하시겠습니까?`)) return;
+
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'retroactive', target_month: targetMonthDate, items }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'save failed');
+    $('retroMsg').className = 'hr-msg success';
+    $('retroMsg').textContent = `${data.count}명 반영 완료. "월별 급여명세"에서 ${targetMonth} 저장된 자료를 확인해보세요.`;
+    $('retroWrap').style.display = 'none';
+    $('retroSaveWrap').style.display = 'none';
+  } catch (e) {
+    $('retroMsg').className = 'hr-msg';
+    $('retroMsg').textContent = e.message.includes('마감') ? e.message : '저장 중 오류가 발생했습니다.';
+  }
+}
+
+/* ── 직원 모달 안 연봉 이력 관리 ── */
+async function loadSalaryHistoryInModal(employeeId) {
+  $('salaryHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:12px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees?salary_history=1&employee_id=${employeeId}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.salary_history || [];
+    if (list.length === 0) {
+      $('salaryHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:12px;">이력이 없습니다.</td></tr>`;
+      return;
+    }
+    $('salaryHistoryTbody').innerHTML = list.map(s => `
+      <tr data-id="${s.id}" data-month="${s.effective_month}" data-salary="${s.annual_salary_thousand}" data-reason="${esc(s.reason || '')}">
+        <td class="hview">${esc(s.effective_month)}</td>
+        <td class="num hview">${fmt(s.annual_salary_thousand)}</td>
+        <td class="hview">${esc(s.reason || '-')}</td>
+        <td class="hview">
+          <a class="hr-edit-link" onclick="editSalaryHistoryRow(this)">수정</a>
+          <a class="hr-edit-link" style="margin-left:8px;" onclick="deleteSalaryHistoryRow('${s.id}', '${employeeId}')">삭제</a>
+        </td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    $('salaryHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:12px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function editSalaryHistoryRow(linkEl) {
+  const tr = linkEl.closest('tr');
+  const id = tr.dataset.id;
+  const month = tr.dataset.month;
+  const salary = tr.dataset.salary;
+  const reason = tr.dataset.reason;
+  tr.innerHTML = `
+    <td><input type="date" class="hr-input" id="sh_month_${id}" value="${month}" style="width:130px;"></td>
+    <td class="num"><input type="number" class="hr-input" id="sh_salary_${id}" value="${salary}" style="width:100px; text-align:right;"></td>
+    <td><input type="text" class="hr-input" id="sh_reason_${id}" value="${esc(reason)}"></td>
+    <td>
+      <a class="hr-edit-link" onclick="saveSalaryHistoryEdit('${id}')">저장</a>
+      <a class="hr-edit-link" style="margin-left:8px;" onclick="loadSalaryHistoryInModal(editingId)">취소</a>
+    </td>
+  `;
+}
+
+async function saveSalaryHistoryEdit(id) {
+  const month = $(`sh_month_${id}`).value;
+  const salary = Number($(`sh_salary_${id}`).value);
+  const reason = $(`sh_reason_${id}`).value.trim() || null;
+  if (!month || !salary) {
+    alert('적용 시작월과 연봉은 필수입니다.');
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees?salary_history_id=${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ effective_month: month, annual_salary_thousand: salary, reason }),
+    });
+    if (!res.ok) throw new Error('update failed');
+    loadSalaryHistoryInModal(editingId);
+    loadEmployees();
+  } catch (e) {
+    alert('수정 중 오류가 발생했습니다.');
+  }
+}
+
+async function deleteSalaryHistoryRow(id, employeeId) {
+  if (!confirm('이 연봉 이력을 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees?salary_history_id=${id}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('delete failed');
+    loadSalaryHistoryInModal(employeeId);
+    loadEmployees();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
 }
