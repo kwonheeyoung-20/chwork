@@ -59,6 +59,10 @@ def check_password(candidate: str) -> bool:
     return candidate == HR_PASSWORD
 
 
+def rpc(fn_name, params):
+    return rest_request("POST", f"rpc/{fn_name}", body=params)
+
+
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
@@ -91,9 +95,22 @@ class handler(BaseHTTPRequestHandler):
         try:
             if not self._authorized():
                 return self._send(401, {"error": "unauthorized"})
+            qs = parse_qs(urlparse(self.path).query)
+            as_of = qs.get("as_of", [None])[0]
+
             data = rest_request("GET", "pension_status?select=*")
             if not isinstance(data, list):
                 return self._send(502, {"error": "unexpected_response", "detail": str(data)})
+
+            if as_of:
+                year_start = f"{as_of[:4]}-01-01"
+                prev_year_end = f"{int(as_of[:4]) - 1}-12-31"
+                for emp in data:
+                    as_of_cum = rpc("pension_cumulative_estimate", {"p_employee_id": emp["id"], "p_as_of": as_of}) or 0
+                    prev_cum = rpc("pension_cumulative_estimate", {"p_employee_id": emp["id"], "p_as_of": prev_year_end}) or 0
+                    emp["as_of_cumulative_estimate"] = round(as_of_cum)
+                    emp["period_accrual"] = round(as_of_cum - prev_cum)
+
             return self._send(200, {"pension": data})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
