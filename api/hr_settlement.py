@@ -121,15 +121,45 @@ class handler(BaseHTTPRequestHandler):
             total_contributed = total_contributed or 0
             additional_payment = round(cumulative_estimate - total_contributed)
 
+            yearly = self._build_yearly_breakdown(employee_id, retire_date)
+
             return self._send(200, {
                 "cumulative_estimate": cumulative_estimate,
                 "total_contributed": total_contributed,
                 "additional_payment": additional_payment,
+                "yearly": yearly,
             })
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
         except Exception as e:
             return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
+
+    def _build_yearly_breakdown(self, employee_id, retire_date):
+        emp = rest_request("GET", f"employees?id=eq.{employee_id}&select=hire_date")
+        if not emp:
+            return []
+        hire_date = emp[0]["hire_date"]
+        hire_year = int(hire_date[:4])
+        retire_year = int(retire_date[:4])
+
+        contributions = rest_request(
+            "GET", f"pension_contributions?employee_id=eq.{employee_id}&select=contribution_date,amount"
+        ) or []
+        contrib_by_year = {}
+        for c in contributions:
+            y = int(c["contribution_date"][:4])
+            contrib_by_year[y] = contrib_by_year.get(y, 0) + c["amount"]
+
+        rows = []
+        for y in range(hire_year, retire_year + 1):
+            as_of = retire_date if y == retire_year else f"{y}-12-31"
+            cum = rpc("pension_cumulative_estimate", {"p_employee_id": employee_id, "p_as_of": as_of}) or 0
+            rows.append({
+                "year": y,
+                "cumulative_estimate": round(cum),
+                "contribution": round(contrib_by_year.get(y, 0)),
+            })
+        return rows
 
     def do_POST(self):
         try:
@@ -157,7 +187,6 @@ class handler(BaseHTTPRequestHandler):
             }
             created = rest_request("POST", "pension_settlements", body=body, prefer="return=representation")
 
-            # 정산 확정 시 직원 재직상태도 자동으로 '퇴사' 처리
             rest_request("PATCH", f"employees?id=eq.{payload['employee_id']}", body={
                 "status": "퇴사", "retire_date": payload["retire_date"],
             })
