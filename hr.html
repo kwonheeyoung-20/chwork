@@ -95,18 +95,27 @@
             누적추계액은 연봉 이력을 기준으로 매번 자동 계산됩니다 (별도 고정 작업 불필요).
           </p>
 
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+            <label style="font-size:13px; color:var(--text-secondary);">반기 마감일(기준일자) 지정:</label>
+            <input id="pensionAsOf" type="date" class="hr-input" style="width:160px;">
+            <button class="secondary" onclick="loadPension()">조회</button>
+            <button class="secondary" onclick="$('pensionAsOf').value=''; loadPension();">초기화(오늘 기준)</button>
+          </div>
+
           <div class="table-wrap">
             <table class="table" id="pensionTable">
               <thead>
                 <tr>
                   <th>이름</th><th>지사</th><th>부서</th><th>가입일</th>
-                  <th class="num">누적추계액</th>
+                  <th class="num">누적추계액(현재기준)</th>
                   <th class="num">실불입액 합계</th>
                   <th class="num">잔액</th>
+                  <th class="num" id="asOfCumHeader">지정일자 누적추계액</th>
+                  <th class="num" id="periodAccrualHeader">해당연도 1월~지정일 발생액</th>
                 </tr>
               </thead>
               <tbody id="pensionTbody">
-                <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+                <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
               </tbody>
             </table>
           </div>
@@ -143,6 +152,18 @@
             </div>
 
             <div class="settle-row highlight" style="margin-top:12px; font-size:16px;"><span>실 지급액</span><b id="s_net">-</b></div>
+
+            <div style="page-break-before: always; margin-top:24px; padding-top:20px; border-top:0.5px solid var(--border);">
+              <h3 style="margin-bottom:12px;">[부속명세서] 연도별 누적추계액 및 기불입액</h3>
+              <div class="table-wrap">
+                <table class="table" id="yearlyTable">
+                  <thead>
+                    <tr><th>연도</th><th class="num">누적추계액</th><th class="num">그 해 불입액</th></tr>
+                  </thead>
+                  <tbody id="yearlyTbody"></tbody>
+                </table>
+              </div>
+            </div>
             </div>
 
             <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
