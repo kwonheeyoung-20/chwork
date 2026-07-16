@@ -212,9 +212,11 @@ async function saveEmployee() {
 /* ── 퇴직연금 현황 ── */
 async function loadPension() {
   const tbody = $('pensionTbody');
-  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  const asOf = $('pensionAsOf').value;
   try {
-    const res = await fetch(`${apiBase()}/api/hr_pension`, {
+    const url = `${apiBase()}/api/hr_pension${asOf ? `?as_of=${asOf}` : ''}`;
+    const res = await fetch(url, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     if (res.status === 401) {
@@ -225,20 +227,22 @@ async function loadPension() {
     }
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
       return;
     }
-    renderPension(data.pension || []);
+    renderPension(data.pension || [], asOf);
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
-function renderPension(list) {
+function renderPension(list, asOf) {
   $('pensionCount').textContent = `총 ${list.length}명`;
+  $('asOfCumHeader').textContent = asOf ? `${asOf} 기준 누적추계액` : '지정일자 누적추계액';
+  $('periodAccrualHeader').textContent = asOf ? `${asOf.slice(0,4)}년 1월~${asOf.slice(5)} 발생액` : '해당연도 1월~지정일 발생액';
   const tbody = $('pensionTbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(p => `
@@ -250,6 +254,8 @@ function renderPension(list) {
       <td class="num">${fmt(p.cumulative_estimate)}</td>
       <td class="num">${fmt(p.total_contributed)}</td>
       <td class="num ${p.balance > 0 ? 'negative' : ''}">${fmt(p.balance)}</td>
+      <td class="num">${asOf ? fmt(p.as_of_cumulative_estimate) : '-'}</td>
+      <td class="num">${asOf ? fmt(p.period_accrual) : '-'}</td>
     </tr>
   `).join('');
 
@@ -337,11 +343,28 @@ async function calcSettlement() {
     $('settlementResult').dataset.cum = data.cumulative_estimate;
     $('settlementResult').dataset.paid = data.total_contributed;
     $('settlementResult').dataset.add = data.additional_payment;
+    $('settlementResult').dataset.yearly = JSON.stringify(data.yearly || []);
     $('settlementResult').style.display = 'block';
+    renderYearlyTable(data.yearly || []);
     calcNet();
   } catch (e) {
     $('settlementMsg').textContent = '계산 중 오류가 발생했습니다.';
   }
+}
+
+function renderYearlyTable(yearly) {
+  const tbody = $('yearlyTbody');
+  if (yearly.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px;">데이터 없음</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = yearly.map(r => `
+    <tr>
+      <td>${r.year}년</td>
+      <td class="num">${fmt(r.cumulative_estimate)}</td>
+      <td class="num">${fmt(r.contribution)}</td>
+    </tr>
+  `).join('');
 }
 
 function calcNet() {
@@ -449,15 +472,23 @@ function downloadSettlementExcel() {
   ws['!cols'] = [{ wch: 22 }, { wch: 20 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '정산내역서');
+
+  const yearly = JSON.parse($('settlementResult').dataset.yearly || '[]');
+  const yearlyRows = [['연도', '누적추계액', '그 해 불입액']];
+  yearly.forEach(r => yearlyRows.push([`${r.year}년`, r.cumulative_estimate, r.contribution]));
+  const ws2 = XLSX.utils.aoa_to_sheet(yearlyRows);
+  ws2['!cols'] = [{ wch: 10 }, { wch: 16 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, ws2, '부속명세서');
+
   XLSX.writeFile(wb, `퇴직금정산내역서_${name}_${$('s_retire_display').textContent}.xlsx`);
 }
 
 /* ── 퇴직연금 현황 엑셀 다운로드 ── */
 function downloadPensionExcel() {
-  const rows = [['이름', '지사', '부서', '가입일', '누적추계액', '실불입액 합계', '잔액']];
+  const rows = [['이름', '지사', '부서', '가입일', '누적추계액(현재기준)', '실불입액 합계', '잔액', $('asOfCumHeader').textContent, $('periodAccrualHeader').textContent]];
   document.querySelectorAll('#pensionTbody tr').forEach(tr => {
     const cells = Array.from(tr.children).map(td => td.textContent.trim());
-    if (cells.length === 7) rows.push(cells);
+    if (cells.length === 9) rows.push(cells);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
