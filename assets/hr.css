@@ -44,6 +44,8 @@
 .settle-row b { font-size: 14px; color: var(--text-primary); font-weight: 500; }
 .settle-row.highlight { background: var(--bg-accent, var(--bg)); padding: 12px 8px; border-radius: var(--radius-sm); border-bottom: none; }
 
+.hr-total-row td { font-weight: 500; background: var(--bg); border-top: 1.5px solid var(--border-strong); color: var(--text-primary); }
+
 @media print {
   body * { visibility: hidden; }
   #printArea, #printArea * { visibility: visible; }
