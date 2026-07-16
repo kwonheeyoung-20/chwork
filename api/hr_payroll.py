@@ -109,6 +109,35 @@ class handler(BaseHTTPRequestHandler):
                 locks = rest_request("GET", "period_locks?module=eq.payroll&select=*&order=period_key.desc")
                 return self._send(200, {"locks": locks})
 
+            if qs.get("retro_preview", ["0"])[0] == "1":
+                from_month = qs.get("from_month", [None])[0]
+                to_month = qs.get("to_month", [None])[0]
+                if not from_month or not to_month:
+                    return self._send(400, {"error": "from_month, to_month은 필수입니다"})
+                employees = rest_request(
+                    "GET", f"employees?status=eq.{quote('재직')}&select=id,name,branch,department,position&order=hire_date.asc"
+                ) or []
+
+                # from_month ~ to_month 사이의 월 목록 생성
+                months = []
+                y, m = int(from_month[:4]), int(from_month[5:7])
+                ey, em = int(to_month[:4]), int(to_month[5:7])
+                while (y, m) <= (ey, em):
+                    months.append(f"{y:04d}-{m:02d}-01")
+                    m += 1
+                    if m > 12:
+                        m = 1
+                        y += 1
+
+                results = []
+                for emp in employees:
+                    for mo in months:
+                        diff = rpc("payroll_retroactive_diff_month", {"p_employee_id": emp["id"], "p_month": mo})
+                        diff = diff or 0
+                        if diff != 0:
+                            results.append({**emp, "source_month": mo, "retroactive_diff": diff})
+                return self._send(200, {"employees": results})
+
             if not year_month:
                 return self._send(400, {"error": "year_month는 필수입니다 (예: 2026-07-01)"})
 
@@ -158,6 +187,64 @@ class handler(BaseHTTPRequestHandler):
                     prefer="resolution=merge-duplicates",
                 )
                 return self._send(200, {"ok": True})
+
+            # 소급인상분 일괄 저장: {"type": "retroactive", target_month, items: [{employee_id, source_month, amount}]}
+            if isinstance(payload, dict) and payload.get("type") == "retroactive":
+                target_month = payload.get("target_month")
+                items = payload.get("items") or []
+                if not target_month or not items:
+                    return self._send(400, {"error": "target_month, items는 필수입니다"})
+                if is_period_locked(target_month[:7]):
+                    return self._send(423, {"error": f"{target_month[:7]}은(는) 마감되어 있습니다. 먼저 마감해제해주세요."})
+
+                # 직원별 합계 (여러 달치가 한 target_month로 합산됨)
+                totals_by_employee = {}
+                for it in items:
+                    emp_id = it.get("employee_id")
+                    source_month = it.get("source_month")
+                    amount = it.get("amount")
+                    if not emp_id or not source_month or amount is None:
+                        continue
+                    totals_by_employee[emp_id] = totals_by_employee.get(emp_id, 0) + amount
+                    # 장부에 기록 (다음번 소급 계산 시 중복 방지용)
+                    rest_request("POST", "payroll_retroactive_log", body={
+                        "employee_id": emp_id,
+                        "source_month": source_month,
+                        "amount": amount,
+                        "target_month": target_month,
+                    })
+
+                count = 0
+                for emp_id, add_amount in totals_by_employee.items():
+                    existing = rest_request(
+                        "GET", f"monthly_payroll?employee_id=eq.{emp_id}&year_month=eq.{target_month}&select=id,retroactive_adjustment"
+                    )
+                    if existing:
+                        new_total = (existing[0].get("retroactive_adjustment") or 0) + add_amount
+                        rest_request(
+                            "PATCH",
+                            f"monthly_payroll?employee_id=eq.{emp_id}&year_month=eq.{target_month}",
+                            body={"retroactive_adjustment": new_total},
+                        )
+                    else:
+                        calc = rpc("payroll_calc_base", {"p_employee_id": emp_id, "p_year_month": target_month})
+                        row = calc[0] if calc else {
+                            "base_pay": 0, "fixed_overtime_pay": 0,
+                            "attendance_allowance": 0, "meal_allowance": 0, "total_pay": 0,
+                        }
+                        rest_request("POST", "monthly_payroll", body={
+                            "employee_id": emp_id,
+                            "year_month": target_month,
+                            "base_pay": row["base_pay"],
+                            "fixed_overtime_pay": row["fixed_overtime_pay"],
+                            "attendance_allowance": row["attendance_allowance"],
+                            "meal_allowance": row["meal_allowance"],
+                            "total_pay": row["total_pay"],
+                            "retroactive_adjustment": add_amount,
+                            "calc_note": "소급인상분 반영",
+                        })
+                    count += 1
+                return self._send(200, {"count": count})
 
             year_month = payload.get("year_month")
             if not year_month:
