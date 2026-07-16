@@ -109,8 +109,11 @@ class handler(BaseHTTPRequestHandler):
                 for emp in data:
                     as_of_cum = rpc("pension_cumulative_estimate", {"p_employee_id": emp["id"], "p_as_of": as_of}) or 0
                     prev_cum = rpc("pension_cumulative_estimate", {"p_employee_id": emp["id"], "p_as_of": prev_year_end}) or 0
+                    as_of_paid = rpc("pension_contributed_as_of", {"p_employee_id": emp["id"], "p_as_of": as_of}) or 0
                     emp["as_of_cumulative_estimate"] = round(as_of_cum)
                     emp["period_accrual"] = round(as_of_cum - prev_cum)
+                    emp["as_of_paid"] = round(as_of_paid)
+                    emp["as_of_balance"] = round(as_of_cum - as_of_paid)
 
             return self._send(200, {"pension": data})
         except SupabaseError as e:
