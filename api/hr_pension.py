@@ -67,7 +67,7 @@ def rpc(fn_name, params):
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, X-HR-Password",
         "Content-Type": "application/json",
     }
@@ -100,8 +100,14 @@ class handler(BaseHTTPRequestHandler):
             as_of = qs.get("as_of", [None])[0]
             employee_id = qs.get("employee_id", [None])[0]
 
-            # 특정 직원의 불입 내역 조회 (취소/정정용)
+            # 특정 직원의 불입 내역 또는 보정 내역 조회
             if employee_id:
+                if qs.get("type", [None])[0] == "adjustment":
+                    items = rest_request(
+                        "GET",
+                        f"pension_accrual_adjustments?employee_id=eq.{employee_id}&select=*&order=effective_date.desc",
+                    )
+                    return self._send(200, {"adjustments": items})
                 items = rest_request(
                     "GET",
                     f"pension_contributions?employee_id=eq.{employee_id}&select=*&order=contribution_date.desc",
@@ -135,6 +141,21 @@ class handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
+
+            # 보정(조정) 추가: {"type": "adjustment", employee_id, effective_date, adjustment_amount, note}
+            if isinstance(payload, dict) and payload.get("type") == "adjustment":
+                emp_id = payload.get("employee_id")
+                effective_date = payload.get("effective_date")
+                adjustment_amount = payload.get("adjustment_amount")
+                if not emp_id or not effective_date or adjustment_amount is None:
+                    return self._send(400, {"error": "employee_id, effective_date, adjustment_amount는 필수입니다"})
+                created = rest_request("POST", "pension_accrual_adjustments", body={
+                    "employee_id": emp_id,
+                    "effective_date": effective_date,
+                    "adjustment_amount": adjustment_amount,
+                    "note": payload.get("note"),
+                }, prefer="return=representation")
+                return self._send(201, {"adjustment": created[0] if created else None})
 
             # 목록형(일괄 저장): {"items": [{employee_id, contribution_date, amount, note}, ...]}
             if isinstance(payload, dict) and "items" in payload:
@@ -175,7 +196,7 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
 
-    def do_DELETE(self):
+    def do_PATCH(self):
         try:
             if not self._authorized():
                 return self._send(401, {"error": "unauthorized"})
@@ -183,7 +204,37 @@ class handler(BaseHTTPRequestHandler):
             contrib_id = qs.get("id", [None])[0]
             if not contrib_id:
                 return self._send(400, {"error": "id는 필수입니다"})
-            rest_request("DELETE", f"pension_contributions?id=eq.{contrib_id}")
+            length = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(length) if length else b"{}"
+            payload = json.loads(raw or b"{}")
+
+            update_fields = {}
+            if payload.get("contribution_date"):
+                update_fields["contribution_date"] = payload["contribution_date"]
+            if payload.get("amount") is not None:
+                update_fields["amount"] = payload["amount"]
+            if "note" in payload:
+                update_fields["note"] = payload["note"]
+            if not update_fields:
+                return self._send(400, {"error": "수정할 항목이 없습니다"})
+
+            rest_request("PATCH", f"pension_contributions?id=eq.{contrib_id}", body=update_fields)
+            return self._send(200, {"ok": True})
+        except SupabaseError as e:
+            return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
+        except Exception as e:
+            return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
+
+    def do_DELETE(self):
+        try:
+            if not self._authorized():
+                return self._send(401, {"error": "unauthorized"})
+            qs = parse_qs(urlparse(self.path).query)
+            item_id = qs.get("id", [None])[0]
+            if not item_id:
+                return self._send(400, {"error": "id는 필수입니다"})
+            table = "pension_accrual_adjustments" if qs.get("type", [None])[0] == "adjustment" else "pension_contributions"
+            rest_request("DELETE", f"{table}?id=eq.{item_id}")
             return self._send(200, {"ok": True})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
