@@ -40,8 +40,13 @@ function switchHrTab(name) {
   $('tab-employees').style.display = name === 'employees' ? 'block' : 'none';
   $('tab-pension').style.display = name === 'pension' ? 'block' : 'none';
   $('tab-settlement').style.display = name === 'settlement' ? 'block' : 'none';
+  $('tab-payroll').style.display = name === 'payroll' ? 'block' : 'none';
   if (name === 'pension') loadPension();
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
+  if (name === 'payroll' && !$('payrollMonth').value) {
+    const now = new Date();
+    $('payrollMonth').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  }
 }
 
 /* 페이지 로드시 이미 로그인된 세션이면 바로 목록 표시 */
@@ -669,4 +674,84 @@ async function saveContributionEdit(id) {
   } catch (e) {
     alert('수정 중 오류가 발생했습니다.');
   }
+}
+
+/* ── 월별 급여명세 ── */
+function payrollYearMonthDate() {
+  const m = $('payrollMonth').value; // "2026-07"
+  return m ? `${m}-01` : '';
+}
+
+async function loadPayrollPreview() {
+  const ym = payrollYearMonthDate();
+  if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
+  const tbody = $('payrollTbody');
+  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?year_month=${ym}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      return;
+    }
+    renderPayroll(data.payroll || []);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function renderPayroll(list) {
+  $('payrollCount').textContent = `총 ${list.length}명`;
+  const tbody = $('payrollTbody');
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">데이터가 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(p => `
+    <tr>
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.branch || '-')}</td>
+      <td>${esc(p.department || '-')}</td>
+      <td>${esc(p.position || '-')}</td>
+      <td class="num">${fmt(p.base_pay)}</td>
+      <td class="num">${fmt(p.fixed_overtime_pay)}</td>
+      <td class="num">${fmt(p.attendance_allowance)}</td>
+      <td class="num">${fmt(p.meal_allowance)}</td>
+      <td class="num">${fmt(p.total_pay)}</td>
+    </tr>
+  `).join('');
+}
+
+async function generatePayroll() {
+  const ym = payrollYearMonthDate();
+  if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
+  if (!confirm(`${$('payrollMonth').value} 급여명세를 생성/저장하시겠습니까? (이미 생성된 달이면 최신 계산값으로 덮어씁니다)`)) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ year_month: ym }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'save failed');
+    alert(`${data.count}명분 저장되었습니다.`);
+    loadPayrollPreview();
+  } catch (e) {
+    alert('저장 중 오류가 발생했습니다.');
+  }
+}
+
+function downloadPayrollExcel() {
+  const rows = [['이름', '지사', '부서', '직급', '기본급', '고정연장수당', '만근수당', '식대', '합계']];
+  document.querySelectorAll('#payrollTbody tr').forEach(tr => {
+    const cells = Array.from(tr.children).map(td => td.textContent.trim());
+    if (cells.length === 9) rows.push(cells);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  const sheetName = $('payrollMonth').value || '급여명세';
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, `급여명세_${sheetName}.xlsx`);
 }
