@@ -39,7 +39,9 @@ function switchHrTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   $('tab-employees').style.display = name === 'employees' ? 'block' : 'none';
   $('tab-pension').style.display = name === 'pension' ? 'block' : 'none';
+  $('tab-settlement').style.display = name === 'settlement' ? 'block' : 'none';
   if (name === 'pension') loadPension();
+  if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
 }
 
 /* 페이지 로드시 이미 로그인된 세션이면 바로 목록 표시 */
@@ -290,5 +292,130 @@ async function saveContribution() {
     loadPension();
   } catch (e) {
     $('contribMsg').textContent = '저장 중 오류가 발생했습니다.';
+  }
+}
+
+/* ── 퇴사자 정산 계산기 ── */
+async function populateSettlementEmployeeSelect() {
+  const sel = $('s_employee_id');
+  if (sel.dataset.loaded === '1') return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees?all=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = (data.employees || []).filter(e => e.pension_enrolled);
+    sel.innerHTML = '<option value="">-- 직원 선택 --</option>' +
+      list.map(e => `<option value="${e.id}">${esc(e.name)} (${esc(e.status)})</option>`).join('');
+    sel.dataset.loaded = '1';
+  } catch (e) {
+    sel.innerHTML = '<option value="">불러오기 실패</option>';
+  }
+}
+
+async function calcSettlement() {
+  const employeeId = $('s_employee_id').value;
+  const retireDate = $('s_retire_date').value;
+  if (!employeeId || !retireDate) {
+    $('settlementResult').style.display = 'none';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_settlement?employee_id=${employeeId}&retire_date=${retireDate}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      $('settlementMsg').textContent = data.detail || '계산 실패';
+      return;
+    }
+    $('s_cum').textContent = fmt(data.cumulative_estimate) + '원';
+    $('s_paid').textContent = fmt(data.total_contributed) + '원';
+    $('s_add').textContent = fmt(data.additional_payment) + '원';
+    $('settlementResult').dataset.cum = data.cumulative_estimate;
+    $('settlementResult').dataset.paid = data.total_contributed;
+    $('settlementResult').dataset.add = data.additional_payment;
+    $('settlementResult').style.display = 'block';
+    calcNet();
+  } catch (e) {
+    $('settlementMsg').textContent = '계산 중 오류가 발생했습니다.';
+  }
+}
+
+function calcNet() {
+  const add = Number($('settlementResult').dataset.add || 0);
+  const deduction = Number($('s_deduction').value || 0);
+  const refund = Number($('s_tax_refund').value || 0);
+  const other = Number($('s_other').value || 0);
+  const net = add - deduction + refund + other;
+  $('s_net').textContent = fmt(net) + '원';
+}
+
+async function saveSettlement() {
+  const r = $('settlementResult');
+  const deduction = Number($('s_deduction').value || 0);
+  const refund = Number($('s_tax_refund').value || 0);
+  const other = Number($('s_other').value || 0);
+  const add = Number(r.dataset.add || 0);
+  const net = add - deduction + refund + other;
+
+  const payload = {
+    employee_id: $('s_employee_id').value,
+    retire_date: $('s_retire_date').value,
+    cumulative_estimate: Number(r.dataset.cum),
+    total_contributed: Number(r.dataset.paid),
+    additional_payment: add,
+    deduction_total: deduction,
+    year_end_tax_refund: refund,
+    other_payment: other,
+    net_payment: net,
+    note: $('s_note').value.trim() || null,
+  };
+
+  if (!confirm('정산을 확정하시겠습니까? 저장 후 해당 직원은 "퇴사" 상태로 자동 변경됩니다.')) return;
+
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_settlement`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('save failed');
+    $('settlementMsg').textContent = '';
+    $('settlementMsg').className = 'hr-msg success';
+    $('settlementMsg').textContent = '정산이 확정 저장되었습니다.';
+    loadSettlementHistory();
+  } catch (e) {
+    $('settlementMsg').className = 'hr-msg';
+    $('settlementMsg').textContent = '저장 중 오류가 발생했습니다.';
+  }
+}
+
+async function loadSettlementHistory() {
+  const tbody = $('historyTbody');
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_settlement?list=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.settlements || [];
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">확정된 정산 내역이 없습니다.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(s => `
+      <tr>
+        <td>${esc(s.employees?.name || '-')}</td>
+        <td>${esc(s.employees?.branch || '-')}</td>
+        <td>${esc(s.employees?.department || '-')}</td>
+        <td>${esc(s.retire_date)}</td>
+        <td class="num">${fmt(s.additional_payment)}</td>
+        <td class="num">${fmt(s.net_payment)}</td>
+        <td>${esc((s.created_at || '').slice(0, 10))}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
