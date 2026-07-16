@@ -50,6 +50,7 @@
         <div style="display:flex; gap:4px; border-bottom: 0.5px solid var(--border);">
           <button class="tab-btn active" data-tab="employees" onclick="switchHrTab('employees')">직원마스터</button>
           <button class="tab-btn" data-tab="pension" onclick="switchHrTab('pension')">퇴직연금 현황</button>
+          <button class="tab-btn" data-tab="settlement" onclick="switchHrTab('settlement')">퇴사자 정산</button>
         </div>
 
         <section class="panel" id="tab-employees">
@@ -101,6 +102,56 @@
                 </tr>
               </thead>
               <tbody id="pensionTbody">
+                <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" id="tab-settlement" style="display:none;">
+          <div class="panel-header">
+            <h2>퇴사자 정산 계산기</h2>
+          </div>
+
+          <div class="hr-form-grid" style="max-width:640px;">
+            <label>직원
+              <select id="s_employee_id" class="hr-input" onchange="calcSettlement()"></select>
+            </label>
+            <label>퇴사일
+              <input id="s_retire_date" type="date" class="hr-input" onchange="calcSettlement()">
+            </label>
+          </div>
+
+          <div id="settlementResult" style="display:none; margin-top:18px;">
+            <div class="settle-row"><span>누적추계액 (퇴사일 기준)</span><b id="s_cum">-</b></div>
+            <div class="settle-row"><span>기 불입액 (퇴사일까지)</span><b id="s_paid">-</b></div>
+            <div class="settle-row highlight"><span>추가불입(정산)액</span><b id="s_add">-</b></div>
+
+            <div class="hr-form-grid" style="margin-top:16px; border-top:0.5px solid var(--border); padding-top:16px;">
+              <label>공제금액 합계 <input id="s_deduction" type="number" class="hr-input" value="0" oninput="calcNet()"></label>
+              <label>연말정산 환급금 <input id="s_tax_refund" type="number" class="hr-input" value="0" oninput="calcNet()"></label>
+              <label>기타지급액 <input id="s_other" type="number" class="hr-input" value="0" oninput="calcNet()"></label>
+              <label>비고 <input id="s_note" class="hr-input"></label>
+            </div>
+
+            <div class="settle-row highlight" style="margin-top:12px; font-size:16px;"><span>실 지급액</span><b id="s_net">-</b></div>
+
+            <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+              <button class="primary" onclick="saveSettlement()">정산 확정 저장 (퇴사자 이력에 기록)</button>
+            </div>
+            <div id="settlementMsg" class="hr-msg"></div>
+          </div>
+
+          <h2 style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">퇴사자 이력</h2>
+          <div class="table-wrap">
+            <table class="table" id="historyTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>지사</th><th>부서</th><th>퇴사일</th>
+                  <th class="num">추가불입액</th><th class="num">실지급액</th><th>처리일</th>
+                </tr>
+              </thead>
+              <tbody id="historyTbody">
                 <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
               </tbody>
             </table>
