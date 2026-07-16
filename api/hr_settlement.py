@@ -68,7 +68,7 @@ def check_password(candidate: str) -> bool:
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, X-HR-Password",
         "Content-Type": "application/json",
     }
@@ -150,10 +150,18 @@ class handler(BaseHTTPRequestHandler):
             y = int(c["contribution_date"][:4])
             contrib_by_year[y] = contrib_by_year.get(y, 0) + c["amount"]
 
+        history = rest_request(
+            "GET", f"pension_cumulative_history?employee_id=eq.{employee_id}&select=year,cumulative_estimate"
+        ) or []
+        history_by_year = {h["year"]: h["cumulative_estimate"] for h in history}
+
         rows = []
         for y in range(hire_year, retire_year + 1):
-            as_of = retire_date if y == retire_year else f"{y}-12-31"
-            cum = rpc("pension_cumulative_estimate", {"p_employee_id": employee_id, "p_as_of": as_of}) or 0
+            if y in history_by_year:
+                cum = history_by_year[y]
+            else:
+                as_of = retire_date if y == retire_year else f"{y}-12-31"
+                cum = rpc("pension_cumulative_estimate", {"p_employee_id": employee_id, "p_as_of": as_of}) or 0
             rows.append({
                 "year": y,
                 "cumulative_estimate": round(cum),
@@ -193,6 +201,33 @@ class handler(BaseHTTPRequestHandler):
             })
 
             return self._send(201, {"settlement": created[0] if created else None})
+        except SupabaseError as e:
+            return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
+        except Exception as e:
+            return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
+
+    def do_DELETE(self):
+        try:
+            if not self._authorized():
+                return self._send(401, {"error": "unauthorized"})
+            qs = parse_qs(urlparse(self.path).query)
+            settlement_id = qs.get("id", [None])[0]
+            if not settlement_id:
+                return self._send(400, {"error": "id는 필수입니다"})
+
+            existing = rest_request("GET", f"pension_settlements?id=eq.{settlement_id}&select=employee_id")
+            rest_request("DELETE", f"pension_settlements?id=eq.{settlement_id}")
+
+            # 되돌리기: 다른 확정 정산 기록이 더 없으면 재직 상태로 복구
+            if existing:
+                emp_id = existing[0]["employee_id"]
+                remaining = rest_request("GET", f"pension_settlements?employee_id=eq.{emp_id}&select=id")
+                if not remaining:
+                    rest_request("PATCH", f"employees?id=eq.{emp_id}", body={
+                        "status": "재직", "retire_date": None,
+                    })
+
+            return self._send(200, {"ok": True})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
         except Exception as e:
