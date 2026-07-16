@@ -156,9 +156,13 @@ class handler(BaseHTTPRequestHandler):
         history_by_year = {h["year"]: h["cumulative_estimate"] for h in history}
 
         rows = []
+        earliest_known_year = min(history_by_year.keys()) if history_by_year else 2026
         for y in range(hire_year, retire_year + 1):
             if y in history_by_year:
                 cum = history_by_year[y]
+            elif y < earliest_known_year:
+                # 2013년 DC 도입 이전 연도는 추계액 자료 자체가 없으므로 0으로 표시
+                cum = 0
             else:
                 as_of = retire_date if y == retire_year else f"{y}-12-31"
                 cum = rpc("pension_cumulative_estimate", {"p_employee_id": employee_id, "p_as_of": as_of}) or 0
