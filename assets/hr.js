@@ -212,7 +212,7 @@ async function saveEmployee() {
 /* ── 퇴직연금 현황 ── */
 async function loadPension() {
   const tbody = $('pensionTbody');
-  tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   const asOf = $('pensionAsOf').value;
   try {
     const url = `${apiBase()}/api/hr_pension${asOf ? `?as_of=${asOf}` : ''}`;
@@ -227,12 +227,12 @@ async function loadPension() {
     }
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
       return;
     }
     renderPension(data.pension || [], asOf);
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
@@ -242,11 +242,11 @@ function renderPension(list, asOf) {
   $('periodAccrualHeader').textContent = asOf ? `${asOf.slice(0,4)}년 1월~${asOf.slice(5)} 발생액` : '해당연도 1월~지정일 발생액';
   const tbody = $('pensionTbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(p => `
-    <tr data-emp-id="${p.id}" data-balance="${p.balance}" data-accrual="${asOf ? (p.period_accrual ?? 0) : ''}">
+    <tr data-emp-id="${p.id}" data-balance="${p.balance}" data-asofbalance="${asOf ? (p.as_of_balance ?? 0) : ''}">
       <td>${esc(p.name)}</td>
       <td>${esc(p.branch || '-')}</td>
       <td>${esc(p.department || '-')}</td>
@@ -256,6 +256,7 @@ function renderPension(list, asOf) {
       <td class="num ${p.balance > 0 ? 'negative' : ''}">${fmt(p.balance)}</td>
       <td class="num">${asOf ? fmt(p.as_of_cumulative_estimate) : '-'}</td>
       <td class="num">${asOf ? fmt(p.period_accrual) : '-'}</td>
+      <td class="num ${asOf && p.as_of_balance > 0 ? 'negative' : ''}">${asOf ? fmt(p.as_of_balance) : '-'}</td>
       <td class="num"><input type="number" class="hr-input bulk-amount" style="width:120px; text-align:right;" placeholder="0"></td>
     </tr>
   `).join('');
@@ -486,10 +487,10 @@ function downloadSettlementExcel() {
 
 /* ── 퇴직연금 현황 엑셀 다운로드 ── */
 function downloadPensionExcel() {
-  const rows = [['이름', '지사', '부서', '가입일', '누적추계액(현재기준)', '실불입액 합계', '잔액', $('asOfCumHeader').textContent, $('periodAccrualHeader').textContent]];
+  const rows = [['이름', '지사', '부서', '가입일', '누적추계액(현재기준)', '실불입액 합계', '잔액', $('asOfCumHeader').textContent, $('periodAccrualHeader').textContent, $('asOfBalanceHeader').textContent]];
   document.querySelectorAll('#pensionTbody tr').forEach(tr => {
-    const cells = Array.from(tr.children).slice(0, 9).map(td => td.textContent.trim());
-    if (cells.length === 9) rows.push(cells);
+    const cells = Array.from(tr.children).slice(0, 10).map(td => td.textContent.trim());
+    if (cells.length === 10) rows.push(cells);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -499,6 +500,10 @@ function downloadPensionExcel() {
 
 /* ── 일괄 불입 처리 ── */
 function fillBulkAmounts(mode) {
+  if (mode === 'accrual' && !$('pensionAsOf').value) {
+    alert('먼저 위에서 "반기 마감일(기준일자)"를 지정하고 조회한 뒤 사용해주세요.');
+    return;
+  }
   document.querySelectorAll('#pensionTbody tr').forEach(tr => {
     const input = tr.querySelector('.bulk-amount');
     if (!input) return;
@@ -507,8 +512,9 @@ function fillBulkAmounts(mode) {
       return;
     }
     if (mode === 'accrual') {
-      const v = tr.dataset.accrual;
-      input.value = (v === '' || v === 'undefined') ? '' : Math.round(Number(v));
+      const v = tr.dataset.asofbalance;
+      const num = (v === '' || v === 'undefined') ? null : Math.round(Number(v));
+      input.value = (num !== null && num > 0) ? num : '';
     } else if (mode === 'balance') {
       const v = Math.round(Number(tr.dataset.balance || 0));
       input.value = v > 0 ? v : '';
