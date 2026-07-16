@@ -52,6 +52,7 @@
           <button class="tab-btn active" data-tab="employees" onclick="switchHrTab('employees')">직원마스터</button>
           <button class="tab-btn" data-tab="pension" onclick="switchHrTab('pension')">퇴직연금 현황</button>
           <button class="tab-btn" data-tab="settlement" onclick="switchHrTab('settlement')">퇴사자 정산</button>
+          <button class="tab-btn" data-tab="payroll" onclick="switchHrTab('payroll')">월별 급여명세</button>
         </div>
 
         <section class="panel" id="tab-employees">
@@ -193,6 +194,39 @@
               </thead>
               <tbody id="historyTbody">
                 <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" id="tab-payroll" style="display:none;">
+          <div class="panel-header">
+            <h2>월별 급여명세 <span id="payrollCount" class="hr-count"></span></h2>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input id="payrollMonth" type="month" class="hr-input" style="width:150px;">
+              <button class="secondary" onclick="loadPayrollPreview()">미리보기 조회</button>
+              <button class="primary" onclick="generatePayroll()">이 달 급여명세 생성/저장</button>
+              <button class="secondary" onclick="downloadPayrollExcel()">엑셀 다운로드</button>
+            </div>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            1단계: 정상 재직자 기준 기본 계산만 반영됩니다 (신규/퇴사자 일할계산·수습요율·휴직조정은 다음 단계에서 추가 예정).
+          </p>
+
+          <div class="table-wrap">
+            <table class="table" id="payrollTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>지사</th><th>부서</th><th>직급</th>
+                  <th class="num">기본급</th>
+                  <th class="num">고정연장수당</th>
+                  <th class="num">만근수당</th>
+                  <th class="num">식대</th>
+                  <th class="num">합계</th>
+                </tr>
+              </thead>
+              <tbody id="payrollTbody">
+                <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">상단에서 월을 선택하고 "미리보기 조회"를 눌러주세요.</td></tr>
               </tbody>
             </table>
           </div>
