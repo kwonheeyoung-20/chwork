@@ -316,6 +316,34 @@
   </div>
 </div>
 
+<!-- 퇴직연금 개별 보정 모달 -->
+<div id="adjustModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:480px;">
+    <h2 id="adjustModalTitle">개별 보정</h2>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+      상여금 포함 등 정해진 공식으로 안 맞는 경우, 특정 시점부터 누적추계액에 금액을 더하거나(+) 뺄(-) 수 있습니다.
+    </p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>적용 시작일 <input id="adj_date" type="date" class="hr-input"></label>
+      <label>보정 금액 (더할 땐 양수, 뺄 땐 음수) <input id="adj_amount" type="number" class="hr-input" placeholder="예: 5000000 또는 -2000000"></label>
+      <label>사유 <input id="adj_note" class="hr-input" placeholder="예: 2026년 상여금 반영"></label>
+    </div>
+    <div id="adjustMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeAdjustModal()">취소</button>
+      <button class="primary" onclick="saveAdjustment()">저장</button>
+    </div>
+
+    <h3 style="margin-top:20px; padding-top:16px; border-top:0.5px solid var(--border); font-size:13px;">기존 보정 내역</h3>
+    <div class="table-wrap">
+      <table class="table" id="adjustHistoryTable">
+        <thead><tr><th>적용일</th><th class="num">금액</th><th>사유</th><th></th></tr></thead>
+        <tbody id="adjustHistoryTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script src="assets/hr.js"></script>
 </body>
 </html>
