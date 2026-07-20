@@ -175,14 +175,17 @@ function populateFieldDatalists(list) {
 }
 
 async function deleteEmployee(id, name) {
-  if (!confirm(`${name} 님을 완전히 삭제하시겠습니까?\n\n⚠ 이 작업은 되돌릴 수 없고, 연봉 이력·퇴직연금·급여명세 등 이 직원과 관련된 모든 기록이 함께 삭제됩니다.\n\n실제 재직했던 직원이라면 삭제 대신 "재직상태=퇴사"로 처리하시는 걸 권장합니다. 잘못 등록된 중복 데이터를 정리하는 경우에만 삭제해주세요.`)) return;
-  if (!confirm('정말로 삭제하시겠습니까? 마지막 확인입니다.')) return;
+  if (!confirm(`${name} 님을 삭제하시겠습니까?\n\n(이미 급여·연봉·퇴직연금 등 처리된 기록이 있으면 서버에서 자동으로 삭제가 거부됩니다. 완전히 빈 상태(예: 실수로 중복 등록)인 경우에만 실제로 삭제됩니다.)`)) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_employees?employee_id=${id}`, {
       method: 'DELETE',
       headers: { 'X-HR-Password': hrPassword() },
     });
-    if (!res.ok) throw new Error('delete failed');
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || '삭제 중 오류가 발생했습니다.');
+      return;
+    }
     loadEmployees();
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
