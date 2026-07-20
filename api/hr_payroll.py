@@ -151,7 +151,7 @@ class handler(BaseHTTPRequestHandler):
             if qs.get("saved", ["0"])[0] == "1":
                 data = rest_request(
                     "GET",
-                    f"monthly_payroll?year_month=eq.{year_month}&select=*,employees(name,branch,department,position)&order=created_at",
+                    f"monthly_payroll?year_month=eq.{year_month}&select=*,employees(name,branch,department,position,hire_date)&order=created_at",
                 )
                 return self._send(200, {"payroll": data})
 
