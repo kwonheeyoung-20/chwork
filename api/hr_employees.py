@@ -134,6 +134,24 @@ class handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
 
+            # 일괄 연봉 인상: {"type": "bulk_salary", "items": [{employee_id, effective_month, annual_salary_thousand, reason}]}
+            if isinstance(payload, dict) and payload.get("type") == "bulk_salary":
+                items = payload.get("items") or []
+                body = []
+                for it in items:
+                    if not it.get("employee_id") or not it.get("effective_month") or it.get("annual_salary_thousand") is None:
+                        continue
+                    body.append({
+                        "employee_id": it["employee_id"],
+                        "effective_month": it["effective_month"],
+                        "annual_salary_thousand": it["annual_salary_thousand"],
+                        "reason": it.get("reason") or "일괄 연봉 인상",
+                    })
+                if not body:
+                    return self._send(400, {"error": "유효한 항목이 없습니다"})
+                created = rest_request("POST", "salary_history", body=body, prefer="return=representation")
+                return self._send(201, {"count": len(created) if created else 0})
+
             emp_fields = {k: payload.get(k) for k in (
                 "name", "position", "branch", "department", "hire_date", "retire_date",
                 "status", "employment_type", "contract_fixed_salary", "unused_leave_days",
