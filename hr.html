@@ -83,6 +83,30 @@
               </tbody>
             </table>
           </div>
+
+          <div style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">
+            <h3 style="font-size:14px; margin-bottom:6px;">일괄 연봉 인상</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              연초 등 여러 명이 한꺼번에 인상될 때 사용하세요. 개별 조정은 위 직원 목록의 "수정"에서 그대로 하시면 됩니다.
+            </p>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+              <label style="font-size:13px; color:var(--text-secondary);">적용 시작월:</label>
+              <input id="bulkSalaryMonth" type="month" class="hr-input" style="width:150px;">
+              <label style="font-size:13px; color:var(--text-secondary);">사유:</label>
+              <input id="bulkSalaryReason" class="hr-input" style="width:180px;" placeholder="예: 2026년 정기 인상">
+              <button class="secondary" onclick="loadBulkSalaryList()">직원 목록 불러오기</button>
+            </div>
+            <div class="table-wrap" id="bulkSalaryWrap" style="display:none;">
+              <table class="table" id="bulkSalaryTable">
+                <thead><tr><th>이름</th><th>지사</th><th>부서</th><th class="num">현재 연봉(천원)</th><th class="num">새 연봉(천원)</th></tr></thead>
+                <tbody id="bulkSalaryTbody"></tbody>
+              </table>
+            </div>
+            <div id="bulkSalarySaveWrap" style="display:none; margin-top:12px; text-align:right;">
+              <button class="primary" onclick="saveBulkSalary()">입력된 인원만 일괄 저장</button>
+            </div>
+            <div id="bulkSalaryMsg" class="hr-msg"></div>
+          </div>
         </section>
 
         <section class="panel" id="tab-pension" style="display:none;">
@@ -271,6 +295,21 @@
               <button class="primary" onclick="saveRetroAdjustments()">이 금액대로 일괄 저장</button>
             </div>
             <div id="retroMsg" class="hr-msg"></div>
+
+            <div style="margin-top:24px; padding-top:16px; border-top:0.5px solid var(--border);">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <h3 style="font-size:13px; margin:0;">소급 지급 기록 (되돌리기 가능)</h3>
+                <button class="secondary" onclick="loadRetroLog()">새로고침</button>
+              </div>
+              <div class="table-wrap">
+                <table class="table" id="retroLogTable">
+                  <thead><tr><th>이름</th><th>지사</th><th>해당월(source)</th><th class="num">지급액</th><th>급여명세월</th><th>처리일</th><th></th></tr></thead>
+                  <tbody id="retroLogTbody">
+                    <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:16px;">위 "새로고침"을 눌러 불러오세요.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </section>
 
