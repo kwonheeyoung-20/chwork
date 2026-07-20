@@ -267,12 +267,60 @@
                   <th class="num">합계</th>
                   <th class="num" id="retroAdjHeader">소급인상분</th>
                   <th class="num" id="finalTotalHeader">최종 지급액</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody id="payrollTbody">
-                <tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">상단에서 월을 선택하고 "미리보기 조회"를 눌러주세요.</td></tr>
+                <tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">상단에서 월을 선택하고 "미리보기 조회"를 눌러주세요.</td></tr>
               </tbody>
             </table>
+          </div>
+
+          <div id="payrollAdjustNoteBox" style="display:none; margin-top:14px; padding:12px 16px; background:var(--bg); border-radius:var(--radius-sm);">
+            <h3 style="font-size:13px; margin-bottom:8px;">이번 달 재직자 조정 대상</h3>
+            <div id="payrollAdjustNoteList"></div>
+          </div>
+
+          <div style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">
+            <h3 style="font-size:14px; margin-bottom:6px;">재직자 조정 관리 (육아휴직 등)</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              육아휴직=회사지급 0원 · 배우자출산휴가=회사지급 0원 · 출산전후휴가=100% 그대로 · 육아기근로시간단축=단축비율만큼 기본급 비례지급(고정연장수당·만근수당·식대는 전액).
+              등록해두면 해당 기간 급여명세에 자동 반영됩니다.
+            </p>
+            <div class="hr-form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr auto; align-items:end; gap:8px;">
+              <label style="font-size:12px;">직원
+                <select id="la_employee_id" class="hr-input"></select>
+              </label>
+              <label style="font-size:12px;">사유
+                <select id="la_reason_type" class="hr-input" onchange="toggleLeaveAdjustFields()">
+                  <option value="육아휴직">육아휴직</option>
+                  <option value="출산전후휴가">출산전후휴가</option>
+                  <option value="배우자출산휴가">배우자출산휴가</option>
+                  <option value="육아기근로시간단축">육아기근로시간단축</option>
+                </select>
+              </label>
+              <label style="font-size:12px;">시작일 <input id="la_start" type="date" class="hr-input"></label>
+              <label style="font-size:12px;">종료일 <input id="la_end" type="date" class="hr-input"></label>
+              <button class="primary" onclick="saveLeaveAdjustment()" style="height:34px;">추가</button>
+            </div>
+            <div id="leaveAdjustHoursFields" class="hr-form-grid" style="grid-template-columns: 1fr 1fr 2fr; margin-top:8px; display:none;">
+              <label style="font-size:12px;">통상 소정근로시간(시간/주) <input id="la_standard_hours" type="number" class="hr-input" placeholder="예: 40"></label>
+              <label style="font-size:12px;">단축후 소정근로시간(시간/주) <input id="la_reduced_hours" type="number" class="hr-input" step="0.5" placeholder="예: 32.5"></label>
+              <label style="font-size:12px;">비고 <input id="la_note" class="hr-input"></label>
+            </div>
+            <div class="hr-form-grid" id="leaveAdjustNoteOnly" style="grid-template-columns: 1fr; margin-top:8px;">
+              <label style="font-size:12px;">비고 <input id="la_note2" class="hr-input"></label>
+            </div>
+            <div id="leaveAdjustMsg" class="hr-msg"></div>
+
+            <div class="table-wrap" style="margin-top:12px;">
+              <table class="table" id="leaveAdjustTable">
+                <thead><tr><th>이름</th><th>지사</th><th>사유</th><th>기간</th><th>비고</th><th></th></tr></thead>
+                <tbody id="leaveAdjustTbody">
+                  <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">
@@ -527,6 +575,32 @@
 
     <div style="display:flex; justify-content:flex-end; margin-top:16px;">
       <button class="secondary" onclick="closeHistoryModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 개인별 급여명세서 출력 모달 -->
+<div id="payslipModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:480px;">
+    <div id="payslipPrintArea">
+      <h3 style="margin-bottom:14px;">급여명세서</h3>
+      <div class="settle-row"><span>성명</span><b id="ps_name">-</b></div>
+      <div class="settle-row"><span>지사/부서/직급</span><b id="ps_org">-</b></div>
+      <div class="settle-row"><span>급여월</span><b id="ps_month">-</b></div>
+      <div class="settle-row"><span>기본급</span><b id="ps_base">-</b></div>
+      <div class="settle-row"><span>고정연장수당</span><b id="ps_ot">-</b></div>
+      <div class="settle-row"><span>만근수당</span><b id="ps_att">-</b></div>
+      <div class="settle-row"><span>식대</span><b id="ps_meal">-</b></div>
+      <div class="settle-row"><span>소급인상분</span><b id="ps_retro">-</b></div>
+      <div class="settle-row highlight" style="margin-top:8px;"><span>최종 지급액</span><b id="ps_total">-</b></div>
+      <div id="ps_adjust_note_wrap" style="display:none; margin-top:14px; padding:10px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary);">
+        <b>재직자 조정 안내</b><br>
+        <span id="ps_adjust_note"></span>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px;">
+      <button class="secondary" onclick="closePayslipModal()">닫기</button>
+      <button class="primary" onclick="printPayslip()">인쇄</button>
     </div>
   </div>
 </div>
