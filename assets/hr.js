@@ -842,7 +842,8 @@ async function loadPayrollSaved() {
       branch: p.employees?.branch,
       department: p.employees?.department,
       position: p.employees?.position,
-    }));
+      hire_date: p.employees?.hire_date,
+    })).sort((a, b) => (a.hire_date || '').localeCompare(b.hire_date || ''));
     if (list.length === 0) {
       tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">이 달은 아직 "생성/저장"된 자료가 없습니다.</td></tr>`;
       return;
@@ -1383,7 +1384,7 @@ async function loadRetroPreview() {
   const toDate = `${to}-01`;
 
   $('retroWrap').style.display = 'block';
-  $('retroTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">계산 중…</td></tr>`;
+  $('retroTbody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:16px;">계산 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?retro_preview=1&from_month=${fromDate}&to_month=${toDate}`, {
       headers: { 'X-HR-Password': hrPassword() },
@@ -1401,7 +1402,7 @@ async function loadRetroPreview() {
     });
 
     if (empOrder.length === 0) {
-      $('retroTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">이 구간에 남은 차액이 있는 직원이 없습니다. (이미 소급 지급되었거나, 연봉 변경이 없는 경우입니다)</td></tr>`;
+      $('retroTbody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:16px;">이 구간에 남은 차액이 있는 직원이 없습니다. (이미 소급 지급되었거나, 연봉 변경이 없는 경우입니다)</td></tr>`;
     } else {
       $('retroTbody').innerHTML = empOrder.map(id => {
         const e = byEmp[id];
@@ -1411,6 +1412,7 @@ async function loadRetroPreview() {
           : e.months[0].source_month.slice(0,7);
         return `
         <tr data-emp-id="${e.id}" data-months='${JSON.stringify(e.months)}'>
+          <td><input type="checkbox" class="retro-select" checked></td>
           <td>${esc(e.name)}</td>
           <td>${esc(e.branch || '-')}</td>
           <td>${esc(e.department || '-')}</td>
@@ -1419,7 +1421,7 @@ async function loadRetroPreview() {
           <td><a class="hr-edit-link" onclick="toggleRetroDetail(this)">월별 보기</a></td>
         </tr>
         <tr class="retro-detail-row" data-for-emp="${e.id}" style="display:none;">
-          <td colspan="6" style="background:var(--bg); padding:10px 16px;">
+          <td colspan="7" style="background:var(--bg); padding:10px 16px;">
             ${e.months.slice().reverse().map(m => `<div style="display:flex; justify-content:space-between; max-width:280px; font-size:12px; color:var(--text-secondary); padding:2px 0;"><span>${m.source_month.slice(0,7)}</span><span>${fmt(m.amount)}원</span></div>`).join('')}
           </td>
         </tr>
@@ -1428,7 +1430,7 @@ async function loadRetroPreview() {
       const grandTotal = empOrder.reduce((s, id) => s + byEmp[id].months.reduce((s2,m)=>s2+(Number(m.amount)||0),0), 0);
       $('retroTbody').innerHTML += `
         <tr class="hr-total-row">
-          <td colspan="4">합계 (${empOrder.length}명)</td>
+          <td colspan="5">합계 (${empOrder.length}명)</td>
           <td class="num">${fmt(grandTotal)}</td>
           <td></td>
         </tr>
@@ -1436,8 +1438,14 @@ async function loadRetroPreview() {
     }
     $('retroSaveWrap').style.display = 'flex';
   } catch (e) {
-    $('retroTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:16px;">계산 실패</td></tr>`;
+    $('retroTbody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:16px;">계산 실패</td></tr>`;
   }
+}
+
+function toggleAllRetroSelect(headerCheckbox) {
+  document.querySelectorAll('#retroTbody .retro-select').forEach(cb => {
+    cb.checked = headerCheckbox.checked;
+  });
 }
 
 function toggleRetroDetail(linkEl) {
@@ -1456,6 +1464,8 @@ async function saveRetroAdjustments() {
 
   const items = [];
   document.querySelectorAll('#retroTbody tr[data-emp-id]').forEach(tr => {
+    const checkbox = tr.querySelector('.retro-select');
+    if (checkbox && !checkbox.checked) return; // 체크 해제된 직원은 제외
     const empId = tr.dataset.empId;
     const months = JSON.parse(tr.dataset.months || '[]');
     const input = tr.querySelector('.retro-amount');
@@ -1541,13 +1551,17 @@ async function loadRetroLog() {
           <td><a class="hr-edit-link" onclick="revertRetroLog('${l.id}')">되돌리기</a></td>
         </tr>
       `).join('');
+      const targetMonths = [...new Set(g.entries.map(l => (l.target_month || '').slice(0,7)))];
+      const targetMonthLabel = targetMonths.length === 1 ? targetMonths[0] : `${targetMonths.length}개월 분산`;
+      const latestDate = g.entries.reduce((max, l) => (l.created_at > max ? l.created_at : max), g.entries[0].created_at || '');
       return `
         <tr data-emp-summary="${empId}">
           <td>${esc(g.name || '-')}</td>
           <td>${esc(g.branch || '-')}</td>
           <td>${esc(monthsRange)}</td>
           <td class="num">${fmt(total)}</td>
-          <td colspan="2"></td>
+          <td>${esc(targetMonthLabel)}</td>
+          <td>${esc((latestDate || '').slice(0,10))}</td>
           <td>
             <a class="hr-edit-link" onclick="toggleRetroLogDetail('${empId}')">${g.entries.length > 1 ? '월별 보기' : ''}</a>
             <a class="hr-edit-link" style="margin-left:8px;" onclick="revertEmployeeRetroLog('${empId}', '${esc(g.name || '')}')">직원별 되돌리기</a>
