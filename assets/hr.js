@@ -44,9 +44,12 @@ function switchHrTab(name) {
   $('tab-otherpay').style.display = name === 'otherpay' ? 'block' : 'none';
   if (name === 'pension') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
-  if (name === 'payroll' && !$('payrollMonth').value) {
-    const now = new Date();
-    $('payrollMonth').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  if (name === 'payroll') {
+    if (!$('payrollMonth').value) {
+      const now = new Date();
+      $('payrollMonth').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    }
+    loadRetroLog();
   }
   if (name === 'otherpay') {
     populateYearSelect('otherpayYear');
@@ -128,6 +131,29 @@ function renderEmployees(list) {
       <td colspan="2"></td>
     </tr>
   `;
+
+  // 지사별 합계 (전체 합계 아래에 별도 섹션으로)
+  const byBranch = {};
+  const branchOrder = [];
+  list.forEach(e => {
+    const b = e.branch || '(미지정)';
+    if (!byBranch[b]) { byBranch[b] = []; branchOrder.push(b); }
+    byBranch[b].push(e);
+  });
+  tbody.innerHTML += `
+    <tr><td colspan="9" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
+  `;
+  branchOrder.forEach(b => {
+    const arr = byBranch[b];
+    const branchTotal = arr.reduce((s, e) => s + (Number(e.current_salary_thousand) || 0), 0);
+    tbody.innerHTML += `
+      <tr class="hr-total-row">
+        <td colspan="6">${esc(b)} (${arr.length}명)</td>
+        <td class="num">${fmt(branchTotal)}</td>
+        <td colspan="2"></td>
+      </tr>
+    `;
+  });
 }
 
 function esc(s) {
@@ -815,17 +841,42 @@ function renderPayroll(list) {
     </tr>
   `).join('');
 
-  const sum = (key) => list.reduce((s, p) => s + (Number(p[key]) || 0), 0);
+  const sum = (arr, key) => arr.reduce((s, p) => s + (Number(p[key]) || 0), 0);
   tbody.innerHTML += `
     <tr class="hr-total-row">
       <td colspan="4">합계 (${list.length}명)</td>
-      <td class="num">${fmt(sum('base_pay'))}</td>
-      <td class="num">${fmt(sum('fixed_overtime_pay'))}</td>
-      <td class="num">${fmt(sum('attendance_allowance'))}</td>
-      <td class="num">${fmt(sum('meal_allowance'))}</td>
-      <td class="num">${fmt(sum('total_pay'))}</td>
+      <td class="num">${fmt(sum(list,'base_pay'))}</td>
+      <td class="num">${fmt(sum(list,'fixed_overtime_pay'))}</td>
+      <td class="num">${fmt(sum(list,'attendance_allowance'))}</td>
+      <td class="num">${fmt(sum(list,'meal_allowance'))}</td>
+      <td class="num">${fmt(sum(list,'total_pay'))}</td>
     </tr>
   `;
+
+  // 지사별 합계 (전체 합계 아래에 별도 섹션으로)
+  const byBranch = {};
+  const branchOrder = [];
+  list.forEach(p => {
+    const b = p.branch || '(미지정)';
+    if (!byBranch[b]) { byBranch[b] = []; branchOrder.push(b); }
+    byBranch[b].push(p);
+  });
+  tbody.innerHTML += `
+    <tr><td colspan="9" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
+  `;
+  branchOrder.forEach(b => {
+    const arr = byBranch[b];
+    tbody.innerHTML += `
+      <tr class="hr-total-row">
+        <td colspan="4">${esc(b)} (${arr.length}명)</td>
+        <td class="num">${fmt(sum(arr,'base_pay'))}</td>
+        <td class="num">${fmt(sum(arr,'fixed_overtime_pay'))}</td>
+        <td class="num">${fmt(sum(arr,'attendance_allowance'))}</td>
+        <td class="num">${fmt(sum(arr,'meal_allowance'))}</td>
+        <td class="num">${fmt(sum(arr,'total_pay'))}</td>
+      </tr>
+    `;
+  });
 }
 
 async function generatePayroll() {
@@ -849,15 +900,16 @@ async function generatePayroll() {
 
 function downloadPayrollExcel() {
   const rows = [['이름', '지사', '부서', '직급', '기본급', '고정연장수당', '만근수당', '식대', '합계']];
-  document.querySelectorAll('#payrollTbody tr:not(.hr-total-row)').forEach(tr => {
+  document.querySelectorAll('#payrollTbody tr').forEach(tr => {
+    if (tr.children.length === 1) return; // "지사별 합계" 섹션 제목 줄은 건너뜀
+    if (tr.classList.contains('hr-total-row')) {
+      const tds = Array.from(tr.children).map(td => td.textContent.trim());
+      rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5]]);
+      return;
+    }
     const cells = Array.from(tr.children).map(td => td.textContent.trim());
     if (cells.length === 9) rows.push(cells);
   });
-  const totalRow = document.querySelector('#payrollTbody tr.hr-total-row');
-  if (totalRow) {
-    const tds = Array.from(totalRow.children).map(td => td.textContent.trim());
-    rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5]]);
-  }
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   const sheetName = $('payrollMonth').value || '급여명세';
@@ -1113,6 +1165,29 @@ async function loadOtherPayments() {
           <td colspan="2"></td>
         </tr>
       `;
+
+      // 지사별 합계 (전체 합계 아래에 별도 섹션으로)
+      const byBranch = {};
+      const branchOrder = [];
+      list.forEach(p => {
+        const b = p.employees?.branch || '(미지정)';
+        if (!byBranch[b]) { byBranch[b] = []; branchOrder.push(b); }
+        byBranch[b].push(p);
+      });
+      tbody.innerHTML += `
+        <tr><td colspan="8" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
+      `;
+      branchOrder.forEach(b => {
+        const arr = byBranch[b];
+        const branchTotal = arr.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        tbody.innerHTML += `
+          <tr class="hr-total-row">
+            <td colspan="5">${esc(b)} (${arr.length}건)</td>
+            <td class="num">${fmt(branchTotal)}</td>
+            <td colspan="2"></td>
+          </tr>
+        `;
+      });
     }
     refreshOtherPayLockStatus();
   } catch (e) {
@@ -1329,9 +1404,54 @@ async function saveRetroAdjustments() {
     $('retroMsg').textContent = `${data.count}명 반영 완료. "월별 급여명세"에서 ${targetMonth} 저장된 자료를 확인해보세요.`;
     $('retroWrap').style.display = 'none';
     $('retroSaveWrap').style.display = 'none';
+    loadRetroLog();
   } catch (e) {
     $('retroMsg').className = 'hr-msg';
     $('retroMsg').textContent = e.message.includes('마감') ? e.message : '저장 중 오류가 발생했습니다.';
+  }
+}
+
+async function loadRetroLog() {
+  const tbody = $('retroLogTbody');
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?retro_log=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.logs || [];
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:16px;">소급 지급 기록이 없습니다.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(l => `
+      <tr>
+        <td>${esc(l.employees?.name || '-')}</td>
+        <td>${esc(l.employees?.branch || '-')}</td>
+        <td>${esc((l.source_month || '').slice(0,7))}</td>
+        <td class="num">${fmt(l.amount)}</td>
+        <td>${esc((l.target_month || '').slice(0,7))}</td>
+        <td>${esc((l.created_at || '').slice(0,10))}</td>
+        <td><a class="hr-edit-link" onclick="revertRetroLog('${l.id}')">되돌리기</a></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+  }
+}
+
+async function revertRetroLog(logId) {
+  if (!confirm('이 소급 지급 기록을 되돌리시겠습니까? 해당 급여명세월의 소급인상분에서 이 금액만큼 차감됩니다.')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?retro_log_id=${logId}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'revert failed');
+    loadRetroLog();
+  } catch (e) {
+    alert(e.message.includes('마감') ? e.message : '되돌리는 중 오류가 발생했습니다.');
   }
 }
 
@@ -1415,5 +1535,72 @@ async function deleteSalaryHistoryRow(id, employeeId) {
     loadEmployees();
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 일괄 연봉 인상 ── */
+async function loadBulkSalaryList() {
+  const month = $('bulkSalaryMonth').value;
+  if (!month) { alert('먼저 적용 시작월을 선택해주세요.'); return; }
+  $('bulkSalaryWrap').style.display = 'block';
+  $('bulkSalarySaveWrap').style.display = 'block';
+  $('bulkSalaryTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.employees || [];
+    $('bulkSalaryTbody').innerHTML = list.map(e => `
+      <tr data-emp-id="${e.id}">
+        <td>${esc(e.name)}</td>
+        <td>${esc(e.branch || '-')}</td>
+        <td>${esc(e.department || '-')}</td>
+        <td class="num">${fmt(e.current_salary_thousand)}</td>
+        <td class="num"><input type="number" class="hr-input bulk-salary-amount" style="width:130px; text-align:right;" placeholder="변경 없으면 비워두세요"></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    $('bulkSalaryTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+  }
+}
+
+async function saveBulkSalary() {
+  const month = $('bulkSalaryMonth').value;
+  if (!month) { alert('적용 시작월을 선택해주세요.'); return; }
+  const effectiveMonth = `${month}-01`;
+  const reason = $('bulkSalaryReason').value.trim() || '일괄 연봉 인상';
+
+  const items = [];
+  document.querySelectorAll('#bulkSalaryTbody tr').forEach(tr => {
+    const empId = tr.dataset.empId;
+    const input = tr.querySelector('.bulk-salary-amount');
+    const amount = Number(input?.value || 0);
+    if (empId && amount > 0) {
+      items.push({ employee_id: empId, effective_month: effectiveMonth, annual_salary_thousand: amount, reason });
+    }
+  });
+  if (items.length === 0) {
+    $('bulkSalaryMsg').textContent = '입력된 인원이 없습니다.';
+    return;
+  }
+  if (!confirm(`${items.length}명의 연봉을 ${month}부터 새 금액으로 반영하시겠습니까?`)) return;
+
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'bulk_salary', items }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'save failed');
+    $('bulkSalaryMsg').className = 'hr-msg success';
+    $('bulkSalaryMsg').textContent = `${data.count}명 반영되었습니다.`;
+    $('bulkSalaryWrap').style.display = 'none';
+    $('bulkSalarySaveWrap').style.display = 'none';
+    loadEmployees();
+  } catch (e) {
+    $('bulkSalaryMsg').className = 'hr-msg';
+    $('bulkSalaryMsg').textContent = '저장 중 오류가 발생했습니다.';
   }
 }
