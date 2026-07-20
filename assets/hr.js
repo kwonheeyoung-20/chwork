@@ -106,6 +106,7 @@ let employeesCache = [];
 function renderEmployees(list) {
   employeesCache = list;
   $('empCount').textContent = `총 ${list.length}명`;
+  populateFieldDatalists(list);
   const tbody = $('empTbody');
   if (list.length === 0) {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">직원이 없습니다.</td></tr>`;
@@ -121,7 +122,7 @@ function renderEmployees(list) {
       <td><span class="hr-badge ${emp.status === '재직' ? 'active' : 'retired'}">${esc(emp.status)}</span></td>
       <td class="num">${fmt(emp.current_salary_thousand)}</td>
       <td><span class="hr-badge ${emp.pension_enrolled ? 'yes' : 'no'}">${emp.pension_enrolled ? '가입' : '미가입'}</span></td>
-      <td><a class="hr-edit-link" onclick="openEditModal('${emp.id}')">수정</a></td>
+      <td><a class="hr-edit-link" onclick="openEditModal('${emp.id}')">수정</a> · <a class="hr-edit-link" onclick="deleteEmployee('${emp.id}', '${esc(emp.name)}')">삭제</a></td>
     </tr>
   `).join('');
 
@@ -166,6 +167,28 @@ function esc(s) {
 /* ── 추가/수정 모달 ── */
 let editingId = null;
 
+function populateFieldDatalists(list) {
+  const uniq = (key) => [...new Set(list.map(e => e[key]).filter(Boolean))].sort();
+  $('positionList').innerHTML = uniq('position').map(v => `<option value="${esc(v)}">`).join('');
+  $('branchList').innerHTML = uniq('branch').map(v => `<option value="${esc(v)}">`).join('');
+  $('departmentList').innerHTML = uniq('department').map(v => `<option value="${esc(v)}">`).join('');
+}
+
+async function deleteEmployee(id, name) {
+  if (!confirm(`${name} 님을 완전히 삭제하시겠습니까?\n\n⚠ 이 작업은 되돌릴 수 없고, 연봉 이력·퇴직연금·급여명세 등 이 직원과 관련된 모든 기록이 함께 삭제됩니다.\n\n실제 재직했던 직원이라면 삭제 대신 "재직상태=퇴사"로 처리하시는 걸 권장합니다. 잘못 등록된 중복 데이터를 정리하는 경우에만 삭제해주세요.`)) return;
+  if (!confirm('정말로 삭제하시겠습니까? 마지막 확인입니다.')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees?employee_id=${id}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('delete failed');
+    loadEmployees();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
 function openAddModal() {
   editingId = null;
   $('modalTitle').textContent = '직원 추가';
@@ -175,6 +198,7 @@ function openAddModal() {
   $('f_pension_enrolled').value = 'true';
   $('modalMsg').textContent = '';
   $('salaryHistorySection').style.display = 'none';
+  $('empSaveBtn').disabled = false;
   $('empModal').style.display = 'flex';
 }
 
@@ -201,6 +225,7 @@ function openEditModal(id) {
   $('modalMsg').className = 'hr-msg';
   $('salaryHistorySection').style.display = 'block';
   loadSalaryHistoryInModal(id);
+  $('empSaveBtn').disabled = false;
   $('empModal').style.display = 'flex';
 }
 
@@ -209,6 +234,10 @@ function closeModal() {
 }
 
 async function saveEmployee() {
+  const btn = $('empSaveBtn');
+  if (btn.disabled) return; // 중복 클릭 방지
+  btn.disabled = true;
+
   const payload = {
     name: $('f_name').value.trim(),
     position: $('f_position').value.trim(),
@@ -226,6 +255,7 @@ async function saveEmployee() {
   if (!payload.name) {
     $('modalMsg').textContent = '이름은 필수입니다.';
     $('modalMsg').className = 'hr-msg';
+    btn.disabled = false;
     return;
   }
 
@@ -253,6 +283,7 @@ async function saveEmployee() {
         if (!payload.new_salary_effective_month) {
           $('modalMsg').textContent = '연봉을 변경하려면 적용 시작월을 입력해주세요.';
           $('modalMsg').className = 'hr-msg';
+          btn.disabled = false;
           return;
         }
       }
@@ -268,6 +299,8 @@ async function saveEmployee() {
   } catch (e) {
     $('modalMsg').textContent = '저장 중 오류가 발생했습니다.';
     $('modalMsg').className = 'hr-msg';
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -1970,6 +2003,7 @@ function closePayslipModal() {
 }
 
 function printPayslip() {
+  $('registerPrintArea').style.display = 'none';
   window.print();
 }
 
@@ -1979,6 +2013,9 @@ function printPayrollRegister() {
     alert('먼저 급여명세를 조회해주세요 ("미리보기 조회" 또는 "저장된 자료 보기").');
     return;
   }
+  // 개인별 명세서 팝업이 열려있으면 먼저 닫기 (같이 인쇄되는 것 방지)
+  $('payslipModal').style.display = 'none';
+
   const list = payrollCache;
   const hasSaved = list[0] && list[0].retroactive_adjustment !== undefined;
 
