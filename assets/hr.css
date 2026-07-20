@@ -57,7 +57,6 @@
   .hr-modal-backdrop {
     position: static !important;
     background: none !important;
-    display: block !important;
     inset: auto !important;
   }
   .hr-modal {
