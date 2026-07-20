@@ -229,6 +229,33 @@ class handler(BaseHTTPRequestHandler):
 
             emp_id = qs.get("employee_id", [None])[0]
             if emp_id:
+                # 안전장치: 관련 기록이 하나라도 있으면(=이미 실제로 쓰인 직원) 삭제 거부
+                blockers = []
+
+                sh = rest_request("GET", f"salary_history?employee_id=eq.{emp_id}&select=id")
+                if sh and len(sh) > 1:
+                    blockers.append(f"연봉 이력 {len(sh)}건")
+
+                checks = [
+                    ("monthly_payroll", "월별 급여명세"),
+                    ("pension_contributions", "퇴직연금 불입 기록"),
+                    ("pension_accrual_adjustments", "퇴직연금 보정 기록"),
+                    ("leave_adjustments", "재직자 조정 기록"),
+                    ("other_payments", "성과급/기타지급 기록"),
+                    ("pension_settlements", "퇴사자 정산 기록"),
+                    ("payroll_retroactive_log", "소급 지급 기록"),
+                ]
+                for table, label in checks:
+                    rows = rest_request("GET", f"{table}?employee_id=eq.{emp_id}&select=id")
+                    if rows:
+                        blockers.append(f"{label} {len(rows)}건")
+
+                if blockers:
+                    return self._send(409, {
+                        "error": "이미 처리된 기록이 있어 삭제할 수 없습니다 (" + ", ".join(blockers)
+                            + "). 실수로 등록한 직원이 아니라면, 삭제 대신 재직상태를 '퇴사'로 변경해주세요.",
+                    })
+
                 rest_request("DELETE", f"employees?id=eq.{emp_id}")
                 return self._send(200, {"ok": True})
 
