@@ -145,6 +145,14 @@ class handler(BaseHTTPRequestHandler):
                             results.append({**emp, "source_month": mo, "retroactive_diff": diff})
                 return self._send(200, {"employees": results})
 
+            if qs.get("leave_adjustments", ["0"])[0] == "1":
+                emp_id = qs.get("employee_id", [None])[0]
+                filt = f"employee_id=eq.{emp_id}&" if emp_id else ""
+                items = rest_request(
+                    "GET", f"leave_adjustments?{filt}select=*,employees(name,branch,department)&order=start_date.desc"
+                )
+                return self._send(200, {"adjustments": items})
+
             if not year_month:
                 return self._send(400, {"error": "year_month는 필수입니다 (예: 2026-07-01)"})
 
@@ -161,10 +169,10 @@ class handler(BaseHTTPRequestHandler):
 
             results = []
             for emp in employees:
-                calc = rpc("payroll_calc_base", {"p_employee_id": emp["id"], "p_year_month": year_month})
+                calc = rpc("payroll_calc_final", {"p_employee_id": emp["id"], "p_year_month": year_month})
                 row = calc[0] if calc else {
                     "base_pay": 0, "fixed_overtime_pay": 0,
-                    "attendance_allowance": 0, "meal_allowance": 0, "total_pay": 0,
+                    "attendance_allowance": 0, "meal_allowance": 0, "total_pay": 0, "adjustment_note": None,
                 }
                 results.append({**emp, **row})
 
@@ -181,6 +189,25 @@ class handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
+
+            # 재직자 조정 추가: {"type": "leave_adjustment", employee_id, reason_type, start_date, end_date, standard_hours, reduced_hours, note}
+            if isinstance(payload, dict) and payload.get("type") == "leave_adjustment":
+                emp_id = payload.get("employee_id")
+                reason_type = payload.get("reason_type")
+                start_date = payload.get("start_date")
+                end_date = payload.get("end_date")
+                if not emp_id or not reason_type or not start_date or not end_date:
+                    return self._send(400, {"error": "employee_id, reason_type, start_date, end_date는 필수입니다"})
+                created = rest_request("POST", "leave_adjustments", body={
+                    "employee_id": emp_id,
+                    "reason_type": reason_type,
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "standard_hours": payload.get("standard_hours"),
+                    "reduced_hours": payload.get("reduced_hours"),
+                    "note": payload.get("note"),
+                }, prefer="return=representation")
+                return self._send(201, {"adjustment": created[0] if created else None})
 
             # 마감/마감해제: {"type": "lock", period_key: "2026-07", locked: true/false, note}
             if isinstance(payload, dict) and payload.get("type") == "lock":
@@ -234,10 +261,10 @@ class handler(BaseHTTPRequestHandler):
                             body={"retroactive_adjustment": new_total},
                         )
                     else:
-                        calc = rpc("payroll_calc_base", {"p_employee_id": emp_id, "p_year_month": target_month})
+                        calc = rpc("payroll_calc_final", {"p_employee_id": emp_id, "p_year_month": target_month})
                         row = calc[0] if calc else {
                             "base_pay": 0, "fixed_overtime_pay": 0,
-                            "attendance_allowance": 0, "meal_allowance": 0, "total_pay": 0,
+                            "attendance_allowance": 0, "meal_allowance": 0, "total_pay": 0, "adjustment_note": None,
                         }
                         rest_request("POST", "monthly_payroll", body={
                             "employee_id": emp_id,
@@ -248,6 +275,7 @@ class handler(BaseHTTPRequestHandler):
                             "meal_allowance": row["meal_allowance"],
                             "total_pay": row["total_pay"],
                             "retroactive_adjustment": add_amount,
+                            "adjustment_note": row.get("adjustment_note"),
                             "calc_note": "소급인상분 반영",
                         })
                     count += 1
@@ -265,7 +293,7 @@ class handler(BaseHTTPRequestHandler):
 
             body = []
             for emp in employees:
-                calc = rpc("payroll_calc_base", {"p_employee_id": emp["id"], "p_year_month": year_month})
+                calc = rpc("payroll_calc_final", {"p_employee_id": emp["id"], "p_year_month": year_month})
                 row = calc[0] if calc else None
                 if not row:
                     continue
@@ -277,7 +305,8 @@ class handler(BaseHTTPRequestHandler):
                     "attendance_allowance": row["attendance_allowance"],
                     "meal_allowance": row["meal_allowance"],
                     "total_pay": row["total_pay"],
-                    "calc_note": "1단계 기본계산 (정상 재직자 기준)",
+                    "adjustment_note": row.get("adjustment_note"),
+                    "calc_note": "1단계 기본계산 (정상 재직자 기준)" + (" + 재직자 조정 반영" if row.get("adjustment_note") else ""),
                 })
 
             if not body:
@@ -317,6 +346,11 @@ class handler(BaseHTTPRequestHandler):
             if not self._authorized():
                 return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
+
+            leave_adj_id = qs.get("leave_adjustment_id", [None])[0]
+            if leave_adj_id:
+                rest_request("DELETE", f"leave_adjustments?id=eq.{leave_adj_id}")
+                return self._send(200, {"ok": True})
 
             revert_employee_id = qs.get("revert_employee_id", [None])[0]
             revert_all = qs.get("revert_all", ["0"])[0] == "1"
