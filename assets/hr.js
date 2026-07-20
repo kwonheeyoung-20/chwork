@@ -50,6 +50,8 @@ function switchHrTab(name) {
       $('payrollMonth').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
     }
     loadRetroLog();
+    populateLeaveAdjustEmployeeSelect();
+    loadLeaveAdjustments();
   }
   if (name === 'otherpay') {
     populateYearSelect('otherpayYear');
@@ -803,14 +805,14 @@ async function loadPayrollPreview() {
   const ym = payrollYearMonthDate();
   if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
   const tbody = $('payrollTbody');
-  tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?year_month=${ym}`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
       return;
     }
     $('retroAdjHeader').textContent = '소급인상분';
@@ -818,7 +820,7 @@ async function loadPayrollPreview() {
     renderPayroll(data.payroll || [], false);
     refreshPayrollLockStatus();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
@@ -826,14 +828,14 @@ async function loadPayrollSaved() {
   const ym = payrollYearMonthDate();
   if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
   const tbody = $('payrollTbody');
-  tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?year_month=${ym}&saved=1`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
       return;
     }
     const list = (data.payroll || []).map(p => ({
@@ -845,7 +847,7 @@ async function loadPayrollSaved() {
       hire_date: p.employees?.hire_date,
     })).sort((a, b) => (a.hire_date || '').localeCompare(b.hire_date || ''));
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">이 달은 아직 "생성/저장"된 자료가 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">이 달은 아직 "생성/저장"된 자료가 없습니다.</td></tr>`;
       return;
     }
     $('retroAdjHeader').textContent = '소급인상분';
@@ -853,18 +855,22 @@ async function loadPayrollSaved() {
     renderPayroll(list, true);
     refreshPayrollLockStatus();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
+let payrollCache = [];
+
 function renderPayroll(list, savedMode) {
+  payrollCache = list;
   $('payrollCount').textContent = `총 ${list.length}명`;
   const tbody = $('payrollTbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">데이터가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">데이터가 없습니다.</td></tr>`;
+    $('payrollAdjustNoteBox').style.display = 'none';
     return;
   }
-  tbody.innerHTML = list.map(p => {
+  tbody.innerHTML = list.map((p, idx) => {
     const retro = savedMode ? (Number(p.retroactive_adjustment) || 0) : null;
     const finalTotal = savedMode ? (Number(p.total_pay) || 0) + (retro || 0) : null;
     return `
@@ -880,6 +886,7 @@ function renderPayroll(list, savedMode) {
       <td class="num">${fmt(p.total_pay)}</td>
       <td class="num">${savedMode ? fmt(retro) : '-'}</td>
       <td class="num">${savedMode ? fmt(finalTotal) : '-'}</td>
+      <td><a class="hr-edit-link" onclick="openPayslipModal(${idx})">명세서</a></td>
     </tr>
   `;
   }).join('');
@@ -896,6 +903,7 @@ function renderPayroll(list, savedMode) {
       <td class="num">${fmt(sum(list,'total_pay'))}</td>
       <td class="num">${savedMode ? fmt(sum(list,'retroactive_adjustment')) : '-'}</td>
       <td class="num">${savedMode ? fmt(sumFinal(list)) : '-'}</td>
+      <td></td>
     </tr>
   `;
 
@@ -908,7 +916,7 @@ function renderPayroll(list, savedMode) {
     byBranch[b].push(p);
   });
   tbody.innerHTML += `
-    <tr><td colspan="11" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
+    <tr><td colspan="12" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
   `;
   branchOrder.forEach(b => {
     const arr = byBranch[b];
@@ -922,9 +930,23 @@ function renderPayroll(list, savedMode) {
         <td class="num">${fmt(sum(arr,'total_pay'))}</td>
         <td class="num">${savedMode ? fmt(sum(arr,'retroactive_adjustment')) : '-'}</td>
         <td class="num">${savedMode ? fmt(sumFinal(arr)) : '-'}</td>
+        <td></td>
       </tr>
     `;
   });
+
+  // 이번 달 재직자 조정 대상 안내 박스
+  const adjusted = list.filter(p => p.adjustment_note);
+  if (adjusted.length > 0) {
+    $('payrollAdjustNoteBox').style.display = 'block';
+    $('payrollAdjustNoteList').innerHTML = adjusted.map(p => `
+      <div style="font-size:12px; color:var(--text-secondary); padding:3px 0;">
+        <b>${esc(p.name)}</b> — ${esc(p.adjustment_note)}
+      </div>
+    `).join('');
+  } else {
+    $('payrollAdjustNoteBox').style.display = 'none';
+  }
 }
 
 async function generatePayroll() {
@@ -947,16 +969,20 @@ async function generatePayroll() {
 }
 
 function downloadPayrollExcel() {
-  const rows = [['이름', '지사', '부서', '직급', '기본급', '고정연장수당', '만근수당', '식대', '합계', '소급인상분', '최종 지급액']];
+  const rows = [['이름', '지사', '부서', '직급', '기본급', '고정연장수당', '만근수당', '식대', '합계', '소급인상분', '최종 지급액', '재직자 조정 안내']];
   document.querySelectorAll('#payrollTbody tr').forEach(tr => {
     if (tr.children.length === 1) return; // "지사별 합계" 섹션 제목 줄은 건너뜀
     if (tr.classList.contains('hr-total-row')) {
       const tds = Array.from(tr.children).map(td => td.textContent.trim());
-      rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5], tds[6], tds[7]]);
+      rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5], tds[6], tds[7], '']);
       return;
     }
     const cells = Array.from(tr.children).map(td => td.textContent.trim());
-    if (cells.length === 11) rows.push(cells);
+    if (cells.length === 12) rows.push(cells.slice(0, 11).concat(['']));
+  });
+  // 재직자 조정 안내는 payrollCache에서 별도로 채움
+  payrollCache.forEach((p, idx) => {
+    if (p.adjustment_note && rows[idx + 1]) rows[idx + 1][11] = p.adjustment_note;
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -1780,4 +1806,146 @@ async function saveBulkSalary() {
     $('bulkSalaryMsg').className = 'hr-msg';
     $('bulkSalaryMsg').textContent = '저장 중 오류가 발생했습니다.';
   }
+}
+
+/* ── 재직자 조정(육아휴직 등) 관리 ── */
+function toggleLeaveAdjustFields() {
+  const type = $('la_reason_type').value;
+  const isReduced = type === '육아기근로시간단축';
+  $('leaveAdjustHoursFields').style.display = isReduced ? 'grid' : 'none';
+  $('leaveAdjustNoteOnly').style.display = isReduced ? 'none' : 'grid';
+}
+
+async function populateLeaveAdjustEmployeeSelect() {
+  const sel = $('la_employee_id');
+  if (sel.dataset.loaded === '1') return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    sel.innerHTML = (data.employees || []).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+    sel.dataset.loaded = '1';
+  } catch (e) {
+    sel.innerHTML = '<option value="">불러오기 실패</option>';
+  }
+}
+
+async function loadLeaveAdjustments() {
+  const tbody = $('leaveAdjustTbody');
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?leave_adjustments=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.adjustments || [];
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 조정 내역이 없습니다.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(a => `
+      <tr>
+        <td>${esc(a.employees?.name || '-')}</td>
+        <td>${esc(a.employees?.branch || '-')}</td>
+        <td>${esc(a.reason_type)}</td>
+        <td>${esc(a.start_date)} ~ ${esc(a.end_date)}</td>
+        <td>${esc(a.note || '-')}</td>
+        <td><a class="hr-edit-link" onclick="deleteLeaveAdjustment('${a.id}')">삭제</a></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+  }
+}
+
+async function saveLeaveAdjustment() {
+  const type = $('la_reason_type').value;
+  const payload = {
+    type: 'leave_adjustment',
+    employee_id: $('la_employee_id').value,
+    reason_type: type,
+    start_date: $('la_start').value,
+    end_date: $('la_end').value,
+    note: type === '육아기근로시간단축' ? $('la_note').value.trim() || null : $('la_note2').value.trim() || null,
+  };
+  if (type === '육아기근로시간단축') {
+    payload.standard_hours = Number($('la_standard_hours').value || 0) || null;
+    payload.reduced_hours = Number($('la_reduced_hours').value || 0) || null;
+    if (!payload.standard_hours || !payload.reduced_hours) {
+      $('leaveAdjustMsg').textContent = '육아기근로시간단축은 통상/단축후 소정근로시간이 필요합니다.';
+      return;
+    }
+  }
+  if (!payload.employee_id || !payload.start_date || !payload.end_date) {
+    $('leaveAdjustMsg').textContent = '직원, 시작일, 종료일은 필수입니다.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'save failed');
+    $('leaveAdjustMsg').className = 'hr-msg success';
+    $('leaveAdjustMsg').textContent = '저장되었습니다.';
+    $('la_start').value = ''; $('la_end').value = ''; $('la_note').value = ''; $('la_note2').value = '';
+    $('la_standard_hours').value = ''; $('la_reduced_hours').value = '';
+    loadLeaveAdjustments();
+  } catch (e) {
+    $('leaveAdjustMsg').className = 'hr-msg';
+    $('leaveAdjustMsg').textContent = '저장 중 오류가 발생했습니다.';
+  }
+}
+
+async function deleteLeaveAdjustment(id) {
+  if (!confirm('이 조정 내역을 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?leave_adjustment_id=${id}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('delete failed');
+    loadLeaveAdjustments();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 개인별 급여명세서 출력 ── */
+function openPayslipModal(idx) {
+  const p = payrollCache[idx];
+  if (!p) return;
+  const retro = Number(p.retroactive_adjustment) || 0;
+  const hasSaved = p.retroactive_adjustment !== undefined;
+  const finalTotal = (Number(p.total_pay) || 0) + (hasSaved ? retro : 0);
+
+  $('ps_name').textContent = p.name || '-';
+  $('ps_org').textContent = `${p.branch || '-'} / ${p.department || '-'} / ${p.position || '-'}`;
+  $('ps_month').textContent = $('payrollMonth').value || '-';
+  $('ps_base').textContent = fmt(p.base_pay) + '원';
+  $('ps_ot').textContent = fmt(p.fixed_overtime_pay) + '원';
+  $('ps_att').textContent = fmt(p.attendance_allowance) + '원';
+  $('ps_meal').textContent = fmt(p.meal_allowance) + '원';
+  $('ps_retro').textContent = hasSaved ? (fmt(retro) + '원') : '- (저장된 자료 아님)';
+  $('ps_total').textContent = fmt(hasSaved ? finalTotal : p.total_pay) + '원';
+
+  if (p.adjustment_note) {
+    $('ps_adjust_note_wrap').style.display = 'block';
+    $('ps_adjust_note').textContent = p.adjustment_note;
+  } else {
+    $('ps_adjust_note_wrap').style.display = 'none';
+  }
+
+  $('payslipModal').style.display = 'flex';
+}
+
+function closePayslipModal() {
+  $('payslipModal').style.display = 'none';
+}
+
+function printPayslip() {
+  window.print();
 }
