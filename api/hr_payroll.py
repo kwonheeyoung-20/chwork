@@ -70,6 +70,16 @@ def is_period_locked(period_key):
     return bool(rows) and rows[0].get("locked", False)
 
 
+def month_end_of(year_month):
+    y, m = int(year_month[:4]), int(year_month[5:7])
+    if m == 12:
+        ny, nm = y + 1, 1
+    else:
+        ny, nm = y, m + 1
+    import datetime
+    return (datetime.date(ny, nm, 1) - datetime.timedelta(days=1)).isoformat()
+
+
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
@@ -164,12 +174,14 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(200, {"payroll": data})
 
             employees = rest_request(
-                "GET", f"employees?status=eq.{quote('재직')}&select=id,name,branch,department,position&order=hire_date.asc"
+                "GET",
+                f"employees?hire_date=lte.{month_end_of(year_month)}&or=(retire_date.is.null,retire_date.gte.{year_month})"
+                f"&select=id,name,branch,department,position&order=hire_date.asc"
             ) or []
 
             results = []
             for emp in employees:
-                calc = rpc("payroll_calc_final", {"p_employee_id": emp["id"], "p_year_month": year_month})
+                calc = rpc("payroll_calc_prorated", {"p_employee_id": emp["id"], "p_year_month": year_month})
                 row = calc[0] if calc else {
                     "base_pay": 0, "fixed_overtime_pay": 0,
                     "attendance_allowance": 0, "meal_allowance": 0, "total_pay": 0, "adjustment_note": None,
@@ -261,7 +273,7 @@ class handler(BaseHTTPRequestHandler):
                             body={"retroactive_adjustment": new_total},
                         )
                     else:
-                        calc = rpc("payroll_calc_final", {"p_employee_id": emp_id, "p_year_month": target_month})
+                        calc = rpc("payroll_calc_prorated", {"p_employee_id": emp_id, "p_year_month": target_month})
                         row = calc[0] if calc else {
                             "base_pay": 0, "fixed_overtime_pay": 0,
                             "attendance_allowance": 0, "meal_allowance": 0, "total_pay": 0, "adjustment_note": None,
@@ -276,6 +288,7 @@ class handler(BaseHTTPRequestHandler):
                             "total_pay": row["total_pay"],
                             "retroactive_adjustment": add_amount,
                             "adjustment_note": row.get("adjustment_note"),
+                            "proration_note": row.get("proration_note"),
                             "calc_note": "소급인상분 반영",
                         })
                     count += 1
@@ -288,12 +301,14 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(423, {"error": f"{year_month[:7]}은(는) 마감되어 있습니다. 먼저 마감해제해주세요."})
 
             employees = rest_request(
-                "GET", f"employees?status=eq.{quote('재직')}&select=id"
+                "GET",
+                f"employees?hire_date=lte.{month_end_of(year_month)}&or=(retire_date.is.null,retire_date.gte.{year_month})"
+                f"&select=id"
             ) or []
 
             body = []
             for emp in employees:
-                calc = rpc("payroll_calc_final", {"p_employee_id": emp["id"], "p_year_month": year_month})
+                calc = rpc("payroll_calc_prorated", {"p_employee_id": emp["id"], "p_year_month": year_month})
                 row = calc[0] if calc else None
                 if not row:
                     continue
@@ -306,13 +321,16 @@ class handler(BaseHTTPRequestHandler):
                     "meal_allowance": row["meal_allowance"],
                     "total_pay": row["total_pay"],
                     "adjustment_note": row.get("adjustment_note"),
+                    "proration_note": row.get("proration_note"),
                     "base_pay_before": row.get("base_pay_before"),
                     "fixed_overtime_pay_before": row.get("fixed_overtime_pay_before"),
                     "attendance_allowance_before": row.get("attendance_allowance_before"),
                     "meal_allowance_before": row.get("meal_allowance_before"),
                     "total_pay_before": row.get("total_pay_before"),
                     "calc_formula": row.get("calc_formula"),
-                    "calc_note": "1단계 기본계산 (정상 재직자 기준)" + (" + 재직자 조정 반영" if row.get("adjustment_note") else ""),
+                    "calc_note": "1단계 기본계산 (정상 재직자 기준)"
+                        + (" + 재직자 조정 반영" if row.get("adjustment_note") else "")
+                        + (" + 일할계산 반영" if row.get("proration_note") else ""),
                 })
 
             if not body:
