@@ -226,9 +226,15 @@ class handler(BaseHTTPRequestHandler):
             if not self._authorized():
                 return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
+
+            emp_id = qs.get("employee_id", [None])[0]
+            if emp_id:
+                rest_request("DELETE", f"employees?id=eq.{emp_id}")
+                return self._send(200, {"ok": True})
+
             sh_id = qs.get("salary_history_id", [None])[0]
             if not sh_id:
-                return self._send(400, {"error": "salary_history_id는 필수입니다"})
+                return self._send(400, {"error": "employee_id 또는 salary_history_id가 필요합니다"})
             rest_request("DELETE", f"salary_history?id=eq.{sh_id}")
             return self._send(200, {"ok": True})
         except SupabaseError as e:
