@@ -935,13 +935,15 @@ function renderPayroll(list, savedMode) {
     `;
   });
 
-  // 이번 달 재직자 조정 대상 안내 박스
-  const adjusted = list.filter(p => p.adjustment_note);
-  if (adjusted.length > 0) {
+  // 이번 달 특이사항 안내 박스 (재직자 조정 + 일할계산 대상)
+  const noted = list.filter(p => p.adjustment_note || p.proration_note);
+  if (noted.length > 0) {
     $('payrollAdjustNoteBox').style.display = 'block';
-    $('payrollAdjustNoteList').innerHTML = adjusted.map(p => `
+    $('payrollAdjustNoteList').innerHTML = noted.map(p => `
       <div style="font-size:12px; color:var(--text-secondary); padding:3px 0;">
-        <b>${esc(p.name)}</b> — ${esc(p.adjustment_note)}
+        <b>${esc(p.name)}</b>
+        ${p.adjustment_note ? ` — ${esc(p.adjustment_note)}` : ''}
+        ${p.proration_note ? `<br><span style="margin-left:8px;">└ ${esc(p.proration_note)}</span>` : ''}
       </div>
     `).join('');
   } else {
@@ -1932,9 +1934,9 @@ function openPayslipModal(idx) {
   $('ps_retro').textContent = hasSaved ? (fmt(retro) + '원') : '- (저장된 자료 아님)';
   $('ps_total').textContent = fmt(hasSaved ? finalTotal : p.total_pay) + '원';
 
-  if (p.adjustment_note) {
+  if (p.adjustment_note || p.proration_note) {
     $('ps_adjust_note_wrap').style.display = 'block';
-    $('ps_adjust_note').textContent = p.adjustment_note;
+    $('ps_adjust_note').textContent = [p.adjustment_note, p.proration_note].filter(Boolean).join(' / ');
   } else {
     $('ps_adjust_note_wrap').style.display = 'none';
   }
@@ -2015,11 +2017,11 @@ function printPayrollRegister() {
     </tr>
   `;
 
-  const adjusted = list.filter(p => p.adjustment_note);
+  const adjusted = list.filter(p => p.adjustment_note || p.proration_note);
   if (adjusted.length > 0) {
     $('reg_adjust_section').style.display = 'block';
     $('reg_adjust_list').innerHTML = adjusted.map(p => `
-      <div style="padding:3px 0;"><b>${esc(p.name)}</b>(${esc(p.branch || '-')}/${esc(p.department || '-')}) — ${esc(p.adjustment_note)}</div>
+      <div style="padding:3px 0;"><b>${esc(p.name)}</b>(${esc(p.branch || '-')}/${esc(p.department || '-')}) — ${esc([p.adjustment_note, p.proration_note].filter(Boolean).join(' / '))}</div>
     `).join('');
   } else {
     $('reg_adjust_section').style.display = 'none';
