@@ -920,7 +920,7 @@ function renderPayroll(list, savedMode) {
       <td class="num">${fmt(p.attendance_allowance)}</td>
       <td class="num">${fmt(p.meal_allowance)}</td>
       <td class="num">${fmt(p.total_pay)}</td>
-      <td class="num">${savedMode ? fmt(retro) : '-'}</td>
+      <td class="num">${savedMode ? (retro ? fmt(retro) : '') : '-'}</td>
       <td class="num">${savedMode ? fmt(finalTotal) : '-'}</td>
       <td><a class="hr-edit-link" onclick="openPayslipModal(${idx})">명세서</a></td>
     </tr>
@@ -1967,7 +1967,7 @@ function openPayslipModal(idx) {
   $('ps_ot').textContent = fmt(p.fixed_overtime_pay) + '원';
   $('ps_att').textContent = fmt(p.attendance_allowance) + '원';
   $('ps_meal').textContent = fmt(p.meal_allowance) + '원';
-  $('ps_retro').textContent = hasSaved ? (fmt(retro) + '원') : '- (저장된 자료 아님)';
+  $('ps_retro').textContent = hasSaved ? (retro ? (fmt(retro) + '원') : '없음') : '- (저장된 자료 아님)';
   $('ps_total').textContent = fmt(hasSaved ? finalTotal : p.total_pay) + '원';
 
   if (p.adjustment_note || p.proration_note) {
@@ -2040,7 +2040,7 @@ function printPayrollRegister() {
         <td class="num">${fmt(p.attendance_allowance)}</td>
         <td class="num">${fmt(p.meal_allowance)}</td>
         <td class="num">${fmt(p.total_pay)}</td>
-        <td class="num">${hasSaved ? fmt(retro) : '-'}</td>
+        <td class="num reg-retro-cell">${hasSaved ? (retro ? fmt(retro) : '') : '-'}</td>
         <td class="num">${hasSaved ? fmt(finalTotal) : '-'}</td>
       </tr>
     `;
@@ -2052,10 +2052,18 @@ function printPayrollRegister() {
       <td class="num">${fmt(sum('attendance_allowance'))}</td>
       <td class="num">${fmt(sum('meal_allowance'))}</td>
       <td class="num">${fmt(sum('total_pay'))}</td>
-      <td class="num">${hasSaved ? fmt(sum('retroactive_adjustment')) : '-'}</td>
+      <td class="num reg-retro-cell">${hasSaved ? fmt(sum('retroactive_adjustment')) : '-'}</td>
       <td class="num">${hasSaved ? fmt(sum('total_pay','retroactive_adjustment')) : '-'}</td>
     </tr>
   `;
+
+  // 전 직원 소급인상분이 전부 0이면, 인쇄본에서는 그 컬럼 자체를 숨김
+  const totalRetro = hasSaved ? sum('retroactive_adjustment') : 0;
+  const showRetroCol = hasSaved && totalRetro !== 0;
+  $('reg_retro_header').style.display = showRetroCol ? '' : 'none';
+  document.querySelectorAll('.reg-retro-cell').forEach(td => {
+    td.style.display = showRetroCol ? '' : 'none';
+  });
 
   const adjusted = list.filter(p => p.adjustment_note || p.proration_note);
   if (adjusted.length > 0) {
@@ -2068,6 +2076,15 @@ function printPayrollRegister() {
   }
 
   $('registerPrintArea').style.display = 'block';
+
+  // 대장 출력만 가로(landscape)로 인쇄 — 임시 스타일 삽입 후 인쇄 후 제거
+  const landscapeStyle = document.createElement('style');
+  landscapeStyle.id = 'registerLandscapeStyle';
+  landscapeStyle.textContent = '@page { size: landscape; }';
+  document.head.appendChild(landscapeStyle);
+
   window.print();
+
+  document.head.removeChild(landscapeStyle);
   $('registerPrintArea').style.display = 'none';
 }
