@@ -306,6 +306,12 @@ class handler(BaseHTTPRequestHandler):
                     "meal_allowance": row["meal_allowance"],
                     "total_pay": row["total_pay"],
                     "adjustment_note": row.get("adjustment_note"),
+                    "base_pay_before": row.get("base_pay_before"),
+                    "fixed_overtime_pay_before": row.get("fixed_overtime_pay_before"),
+                    "attendance_allowance_before": row.get("attendance_allowance_before"),
+                    "meal_allowance_before": row.get("meal_allowance_before"),
+                    "total_pay_before": row.get("total_pay_before"),
+                    "calc_formula": row.get("calc_formula"),
                     "calc_note": "1단계 기본계산 (정상 재직자 기준)" + (" + 재직자 조정 반영" if row.get("adjustment_note") else ""),
                 })
 
