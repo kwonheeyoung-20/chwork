@@ -244,7 +244,8 @@
             </div>
           </div>
           <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
-            1단계: 정상 재직자 기준 기본 계산만 반영됩니다 (신규/퇴사자 일할계산·수습요율·휴직조정은 다음 단계에서 추가 예정).
+            1단계: 정상 재직자 기준 기본 계산만 반영됩니다 (신규/퇴사자 일할계산·수습요율·휴직조정은 다음 단계에서 추가 예정).<br>
+            ⚠ "미리보기 조회"는 실시간 계산만 보여줘서 <b>소급인상분이 안 보입니다.</b> 소급분까지 확인하시려면 반드시 <b>"저장된 자료 보기"</b>를 눌러주세요.
           </p>
 
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
@@ -288,7 +289,7 @@
             </div>
             <div class="table-wrap" id="retroWrap" style="display:none;">
               <table class="table" id="retroTable">
-                <thead><tr><th>이름</th><th>지사</th><th>부서</th><th>대상 기간</th><th class="num">소급 차액(자동계산, 합계)</th><th></th></tr></thead>
+                <thead><tr><th><input type="checkbox" checked onclick="toggleAllRetroSelect(this)"></th><th>이름</th><th>지사</th><th>부서</th><th>대상 기간</th><th class="num">소급 차액(자동계산, 합계)</th><th></th></tr></thead>
                 <tbody id="retroTbody"></tbody>
               </table>
             </div>
