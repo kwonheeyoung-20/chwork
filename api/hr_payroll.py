@@ -73,7 +73,7 @@ def is_period_locked(period_key):
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, X-HR-Password",
         "Content-Type": "application/json",
     }
@@ -108,6 +108,13 @@ class handler(BaseHTTPRequestHandler):
             if qs.get("locks", ["0"])[0] == "1":
                 locks = rest_request("GET", "period_locks?module=eq.payroll&select=*&order=period_key.desc")
                 return self._send(200, {"locks": locks})
+
+            if qs.get("retro_log", ["0"])[0] == "1":
+                logs = rest_request(
+                    "GET",
+                    "payroll_retroactive_log?select=*,employees(name,branch,department)&order=created_at.desc",
+                )
+                return self._send(200, {"logs": logs})
 
             if qs.get("retro_preview", ["0"])[0] == "1":
                 from_month = qs.get("from_month", [None])[0]
@@ -281,6 +288,66 @@ class handler(BaseHTTPRequestHandler):
                 prefer="return=representation,resolution=merge-duplicates",
             )
             return self._send(201, {"count": len(created) if created else 0})
+        except SupabaseError as e:
+            return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
+        except Exception as e:
+            return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
+
+    def _revert_one_log(self, log_entry):
+        """단일 소급 기록 되돌리기. 마감된 달이면 (False, 사유) 반환, 성공하면 (True, None)."""
+        if is_period_locked(log_entry["target_month"][:7]):
+            return False, f"{log_entry['target_month'][:7]}(마감됨)"
+
+        payroll_row = rest_request(
+            "GET",
+            f"monthly_payroll?employee_id=eq.{log_entry['employee_id']}&year_month=eq.{log_entry['target_month']}&select=id,retroactive_adjustment",
+        )
+        if payroll_row:
+            new_amount = (payroll_row[0].get("retroactive_adjustment") or 0) - log_entry["amount"]
+            rest_request(
+                "PATCH",
+                f"monthly_payroll?employee_id=eq.{log_entry['employee_id']}&year_month=eq.{log_entry['target_month']}",
+                body={"retroactive_adjustment": new_amount},
+            )
+        rest_request("DELETE", f"payroll_retroactive_log?id=eq.{log_entry['id']}")
+        return True, None
+
+    def do_DELETE(self):
+        try:
+            if not self._authorized():
+                return self._send(401, {"error": "unauthorized"})
+            qs = parse_qs(urlparse(self.path).query)
+
+            revert_employee_id = qs.get("revert_employee_id", [None])[0]
+            revert_all = qs.get("revert_all", ["0"])[0] == "1"
+
+            if revert_employee_id or revert_all:
+                filt = f"employee_id=eq.{revert_employee_id}&" if revert_employee_id else ""
+                logs = rest_request("GET", f"payroll_retroactive_log?{filt}select=*") or []
+                if not logs:
+                    return self._send(200, {"reverted": 0, "skipped": []})
+                reverted = 0
+                skipped = []
+                for log_entry in logs:
+                    ok, reason = self._revert_one_log(log_entry)
+                    if ok:
+                        reverted += 1
+                    else:
+                        skipped.append(reason)
+                return self._send(200, {"reverted": reverted, "skipped": skipped})
+
+            log_id = qs.get("retro_log_id", [None])[0]
+            if not log_id:
+                return self._send(400, {"error": "retro_log_id는 필수입니다"})
+
+            existing = rest_request("GET", f"payroll_retroactive_log?id=eq.{log_id}&select=*")
+            if not existing:
+                return self._send(404, {"error": "해당 기록을 찾을 수 없습니다"})
+
+            ok, reason = self._revert_one_log(existing[0])
+            if not ok:
+                return self._send(423, {"error": f"{reason} 상태라 먼저 마감해제해주세요."})
+            return self._send(200, {"ok": True})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
         except Exception as e:
