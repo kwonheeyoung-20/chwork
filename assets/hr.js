@@ -1939,6 +1939,27 @@ function openPayslipModal(idx) {
     $('ps_adjust_note_wrap').style.display = 'none';
   }
 
+  if (p.calc_formula) {
+    $('ps_calc_detail_wrap').style.display = 'block';
+    const rows = [
+      ['기본급', p.base_pay_before, p.base_pay],
+      ['고정연장수당', p.fixed_overtime_pay_before, p.fixed_overtime_pay],
+      ['만근수당', p.attendance_allowance_before, p.attendance_allowance],
+      ['식대', p.meal_allowance_before, p.meal_allowance],
+      ['합계', p.total_pay_before, p.total_pay],
+    ];
+    $('ps_calc_table').innerHTML = rows.map(([label, before, after]) => `
+      <tr>
+        <td style="padding:2px 4px;">${label}</td>
+        <td style="text-align:right; padding:2px 4px; color:var(--text-muted);">${fmt(before)}</td>
+        <td style="text-align:right; padding:2px 4px; font-weight:500;">${fmt(after)}</td>
+      </tr>
+    `).join('');
+    $('ps_calc_formula').textContent = p.calc_formula;
+  } else {
+    $('ps_calc_detail_wrap').style.display = 'none';
+  }
+
   $('payslipModal').style.display = 'flex';
 }
 
@@ -1948,4 +1969,63 @@ function closePayslipModal() {
 
 function printPayslip() {
   window.print();
+}
+
+/* ── 전 직원 급여 대장 출력 ── */
+function printPayrollRegister() {
+  if (!payrollCache || payrollCache.length === 0) {
+    alert('먼저 급여명세를 조회해주세요 ("미리보기 조회" 또는 "저장된 자료 보기").');
+    return;
+  }
+  const list = payrollCache;
+  const hasSaved = list[0] && list[0].retroactive_adjustment !== undefined;
+
+  $('reg_month').textContent = `급여월: ${$('payrollMonth').value || '-'}`;
+
+  const sum = (key, extra) => list.reduce((s, p) => s + (Number(p[key]) || 0) + (extra ? (Number(p[extra]) || 0) : 0), 0);
+
+  $('reg_tbody').innerHTML = list.map(p => {
+    const retro = hasSaved ? (Number(p.retroactive_adjustment) || 0) : 0;
+    const finalTotal = (Number(p.total_pay) || 0) + retro;
+    return `
+      <tr>
+        <td>${esc(p.name)}</td>
+        <td>${esc(p.branch || '-')}</td>
+        <td>${esc(p.department || '-')}</td>
+        <td>${esc(p.position || '-')}</td>
+        <td class="num">${fmt(p.base_pay)}</td>
+        <td class="num">${fmt(p.fixed_overtime_pay)}</td>
+        <td class="num">${fmt(p.attendance_allowance)}</td>
+        <td class="num">${fmt(p.meal_allowance)}</td>
+        <td class="num">${fmt(p.total_pay)}</td>
+        <td class="num">${hasSaved ? fmt(retro) : '-'}</td>
+        <td class="num">${hasSaved ? fmt(finalTotal) : '-'}</td>
+      </tr>
+    `;
+  }).join('') + `
+    <tr class="hr-total-row">
+      <td colspan="4">합계 (${list.length}명)</td>
+      <td class="num">${fmt(sum('base_pay'))}</td>
+      <td class="num">${fmt(sum('fixed_overtime_pay'))}</td>
+      <td class="num">${fmt(sum('attendance_allowance'))}</td>
+      <td class="num">${fmt(sum('meal_allowance'))}</td>
+      <td class="num">${fmt(sum('total_pay'))}</td>
+      <td class="num">${hasSaved ? fmt(sum('retroactive_adjustment')) : '-'}</td>
+      <td class="num">${hasSaved ? fmt(sum('total_pay','retroactive_adjustment')) : '-'}</td>
+    </tr>
+  `;
+
+  const adjusted = list.filter(p => p.adjustment_note);
+  if (adjusted.length > 0) {
+    $('reg_adjust_section').style.display = 'block';
+    $('reg_adjust_list').innerHTML = adjusted.map(p => `
+      <div style="padding:3px 0;"><b>${esc(p.name)}</b>(${esc(p.branch || '-')}/${esc(p.department || '-')}) — ${esc(p.adjustment_note)}</div>
+    `).join('');
+  } else {
+    $('reg_adjust_section').style.display = 'none';
+  }
+
+  $('registerPrintArea').style.display = 'block';
+  window.print();
+  $('registerPrintArea').style.display = 'none';
 }

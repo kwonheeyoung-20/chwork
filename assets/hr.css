@@ -48,9 +48,27 @@
 
 @media print {
   body * { visibility: hidden; }
-  #printArea, #printArea *, #payslipPrintArea, #payslipPrintArea * { visibility: visible; }
-  #printArea { position: absolute; top: 0; left: 0; width: 100%; }
-  #payslipPrintArea { position: absolute; top: 0; left: 0; width: 100%; }
+  #printArea, #printArea *, #payslipPrintArea, #payslipPrintArea *,
+  #registerPrintArea, #registerPrintArea * { visibility: visible; }
+  #printArea, #payslipPrintArea, #registerPrintArea {
+    position: absolute; top: 0; left: 0; width: 100%;
+  }
+  /* 모달(position:fixed)이 인쇄시 매 페이지마다 반복 출력되는 문제 방지 */
+  .hr-modal-backdrop {
+    position: static !important;
+    background: none !important;
+    display: block !important;
+    inset: auto !important;
+  }
+  .hr-modal {
+    position: static !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
 }
 
 /* 모달 */
