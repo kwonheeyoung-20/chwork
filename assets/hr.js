@@ -803,31 +803,70 @@ async function loadPayrollPreview() {
   const ym = payrollYearMonthDate();
   if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
   const tbody = $('payrollTbody');
-  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?year_month=${ym}`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
       return;
     }
-    renderPayroll(data.payroll || []);
+    $('retroAdjHeader').textContent = '소급인상분';
+    $('finalTotalHeader').textContent = '최종 지급액';
+    renderPayroll(data.payroll || [], false);
     refreshPayrollLockStatus();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
-function renderPayroll(list) {
+async function loadPayrollSaved() {
+  const ym = payrollYearMonthDate();
+  if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
+  const tbody = $('payrollTbody');
+  tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?year_month=${ym}&saved=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      return;
+    }
+    const list = (data.payroll || []).map(p => ({
+      ...p,
+      name: p.employees?.name,
+      branch: p.employees?.branch,
+      department: p.employees?.department,
+      position: p.employees?.position,
+    }));
+    if (list.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">이 달은 아직 "생성/저장"된 자료가 없습니다.</td></tr>`;
+      return;
+    }
+    $('retroAdjHeader').textContent = '소급인상분';
+    $('finalTotalHeader').textContent = '최종 지급액';
+    renderPayroll(list, true);
+    refreshPayrollLockStatus();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function renderPayroll(list, savedMode) {
   $('payrollCount').textContent = `총 ${list.length}명`;
   const tbody = $('payrollTbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">데이터가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">데이터가 없습니다.</td></tr>`;
     return;
   }
-  tbody.innerHTML = list.map(p => `
+  tbody.innerHTML = list.map(p => {
+    const retro = savedMode ? (Number(p.retroactive_adjustment) || 0) : null;
+    const finalTotal = savedMode ? (Number(p.total_pay) || 0) + (retro || 0) : null;
+    return `
     <tr>
       <td>${esc(p.name)}</td>
       <td>${esc(p.branch || '-')}</td>
@@ -838,10 +877,14 @@ function renderPayroll(list) {
       <td class="num">${fmt(p.attendance_allowance)}</td>
       <td class="num">${fmt(p.meal_allowance)}</td>
       <td class="num">${fmt(p.total_pay)}</td>
+      <td class="num">${savedMode ? fmt(retro) : '-'}</td>
+      <td class="num">${savedMode ? fmt(finalTotal) : '-'}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   const sum = (arr, key) => arr.reduce((s, p) => s + (Number(p[key]) || 0), 0);
+  const sumFinal = (arr) => arr.reduce((s, p) => s + (Number(p.total_pay) || 0) + (savedMode ? (Number(p.retroactive_adjustment) || 0) : 0), 0);
   tbody.innerHTML += `
     <tr class="hr-total-row">
       <td colspan="4">합계 (${list.length}명)</td>
@@ -850,6 +893,8 @@ function renderPayroll(list) {
       <td class="num">${fmt(sum(list,'attendance_allowance'))}</td>
       <td class="num">${fmt(sum(list,'meal_allowance'))}</td>
       <td class="num">${fmt(sum(list,'total_pay'))}</td>
+      <td class="num">${savedMode ? fmt(sum(list,'retroactive_adjustment')) : '-'}</td>
+      <td class="num">${savedMode ? fmt(sumFinal(list)) : '-'}</td>
     </tr>
   `;
 
@@ -862,7 +907,7 @@ function renderPayroll(list) {
     byBranch[b].push(p);
   });
   tbody.innerHTML += `
-    <tr><td colspan="9" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
+    <tr><td colspan="11" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
   `;
   branchOrder.forEach(b => {
     const arr = byBranch[b];
@@ -874,6 +919,8 @@ function renderPayroll(list) {
         <td class="num">${fmt(sum(arr,'attendance_allowance'))}</td>
         <td class="num">${fmt(sum(arr,'meal_allowance'))}</td>
         <td class="num">${fmt(sum(arr,'total_pay'))}</td>
+        <td class="num">${savedMode ? fmt(sum(arr,'retroactive_adjustment')) : '-'}</td>
+        <td class="num">${savedMode ? fmt(sumFinal(arr)) : '-'}</td>
       </tr>
     `;
   });
@@ -899,16 +946,16 @@ async function generatePayroll() {
 }
 
 function downloadPayrollExcel() {
-  const rows = [['이름', '지사', '부서', '직급', '기본급', '고정연장수당', '만근수당', '식대', '합계']];
+  const rows = [['이름', '지사', '부서', '직급', '기본급', '고정연장수당', '만근수당', '식대', '합계', '소급인상분', '최종 지급액']];
   document.querySelectorAll('#payrollTbody tr').forEach(tr => {
     if (tr.children.length === 1) return; // "지사별 합계" 섹션 제목 줄은 건너뜀
     if (tr.classList.contains('hr-total-row')) {
       const tds = Array.from(tr.children).map(td => td.textContent.trim());
-      rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5]]);
+      rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5], tds[6], tds[7]]);
       return;
     }
     const cells = Array.from(tr.children).map(td => td.textContent.trim());
-    if (cells.length === 9) rows.push(cells);
+    if (cells.length === 11) rows.push(cells);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -1336,37 +1383,69 @@ async function loadRetroPreview() {
   const toDate = `${to}-01`;
 
   $('retroWrap').style.display = 'block';
-  $('retroTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">계산 중…</td></tr>`;
+  $('retroTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">계산 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?retro_preview=1&from_month=${fromDate}&to_month=${toDate}`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'calc failed');
-    const list = data.employees || [];
-    if (list.length === 0) {
-      $('retroTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">이 구간에 남은 차액이 있는 직원이 없습니다. (이미 소급 지급되었거나, 연봉 변경이 없는 경우입니다)</td></tr>`;
+    const flat = data.employees || [];
+
+    // 직원별로 묶기 (화면은 한 줄, 저장용 월별 내역은 데이터로 보관)
+    const byEmp = {};
+    const empOrder = [];
+    flat.forEach(e => {
+      if (!byEmp[e.id]) { byEmp[e.id] = { ...e, months: [] }; empOrder.push(e.id); }
+      byEmp[e.id].months.push({ source_month: e.source_month, amount: e.retroactive_diff });
+    });
+
+    if (empOrder.length === 0) {
+      $('retroTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">이 구간에 남은 차액이 있는 직원이 없습니다. (이미 소급 지급되었거나, 연봉 변경이 없는 경우입니다)</td></tr>`;
     } else {
-      $('retroTbody').innerHTML = list.map(e => `
-        <tr data-emp-id="${e.id}" data-source-month="${e.source_month}">
+      $('retroTbody').innerHTML = empOrder.map(id => {
+        const e = byEmp[id];
+        const total = e.months.reduce((s, m) => s + (Number(m.amount) || 0), 0);
+        const monthsLabel = e.months.length > 1
+          ? `${e.months[e.months.length - 1].source_month.slice(0,7)}~${e.months[0].source_month.slice(0,7)} (${e.months.length}개월)`
+          : e.months[0].source_month.slice(0,7);
+        return `
+        <tr data-emp-id="${e.id}" data-months='${JSON.stringify(e.months)}'>
           <td>${esc(e.name)}</td>
           <td>${esc(e.branch || '-')}</td>
           <td>${esc(e.department || '-')}</td>
-          <td>${esc(e.source_month.slice(0,7))}</td>
-          <td class="num"><input type="number" class="hr-input retro-amount" style="width:140px; text-align:right;" value="${e.retroactive_diff}"></td>
+          <td>${esc(monthsLabel)}</td>
+          <td class="num"><input type="number" class="hr-input retro-amount" style="width:140px; text-align:right;" value="${total}"></td>
+          <td><a class="hr-edit-link" onclick="toggleRetroDetail(this)">월별 보기</a></td>
         </tr>
-      `).join('');
-      const total = list.reduce((s,e) => s + (Number(e.retroactive_diff)||0), 0);
+        <tr class="retro-detail-row" data-for-emp="${e.id}" style="display:none;">
+          <td colspan="6" style="background:var(--bg); padding:10px 16px;">
+            ${e.months.slice().reverse().map(m => `<div style="display:flex; justify-content:space-between; max-width:280px; font-size:12px; color:var(--text-secondary); padding:2px 0;"><span>${m.source_month.slice(0,7)}</span><span>${fmt(m.amount)}원</span></div>`).join('')}
+          </td>
+        </tr>
+      `;
+      }).join('');
+      const grandTotal = empOrder.reduce((s, id) => s + byEmp[id].months.reduce((s2,m)=>s2+(Number(m.amount)||0),0), 0);
       $('retroTbody').innerHTML += `
         <tr class="hr-total-row">
-          <td colspan="4">합계 (${list.length}건)</td>
-          <td class="num">${fmt(total)}</td>
+          <td colspan="4">합계 (${empOrder.length}명)</td>
+          <td class="num">${fmt(grandTotal)}</td>
+          <td></td>
         </tr>
       `;
     }
     $('retroSaveWrap').style.display = 'flex';
   } catch (e) {
-    $('retroTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">계산 실패</td></tr>`;
+    $('retroTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:16px;">계산 실패</td></tr>`;
+  }
+}
+
+function toggleRetroDetail(linkEl) {
+  const tr = linkEl.closest('tr');
+  const empId = tr.dataset.empId;
+  const detailRow = document.querySelector(`.retro-detail-row[data-for-emp="${empId}"]`);
+  if (detailRow) {
+    detailRow.style.display = detailRow.style.display === 'none' ? 'table-row' : 'none';
   }
 }
 
@@ -1376,13 +1455,24 @@ async function saveRetroAdjustments() {
   const targetMonthDate = `${targetMonth}-01`;
 
   const items = [];
-  document.querySelectorAll('#retroTbody tr:not(.hr-total-row)').forEach(tr => {
+  document.querySelectorAll('#retroTbody tr[data-emp-id]').forEach(tr => {
     const empId = tr.dataset.empId;
-    const sourceMonth = tr.dataset.sourceMonth;
+    const months = JSON.parse(tr.dataset.months || '[]');
     const input = tr.querySelector('.retro-amount');
-    const amount = Number(input?.value || 0);
-    if (empId && sourceMonth && amount !== 0) {
-      items.push({ employee_id: empId, source_month: sourceMonth, amount });
+    const editedTotal = Number(input?.value || 0);
+    const originalTotal = months.reduce((s, m) => s + (Number(m.amount) || 0), 0);
+    if (!empId || editedTotal === 0 || months.length === 0) return;
+
+    if (originalTotal !== 0 && editedTotal !== originalTotal) {
+      // 사용자가 합계를 직접 고친 경우: 월별 비중대로 재분배
+      const ratio = editedTotal / originalTotal;
+      months.forEach(m => {
+        items.push({ employee_id: empId, source_month: m.source_month, amount: Math.round(m.amount * ratio) });
+      });
+    } else {
+      months.forEach(m => {
+        items.push({ employee_id: empId, source_month: m.source_month, amount: m.amount });
+      });
     }
   });
   if (items.length === 0) {
@@ -1424,20 +1514,57 @@ async function loadRetroLog() {
       tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:16px;">소급 지급 기록이 없습니다.</td></tr>`;
       return;
     }
-    tbody.innerHTML = list.map(l => `
-      <tr>
-        <td>${esc(l.employees?.name || '-')}</td>
-        <td>${esc(l.employees?.branch || '-')}</td>
-        <td>${esc((l.source_month || '').slice(0,7))}</td>
-        <td class="num">${fmt(l.amount)}</td>
-        <td>${esc((l.target_month || '').slice(0,7))}</td>
-        <td>${esc((l.created_at || '').slice(0,10))}</td>
-        <td><a class="hr-edit-link" onclick="revertRetroLog('${l.id}')">되돌리기</a></td>
-      </tr>
-    `).join('');
+
+    // 직원별로 묶어서 요약 줄 + (펼치면) 개별 줄
+    const byEmp = {};
+    const empOrder = [];
+    list.forEach(l => {
+      const empId = l.employee_id;
+      if (!byEmp[empId]) { byEmp[empId] = { name: l.employees?.name, branch: l.employees?.branch, entries: [] }; empOrder.push(empId); }
+      byEmp[empId].entries.push(l);
+    });
+
+    tbody.innerHTML = empOrder.map(empId => {
+      const g = byEmp[empId];
+      const total = g.entries.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+      const monthsRange = g.entries.length > 1
+        ? `${g.entries.length}건`
+        : `${(g.entries[0].source_month || '').slice(0,7)}`;
+      const detailRows = g.entries.map(l => `
+        <tr class="retro-log-detail-row" data-for-emp="${empId}" style="display:none;">
+          <td style="padding-left:24px; color:var(--text-muted);">└ ${esc((l.source_month || '').slice(0,7))}</td>
+          <td></td>
+          <td>${esc((l.source_month || '').slice(0,7))}</td>
+          <td class="num">${fmt(l.amount)}</td>
+          <td>${esc((l.target_month || '').slice(0,7))}</td>
+          <td>${esc((l.created_at || '').slice(0,10))}</td>
+          <td><a class="hr-edit-link" onclick="revertRetroLog('${l.id}')">되돌리기</a></td>
+        </tr>
+      `).join('');
+      return `
+        <tr data-emp-summary="${empId}">
+          <td>${esc(g.name || '-')}</td>
+          <td>${esc(g.branch || '-')}</td>
+          <td>${esc(monthsRange)}</td>
+          <td class="num">${fmt(total)}</td>
+          <td colspan="2"></td>
+          <td>
+            <a class="hr-edit-link" onclick="toggleRetroLogDetail('${empId}')">${g.entries.length > 1 ? '월별 보기' : ''}</a>
+            <a class="hr-edit-link" style="margin-left:8px;" onclick="revertEmployeeRetroLog('${empId}', '${esc(g.name || '')}')">직원별 되돌리기</a>
+          </td>
+        </tr>
+        ${detailRows}
+      `;
+    }).join('');
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
   }
+}
+
+function toggleRetroLogDetail(empId) {
+  document.querySelectorAll(`.retro-log-detail-row[data-for-emp="${empId}"]`).forEach(tr => {
+    tr.style.display = tr.style.display === 'none' ? 'table-row' : 'none';
+  });
 }
 
 async function revertRetroLog(logId) {
@@ -1452,6 +1579,42 @@ async function revertRetroLog(logId) {
     loadRetroLog();
   } catch (e) {
     alert(e.message.includes('마감') ? e.message : '되돌리는 중 오류가 발생했습니다.');
+  }
+}
+
+async function revertEmployeeRetroLog(empId, name) {
+  if (!confirm(`${name}님의 소급 지급 기록을 전부 되돌리시겠습니까? (마감된 달은 제외되고 나머지만 처리됩니다)`)) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?revert_employee_id=${empId}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'revert failed');
+    let msg = `${data.reverted}건 되돌렸습니다.`;
+    if (data.skipped && data.skipped.length > 0) msg += ` (마감된 ${data.skipped.length}건은 건너뜀: ${data.skipped.join(', ')})`;
+    alert(msg);
+    loadRetroLog();
+  } catch (e) {
+    alert('되돌리는 중 오류가 발생했습니다.');
+  }
+}
+
+async function revertAllRetroLog() {
+  if (!confirm('모든 직원의 소급 지급 기록을 전부 되돌리시겠습니까? (마감된 달은 제외되고 나머지만 처리됩니다)')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?revert_all=1`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'revert failed');
+    let msg = `${data.reverted}건 되돌렸습니다.`;
+    if (data.skipped && data.skipped.length > 0) msg += ` (마감된 ${data.skipped.length}건은 건너뜀)`;
+    alert(msg);
+    loadRetroLog();
+  } catch (e) {
+    alert('되돌리는 중 오류가 발생했습니다.');
   }
 }
 
