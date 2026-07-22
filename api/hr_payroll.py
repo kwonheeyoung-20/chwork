@@ -337,7 +337,7 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "계산된 대상이 없습니다"})
 
             created = rest_request(
-                "POST", "monthly_payroll", body=body,
+                "POST", "monthly_payroll?on_conflict=employee_id,year_month", body=body,
                 prefer="return=representation,resolution=merge-duplicates",
             )
             return self._send(201, {"count": len(created) if created else 0})
