@@ -1846,6 +1846,35 @@ async function saveBulkSalary() {
   }
 }
 
+async function savePayRate() {
+  const empId = $('pr_employee_id').value;
+  const month = $('pr_month').value;
+  const rate = Number($('pr_rate').value);
+  if (!empId || !month || !rate) {
+    $('payRateMsg').textContent = '직원, 적용 시작월, 요율은 필수입니다.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({
+        type: 'pay_rate',
+        employee_id: empId,
+        effective_month: `${month}-01`,
+        pay_rate: rate / 100,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'save failed');
+    $('payRateMsg').className = 'hr-msg success';
+    $('payRateMsg').textContent = `적용되었습니다 (${rate}%, ${month}부터).`;
+  } catch (e) {
+    $('payRateMsg').className = 'hr-msg';
+    $('payRateMsg').textContent = '저장 중 오류가 발생했습니다.';
+  }
+}
+
 /* ── 재직자 조정(육아휴직 등) 관리 ── */
 function toggleLeaveAdjustFields() {
   const type = $('la_reason_type').value;
@@ -1855,8 +1884,13 @@ function toggleLeaveAdjustFields() {
 }
 
 async function populateLeaveAdjustEmployeeSelect() {
-  const sel = $('la_employee_id');
-  if (sel.dataset.loaded === '1') return;
+  await populateEmployeeSelectById('la_employee_id');
+  await populateEmployeeSelectById('pr_employee_id');
+}
+
+async function populateEmployeeSelectById(elId) {
+  const sel = $(elId);
+  if (!sel || sel.dataset.loaded === '1') return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_employees`, {
       headers: { 'X-HR-Password': hrPassword() },
