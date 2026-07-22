@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>인사관리 | 창현 Dashboard</title>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/hr.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="brand">창현 Dashboard</div>
+    <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
+    <nav class="nav">
+      <a href="index.html">대시보드</a>
+      <a href="corporate-profit.html">기업손익분석</a>
+      <a class="active" href="hr.html">인사/급여관리</a>
+      <a href="#">계약/증빙관리</a>
+      <a href="#">월간 보고서</a>
+      <a href="#">설정</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h1>인사관리 — 직원마스터</h1>
+        <p>급여관리·퇴직연금 공통 직원 기준정보를 관리합니다.</p>
+      </div>
+      <div class="pill">Vercel 배포</div>
+    </header>
+
+    <div class="content">
+
+      <!-- 로그인 게이트 -->
+      <section id="loginPanel" class="panel" style="max-width:360px;">
+        <h2>담당자 로그인</h2>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <input id="pwInput" type="password" placeholder="비밀번호" class="hr-input" autocomplete="current-password">
+          <button class="primary" onclick="hrLogin()">로그인</button>
+          <div id="loginMsg" class="hr-msg"></div>
+        </div>
+      </section>
+
+      <!-- 인사 메인 화면 (로그인 후 표시) -->
+      <div id="hrMain" style="display:none; flex-direction:column; gap:20px;">
+
+        <div style="display:flex; gap:4px; border-bottom: 0.5px solid var(--border);">
+          <button class="tab-btn active" data-tab="employees" onclick="switchHrTab('employees')">직원마스터</button>
+          <button class="tab-btn" data-tab="pension" onclick="switchHrTab('pension')">퇴직연금 현황</button>
+          <button class="tab-btn" data-tab="settlement" onclick="switchHrTab('settlement')">퇴사자 정산</button>
+          <button class="tab-btn" data-tab="payroll" onclick="switchHrTab('payroll')">월별 급여명세</button>
+          <button class="tab-btn" data-tab="otherpay" onclick="switchHrTab('otherpay')">성과급/기타지급</button>
+        </div>
+
+        <section class="panel" id="tab-employees">
+          <div class="panel-header">
+            <h2>직원 목록 <span id="empCount" class="hr-count"></span></h2>
+            <div style="display:flex; gap:8px;">
+              <label class="hr-checkbox">
+                <input type="checkbox" id="showAllToggle" onchange="loadEmployees()">
+                퇴사자 포함
+              </label>
+              <button class="primary" onclick="openAddModal()">+ 직원 추가</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="empTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>직급</th><th>지사</th><th>부서</th>
+                  <th>입사일</th><th>재직상태</th>
+                  <th class="num">현재 연봉(천원)</th>
+                  <th>DC가입</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="empTbody">
+                <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">
+            <h3 style="font-size:14px; margin-bottom:6px;">일괄 연봉 인상</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              연초 등 여러 명이 한꺼번에 인상될 때 사용하세요. 개별 조정은 위 직원 목록의 "수정"에서 그대로 하시면 됩니다.
+            </p>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+              <label style="font-size:13px; color:var(--text-secondary);">적용 시작월:</label>
+              <input id="bulkSalaryMonth" type="month" class="hr-input" style="width:150px;">
+              <label style="font-size:13px; color:var(--text-secondary);">사유:</label>
+              <input id="bulkSalaryReason" class="hr-input" style="width:180px;" placeholder="예: 2026년 정기 인상">
+              <button class="secondary" onclick="loadBulkSalaryList()">직원 목록 불러오기</button>
+            </div>
+            <div class="table-wrap" id="bulkSalaryWrap" style="display:none;">
+              <table class="table" id="bulkSalaryTable">
+                <thead><tr><th>이름</th><th>지사</th><th>부서</th><th class="num">현재 연봉(천원)</th><th class="num">새 연봉(천원)</th></tr></thead>
+                <tbody id="bulkSalaryTbody"></tbody>
+              </table>
+            </div>
+            <div id="bulkSalarySaveWrap" style="display:none; margin-top:12px; text-align:right;">
+              <button class="primary" onclick="saveBulkSalary()">입력된 인원만 일괄 저장</button>
+            </div>
+            <div id="bulkSalaryMsg" class="hr-msg"></div>
+          </div>
+        </section>
+
+        <section class="panel" id="tab-pension" style="display:none;">
+          <div class="panel-header">
+            <h2>퇴직연금(DC) 현황 <span id="pensionCount" class="hr-count"></span></h2>
+            <div style="display:flex; gap:8px;">
+              <button class="secondary" onclick="downloadPensionExcel()">엑셀 다운로드</button>
+              <button class="primary" onclick="openContribModal()">+ 불입 기록 추가</button>
+            </div>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            누적추계액은 연봉 이력을 기준으로 매번 자동 계산됩니다 (별도 고정 작업 불필요).
+          </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">연도 마감:</label>
+            <select id="pensionLockYear" class="hr-input" style="width:100px;"></select>
+            <button class="secondary" onclick="lockPensionYear(true)">마감</button>
+            <button class="secondary" onclick="lockPensionYear(false)">마감해제</button>
+            <span id="pensionLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">기준일자(반기 마감일 등):</label>
+            <input id="pensionAsOf" type="date" class="hr-input" style="width:150px;">
+            <button class="secondary" onclick="loadPension()">조회</button>
+            <button class="secondary" onclick="$('pensionAsOf').value=''; loadPension();">초기화(오늘 기준)</button>
+            <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
+            <button class="secondary" onclick="fillBulkAmounts('accrual')">지정일자 미지급잔액으로 채우기</button>
+            <button class="secondary" onclick="fillBulkAmounts('balance')">오늘 기준 전체잔액으로 채우기</button>
+            <button class="secondary" onclick="fillBulkAmounts('clear')">비우기</button>
+            <button class="primary" onclick="saveBulkContributions()">입력된 금액을 기준일자로 일괄 저장</button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="pensionTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>지사</th><th>부서</th><th>가입일</th>
+                  <th class="num">누적추계액(현재기준)</th>
+                  <th class="num">실불입액 합계</th>
+                  <th class="num">잔액</th>
+                  <th class="num" id="asOfCumHeader">지정일자 누적추계액</th>
+                  <th class="num" id="periodAccrualHeader">해당연도 1월~지정일 발생액</th>
+                  <th class="num" id="asOfBalanceHeader">지정일자 기준 미지급잔액</th>
+                  <th class="num">이번 불입액(입력)</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="pensionTbody">
+                <tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" id="tab-settlement" style="display:none;">
+          <div class="panel-header">
+            <h2>퇴사자 정산 계산기</h2>
+          </div>
+
+          <div class="hr-form-grid" style="max-width:640px;">
+            <label>직원
+              <select id="s_employee_id" class="hr-input" onchange="calcSettlement()"></select>
+            </label>
+            <label>퇴사일
+              <input id="s_retire_date" type="date" class="hr-input" onchange="calcSettlement()">
+            </label>
+          </div>
+
+          <div id="settlementResult" style="display:none; margin-top:18px;">
+            <div id="printArea">
+            <h3 style="margin-bottom:12px;">퇴직금(DC형 퇴직연금) 정산내역서</h3>
+            <div class="settle-row"><span>성명</span><b id="s_name">-</b></div>
+            <div class="settle-row"><span>퇴사일</span><b id="s_retire_display">-</b></div>
+            <div class="settle-row"><span>누적추계액 (퇴사일 기준)</span><b id="s_cum">-</b></div>
+            <div class="settle-row"><span>기 불입액 (퇴사일까지)</span><b id="s_paid">-</b></div>
+            <div class="settle-row highlight"><span>추가불입(정산)액</span><b id="s_add">-</b></div>
+
+            <div class="hr-form-grid" style="margin-top:16px; border-top:0.5px solid var(--border); padding-top:16px;">
+              <label>공제금액 합계 <input id="s_deduction" type="number" class="hr-input" value="0" oninput="calcNet()"></label>
+              <label>연말정산 환급금 <input id="s_tax_refund" type="number" class="hr-input" value="0" oninput="calcNet()"></label>
+              <label>기타지급액 <input id="s_other" type="number" class="hr-input" value="0" oninput="calcNet()"></label>
+              <label>비고 <input id="s_note" class="hr-input"></label>
+            </div>
+
+            <div class="settle-row highlight" style="margin-top:12px; font-size:16px;"><span>실 지급액</span><b id="s_net">-</b></div>
+
+            <div style="page-break-before: always; margin-top:24px; padding-top:20px; border-top:0.5px solid var(--border);">
+              <h3 style="margin-bottom:12px;">[부속명세서] 연도별 누적추계액 및 기불입액</h3>
+              <div class="table-wrap">
+                <table class="table" id="yearlyTable">
+                  <thead>
+                    <tr><th>연도</th><th class="num">누적추계액</th><th class="num">누적불입액</th><th class="num">잔액</th></tr>
+                  </thead>
+                  <tbody id="yearlyTbody"></tbody>
+                </table>
+              </div>
+            </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+              <button class="secondary" onclick="downloadSettlementExcel()">엑셀 다운로드</button>
+              <button class="secondary" onclick="printSettlement()">인쇄</button>
+              <button class="primary" onclick="saveSettlement()">정산 확정 저장 (퇴사자 이력에 기록)</button>
+            </div>
+            <div id="settlementMsg" class="hr-msg"></div>
+          </div>
+
+          <h2 style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">퇴사자 이력</h2>
+          <div class="table-wrap">
+            <table class="table" id="historyTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>지사</th><th>부서</th><th>퇴사일</th>
+                  <th class="num">추가불입액</th><th class="num">실지급액</th><th>처리일</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="historyTbody">
+                <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" id="tab-payroll" style="display:none;">
+          <div class="panel-header">
+            <h2>월별 급여명세 <span id="payrollCount" class="hr-count"></span></h2>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <input id="payrollMonth" type="month" class="hr-input" style="width:150px;">
+              <button class="secondary" onclick="loadPayrollPreview()">미리보기 조회</button>
+              <button class="primary" onclick="generatePayroll()">이 달 급여명세 생성/저장</button>
+              <button class="secondary" onclick="loadPayrollSaved()">저장된 자료 보기(소급분 포함)</button>
+              <button class="secondary" onclick="downloadPayrollExcel()">엑셀 다운로드</button>
+              <button class="secondary" onclick="printPayrollRegister()">전 직원 대장 출력</button>
+            </div>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            1단계: 정상 재직자 기준 기본 계산만 반영됩니다 (신규/퇴사자 일할계산·수습요율·휴직조정은 다음 단계에서 추가 예정).<br>
+            ⚠ "미리보기 조회"는 실시간 계산만 보여줘서 <b>소급인상분이 안 보입니다.</b> 소급분까지 확인하시려면 반드시 <b>"저장된 자료 보기"</b>를 눌러주세요.
+          </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">월 마감:</label>
+            <button class="secondary" onclick="lockPayrollMonth(true)">이 달 마감</button>
+            <button class="secondary" onclick="lockPayrollMonth(false)">마감해제</button>
+            <span id="payrollLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="payrollTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>지사</th><th>부서</th><th>직급</th>
+                  <th class="num">기본급</th>
+                  <th class="num">고정연장수당</th>
+                  <th class="num">만근수당</th>
+                  <th class="num">식대</th>
+                  <th class="num">합계</th>
+                  <th class="num" id="retroAdjHeader">소급인상분</th>
+                  <th class="num" id="finalTotalHeader">최종 지급액</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="payrollTbody">
+                <tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">상단에서 월을 선택하고 "미리보기 조회"를 눌러주세요.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div id="payrollAdjustNoteBox" style="display:none; margin-top:14px; padding:12px 16px; background:var(--bg); border-radius:var(--radius-sm);">
+            <h3 style="font-size:13px; margin-bottom:8px;">이번 달 특이사항 (재직자 조정 / 일할계산 대상)</h3>
+            <div id="payrollAdjustNoteList"></div>
+          </div>
+
+          <div style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">
+            <h3 style="font-size:14px; margin-bottom:6px;">수습요율 설정</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              수습기간 동안 급여 비율(예: 90%)을 적용합니다. 적용 후에도 최저임금(2026년 시간당 10,320원)보다 낮아지지 않도록 자동으로 상향 보정됩니다.
+              수습이 끝나면 종료일 다음달부터 요율 100%로 새로 등록해주세요.
+            </p>
+            <div class="hr-form-grid" style="grid-template-columns: 1fr 1fr 1fr auto; align-items:end; gap:8px;">
+              <label style="font-size:12px;">직원
+                <select id="pr_employee_id" class="hr-input"></select>
+              </label>
+              <label style="font-size:12px;">적용 시작월 <input id="pr_month" type="month" class="hr-input"></label>
+              <label style="font-size:12px;">요율(%) <input id="pr_rate" type="number" class="hr-input" placeholder="예: 90" value="100"></label>
+              <button class="primary" onclick="savePayRate()" style="height:34px;">적용</button>
+            </div>
+            <div id="payRateMsg" class="hr-msg"></div>
+          </div>
+
+          <div style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">
+            <h3 style="font-size:14px; margin-bottom:6px;">재직자 조정 관리 (육아휴직 등)</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              육아휴직=회사지급 0원 · 배우자출산휴가=회사지급 0원 · 출산전후휴가=100% 그대로 · 육아기근로시간단축=단축비율만큼 기본급 비례지급(고정연장수당·만근수당·식대는 전액).
+              등록해두면 해당 기간 급여명세에 자동 반영됩니다.
+            </p>
+            <div class="hr-form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr auto; align-items:end; gap:8px;">
+              <label style="font-size:12px;">직원
+                <select id="la_employee_id" class="hr-input"></select>
+              </label>
+              <label style="font-size:12px;">사유
+                <select id="la_reason_type" class="hr-input" onchange="toggleLeaveAdjustFields()">
+                  <option value="육아휴직">육아휴직</option>
+                  <option value="출산전후휴가">출산전후휴가</option>
+                  <option value="배우자출산휴가">배우자출산휴가</option>
+                  <option value="육아기근로시간단축">육아기근로시간단축</option>
+                </select>
+              </label>
+              <label style="font-size:12px;">시작일 <input id="la_start" type="date" class="hr-input"></label>
+              <label style="font-size:12px;">종료일 <input id="la_end" type="date" class="hr-input"></label>
+              <button class="primary" onclick="saveLeaveAdjustment()" style="height:34px;">추가</button>
+            </div>
+            <div id="leaveAdjustHoursFields" class="hr-form-grid" style="grid-template-columns: 1fr 1fr 2fr; margin-top:8px; display:none;">
+              <label style="font-size:12px;">통상 소정근로시간(시간/주) <input id="la_standard_hours" type="number" class="hr-input" placeholder="예: 40"></label>
+              <label style="font-size:12px;">단축후 소정근로시간(시간/주) <input id="la_reduced_hours" type="number" class="hr-input" step="0.5" placeholder="예: 32.5"></label>
+              <label style="font-size:12px;">비고 <input id="la_note" class="hr-input"></label>
+            </div>
+            <div class="hr-form-grid" id="leaveAdjustNoteOnly" style="grid-template-columns: 1fr; margin-top:8px;">
+              <label style="font-size:12px;">비고 <input id="la_note2" class="hr-input"></label>
+            </div>
+            <div id="leaveAdjustMsg" class="hr-msg"></div>
+
+            <div class="table-wrap" style="margin-top:12px;">
+              <table class="table" id="leaveAdjustTable">
+                <thead><tr><th>이름</th><th>지사</th><th>사유</th><th>기간</th><th>비고</th><th></th></tr></thead>
+                <tbody id="leaveAdjustTbody">
+                  <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">
+            <h3 style="font-size:14px; margin-bottom:6px;">연봉 소급 정산</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              연봉 인상을 과거 시점(직원마스터의 연봉이력)으로 소급 적용했을 때, 이미 지급된 기간의 차액을 계산해서 특정 달 급여에 일괄로 얹어줍니다.
+            </p>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+              <label style="font-size:13px; color:var(--text-secondary);">소급 적용 구간:</label>
+              <input id="retroFrom" type="month" class="hr-input" style="width:140px;">
+              <span>~</span>
+              <input id="retroTo" type="month" class="hr-input" style="width:140px;">
+              <button class="secondary" onclick="loadRetroPreview()">차액 계산</button>
+            </div>
+            <div class="table-wrap" id="retroWrap" style="display:none;">
+              <table class="table" id="retroTable">
+                <thead><tr><th><input type="checkbox" checked onclick="toggleAllRetroSelect(this)"></th><th>이름</th><th>지사</th><th>부서</th><th>대상 기간</th><th class="num">소급 차액(자동계산, 합계)</th><th></th></tr></thead>
+                <tbody id="retroTbody"></tbody>
+              </table>
+            </div>
+            <div id="retroSaveWrap" style="display:none; margin-top:12px; align-items:center; gap:8px; justify-content:flex-end;">
+              <label style="font-size:13px; color:var(--text-secondary);">적용할 급여명세월:</label>
+              <input id="retroTargetMonth" type="month" class="hr-input" style="width:140px;">
+              <button class="primary" onclick="saveRetroAdjustments()">이 금액대로 일괄 저장</button>
+            </div>
+            <div id="retroMsg" class="hr-msg"></div>
+
+            <div style="margin-top:24px; padding-top:16px; border-top:0.5px solid var(--border);">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <h3 style="font-size:13px; margin:0;">소급 지급 기록 (되돌리기 가능)</h3>
+                <div style="display:flex; gap:8px;">
+                  <button class="secondary" onclick="loadRetroLog()">새로고침</button>
+                  <button class="secondary" onclick="revertAllRetroLog()">전체 되돌리기</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="table" id="retroLogTable">
+                  <thead><tr><th>이름</th><th>지사</th><th>해당월(source)</th><th class="num">지급액</th><th>급여명세월</th><th>처리일</th><th></th></tr></thead>
+                  <tbody id="retroLogTbody">
+                    <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:16px;">위 "새로고침"을 눌러 불러오세요.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" id="tab-otherpay" style="display:none;">
+          <div class="panel-header">
+            <h2>성과급/기타지급 <span id="otherpayCount" class="hr-count"></span></h2>
+            <div style="display:flex; gap:8px;">
+              <button class="secondary" onclick="downloadOtherPaymentsExcel()">엑셀 다운로드</button>
+              <button class="primary" onclick="openOtherPayModal()">+ 지급 내역 추가</button>
+            </div>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            성과급(1차/2차)·상여금·기타수당·연차수당처럼 매달 정기적이지 않은 지급을 기록합니다. (급여명세와는 별도로 관리, 나중에 연도별/유형별 비교표에 활용)
+          </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">일괄 입력 — 지급유형:</label>
+            <select id="bulkOpType" class="hr-input" style="width:130px;">
+              <option value="성과급1차">성과급1차</option>
+              <option value="성과급2차">성과급2차</option>
+              <option value="상여금">상여금</option>
+              <option value="기타수당">기타수당</option>
+              <option value="연차수당">연차수당</option>
+            </select>
+            <label style="font-size:13px; color:var(--text-secondary);">지급월:</label>
+            <input id="bulkOpDate" type="month" class="hr-input" style="width:150px;">
+            <button class="secondary" onclick="loadBulkOtherPayList()">직원 목록 불러오기</button>
+          </div>
+
+          <div class="table-wrap" id="bulkOpWrap" style="display:none; margin-bottom:20px;">
+            <table class="table" id="bulkOpTable">
+              <thead>
+                <tr><th>이름</th><th>지사</th><th>부서</th><th class="num">지급 금액</th></tr>
+              </thead>
+              <tbody id="bulkOpTbody"></tbody>
+            </table>
+          </div>
+          <div id="bulkOpWrap2" style="display:none; margin-bottom:20px; text-align:right;">
+            <button class="primary" onclick="saveBulkOtherPayments()">입력된 금액 일괄 저장</button>
+          </div>
+          <div id="otherPayBulkMsg" class="hr-msg"></div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin:20px 0 14px; padding-top:16px; border-top:0.5px solid var(--border);">
+            <h3 style="font-size:13px; margin:0;">지급 내역 조회</h3>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">조회 연도:</label>
+            <select id="otherpayYear" class="hr-input" style="width:100px;" onchange="loadOtherPayments()"></select>
+            <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
+            <label style="font-size:13px; color:var(--text-secondary);">연도 마감:</label>
+            <button class="secondary" onclick="lockOtherPayYear(true)">마감</button>
+            <button class="secondary" onclick="lockOtherPayYear(false)">마감해제</button>
+            <span id="otherpayLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="otherpayTable">
+              <thead>
+                <tr>
+                  <th>이름</th><th>지사</th><th>부서</th><th>지급유형</th>
+                  <th>지급월</th><th class="num">금액</th><th>비고</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="otherpayTbody">
+                <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- 성과급/기타지급 추가 모달 -->
+<div id="otherPayModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:480px;">
+    <h2>성과급/기타지급 추가</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>직원
+        <select id="op_employee_id" class="hr-input"></select>
+      </label>
+      <label>지급유형
+        <select id="op_payment_type" class="hr-input">
+          <option value="성과급1차">성과급1차</option>
+          <option value="성과급2차">성과급2차</option>
+          <option value="상여금">상여금</option>
+          <option value="기타수당">기타수당</option>
+          <option value="연차수당">연차수당</option>
+        </select>
+      </label>
+      <label>지급월 <input id="op_date" type="month" class="hr-input"></label>
+      <label>금액 <input id="op_amount" type="number" class="hr-input"></label>
+      <label>비고 <input id="op_note" class="hr-input"></label>
+    </div>
+    <div id="otherPayMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeOtherPayModal()">취소</button>
+      <button class="primary" onclick="saveOtherPayment()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 불입 기록 추가 모달 -->
+<div id="contribModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:420px;">
+    <h2>퇴직연금 불입 기록 추가</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>직원
+        <select id="c_employee_id" class="hr-input"></select>
+      </label>
+      <label>입금일 <input id="c_date" type="date" class="hr-input"></label>
+      <label>금액(원) <input id="c_amount" type="number" class="hr-input"></label>
+      <label>비고 <input id="c_note" class="hr-input" placeholder="예: 2026년 상반기"></label>
+    </div>
+    <div id="contribMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeContribModal()">취소</button>
+      <button class="primary" onclick="saveContribution()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 직원 추가/수정 모달 -->
+<div id="empModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal">
+    <h2 id="modalTitle">직원 추가</h2>
+    <div class="hr-form-grid">
+      <label>이름 <input id="f_name" class="hr-input"></label>
+      <label>직급 <input id="f_position" class="hr-input" list="positionList"></label>
+      <label>지사 <input id="f_branch" class="hr-input" list="branchList"></label>
+      <label>부서 <input id="f_department" class="hr-input" list="departmentList"></label>
+      <datalist id="positionList"></datalist>
+      <datalist id="branchList"></datalist>
+      <datalist id="departmentList"></datalist>
+      <label>입사일 <input id="f_hire_date" type="date" class="hr-input"></label>
+      <label>재직상태
+        <select id="f_status" class="hr-input">
+          <option value="재직">재직</option>
+          <option value="퇴사">퇴사</option>
+        </select>
+      </label>
+      <label>퇴사일 <input id="f_retire_date" type="date" class="hr-input"></label>
+      <label>고용형태 <input id="f_employment_type" class="hr-input" placeholder="정규직/계약직/수습"></label>
+      <label>퇴직연금(DC) 가입
+        <select id="f_pension_enrolled" class="hr-input">
+          <option value="true">가입</option>
+          <option value="false">미가입</option>
+        </select>
+      </label>
+      <label>퇴직연금 가입일 <input id="f_pension_enrollment_date" type="date" class="hr-input"></label>
+      <label class="hr-span2">비고 <input id="f_note" class="hr-input"></label>
+    </div>
+
+    <div class="hr-form-grid" style="margin-top:14px; border-top: 0.5px solid var(--border); padding-top:14px;">
+      <label>연봉(천원) <input id="f_salary" type="number" class="hr-input"></label>
+      <label>적용 시작월 <input id="f_salary_month" type="date" class="hr-input"></label>
+      <label class="hr-span2">변경 사유 <input id="f_salary_reason" class="hr-input" placeholder="예: 신규입사, 2026년 연봉재협상"></label>
+    </div>
+
+    <div id="salaryHistorySection" style="display:none; margin-top:16px; padding-top:12px; border-top:0.5px solid var(--border);">
+      <h3 style="font-size:13px; margin-bottom:8px;">연봉 이력 (기존 항목 수정/삭제)</h3>
+      <div class="table-wrap">
+        <table class="table" id="salaryHistoryTable">
+          <thead><tr><th>적용 시작월</th><th class="num">연봉(천원)</th><th>사유</th><th></th></tr></thead>
+          <tbody id="salaryHistoryTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="modalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeModal()">취소</button>
+      <button class="primary" id="empSaveBtn" onclick="saveEmployee()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 불입 내역 조회/삭제 모달 -->
+<div id="historyModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:520px;">
+    <h2 id="historyModalTitle">불입/보정 내역</h2>
+
+    <h3 style="font-size:13px; margin-bottom:8px;">불입 기록</h3>
+    <div class="table-wrap">
+      <table class="table" id="contribHistoryTable">
+        <thead><tr><th>입금일</th><th class="num">금액</th><th>비고</th><th></th></tr></thead>
+        <tbody id="contribHistoryTbody"></tbody>
+      </table>
+    </div>
+
+    <h3 style="font-size:13px; margin-top:24px; padding-top:16px; border-top:0.5px solid var(--border); margin-bottom:4px;">발생액 보정</h3>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+      상여금 포함 등 정해진 공식으로 안 맞는 경우, 특정 시점부터 누적추계액에 금액을 더하거나(+) 뺄(-) 수 있습니다.
+    </p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr 1fr 1fr auto; align-items:end; gap:8px;">
+      <label style="font-size:12px;">적용 시작일 <input id="adj_date" type="date" class="hr-input"></label>
+      <label style="font-size:12px;">보정 금액(+/-) <input id="adj_amount" type="number" class="hr-input" placeholder="예: 5000000"></label>
+      <label style="font-size:12px;">사유 <input id="adj_note" class="hr-input" placeholder="예: 상여금 반영"></label>
+      <button class="primary" onclick="saveAdjustment()" style="height:34px;">추가</button>
+    </div>
+    <div id="adjustMsg" class="hr-msg"></div>
+    <div class="table-wrap" style="margin-top:8px;">
+      <table class="table" id="adjustHistoryTable">
+        <thead><tr><th>적용일</th><th class="num">금액</th><th>사유</th><th></th></tr></thead>
+        <tbody id="adjustHistoryTbody"></tbody>
+      </table>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeHistoryModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div id="registerPrintArea" style="display:none;">
+  <h2 style="margin-bottom:4px;">급여 대장</h2>
+  <p id="reg_month" style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;"></p>
+  <table class="table" style="width:100%; font-size:12px;">
+    <thead>
+      <tr>
+        <th>이름</th><th>지사</th><th>부서</th><th>직급</th>
+        <th class="num">기본급</th><th class="num">고정연장수당</th><th class="num">만근수당</th>
+        <th class="num">식대</th><th class="num">합계</th><th class="num" id="reg_retro_header">소급인상분</th><th class="num">최종 지급액</th>
+      </tr>
+    </thead>
+    <tbody id="reg_tbody"></tbody>
+  </table>
+  <div id="reg_adjust_section" style="margin-top:24px;">
+    <h3 style="font-size:14px; margin-bottom:8px;">급여 조정자 내역</h3>
+    <div id="reg_adjust_list" style="font-size:12px;"></div>
+  </div>
+</div>
+
+<!-- 개인별 급여명세서 출력 모달 -->
+<div id="payslipModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:480px;">
+    <div id="payslipPrintArea">
+      <h3 style="margin-bottom:14px;">급여명세서</h3>
+      <div class="settle-row"><span>성명</span><b id="ps_name">-</b></div>
+      <div class="settle-row"><span>지사/부서/직급</span><b id="ps_org">-</b></div>
+      <div class="settle-row"><span>급여월</span><b id="ps_month">-</b></div>
+      <div class="settle-row"><span>기본급</span><b id="ps_base">-</b></div>
+      <div class="settle-row"><span>고정연장수당</span><b id="ps_ot">-</b></div>
+      <div class="settle-row"><span>만근수당</span><b id="ps_att">-</b></div>
+      <div class="settle-row"><span>식대</span><b id="ps_meal">-</b></div>
+      <div class="settle-row"><span>소급인상분</span><b id="ps_retro">-</b></div>
+      <div class="settle-row highlight" style="margin-top:8px;"><span>최종 지급액</span><b id="ps_total">-</b></div>
+      <div id="ps_adjust_note_wrap" style="display:none; margin-top:14px; padding:10px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary);">
+        <b>재직자 조정 안내</b><br>
+        <span id="ps_adjust_note"></span>
+      </div>
+      <div id="ps_calc_detail_wrap" style="display:none; margin-top:10px; padding:10px 12px; border:0.5px solid var(--border); border-radius:var(--radius-sm); font-size:12px;">
+        <b style="display:block; margin-bottom:6px;">계산 근거</b>
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="color:var(--text-muted);">
+              <td></td><td style="text-align:right; padding:2px 4px;">원래(조정 전)</td><td style="text-align:right; padding:2px 4px;">조정 후</td>
+            </tr>
+          </thead>
+          <tbody id="ps_calc_table"></tbody>
+        </table>
+        <div style="margin-top:8px; color:var(--text-secondary);"><b>산식</b>: <span id="ps_calc_formula"></span></div>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px;">
+      <button class="secondary" onclick="closePayslipModal()">닫기</button>
+      <button class="primary" onclick="printPayslip()">인쇄</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/hr.js"></script>
+</body>
+</html>
