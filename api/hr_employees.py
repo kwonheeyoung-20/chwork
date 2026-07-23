@@ -23,6 +23,19 @@ SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 HR_PASSWORD = os.environ.get("HR_PASSWORD", "")
 
 
+def add_months(date_str, months):
+    import datetime
+    y, m, d = int(date_str[:4]), int(date_str[5:7]), int(date_str[8:10])
+    total = (y * 12 + (m - 1)) + months
+    ny, nm = divmod(total, 12)
+    nm += 1
+    # 말일 넘어가는 경우 방지 (예: 1/31 + 1개월 -> 2/28)
+    import calendar
+    last_day = calendar.monthrange(ny, nm)[1]
+    nd = min(d, last_day)
+    return datetime.date(ny, nm, nd).isoformat()
+
+
 class SupabaseError(Exception):
     def __init__(self, status, body):
         self.status = status
@@ -98,6 +111,10 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
 
+            if qs.get("contract_expiring", ["0"])[0] == "1":
+                rows = rest_request("POST", "rpc/contract_expiring_employees", body={"p_within_days": 30})
+                return self._send(200, {"employees": rows})
+
             if qs.get("salary_history", ["0"])[0] == "1":
                 emp_id = qs.get("employee_id", [None])[0]
                 if not emp_id:
@@ -152,6 +169,32 @@ class handler(BaseHTTPRequestHandler):
                 created = rest_request("POST", "salary_history", body=body, prefer="return=representation")
                 return self._send(201, {"count": len(created) if created else 0})
 
+            # 계약직 정규직 전환: {"type": "convert_to_regular", employee_id, effective_month}
+            if isinstance(payload, dict) and payload.get("type") == "convert_to_regular":
+                emp_id = payload.get("employee_id")
+                effective_month = payload.get("effective_month")
+                if not emp_id or not effective_month:
+                    return self._send(400, {"error": "employee_id, effective_month은 필수입니다"})
+                existing = rest_request(
+                    "GET", f"payroll_settings_history?employee_id=eq.{emp_id}&select=*&order=effective_month.desc&limit=1"
+                )
+                base = existing[0] if existing else {
+                    "standard_hours": 209, "fixed_overtime_hours": 0,
+                    "attendance_allowance": 0, "meal_allowance": 0,
+                }
+                rest_request("POST", "payroll_settings_history", body={
+                    "employee_id": emp_id,
+                    "effective_month": effective_month,
+                    "standard_hours": base.get("standard_hours", 209),
+                    "fixed_overtime_hours": base.get("fixed_overtime_hours", 0),
+                    "attendance_allowance": base.get("attendance_allowance", 0),
+                    "meal_allowance": base.get("meal_allowance", 0),
+                    "employment_type": "정규직",
+                    "pay_rate": 1.0,
+                    "note": "계약 종료 후 정규직 전환",
+                })
+                return self._send(200, {"ok": True})
+
             emp_fields = {k: payload.get(k) for k in (
                 "name", "position", "branch", "department", "hire_date", "retire_date",
                 "status", "employment_type", "contract_fixed_salary", "unused_leave_days",
@@ -168,6 +211,55 @@ class handler(BaseHTTPRequestHandler):
                     "annual_salary_thousand": payload["annual_salary_thousand"],
                     "reason": "신규입사",
                 })
+
+            # 급여 설정(payroll_settings_history) — 정규직도 이 설정이 있어야 급여계산이 되므로 항상 생성
+            work_type = payload.get("work_type") or "정규직"  # '정규직' | '수습' | '계약직'
+            hire_date = payload.get("hire_date")
+            base_settings = {
+                "employee_id": new_emp["id"],
+                "effective_month": hire_date,
+                "standard_hours": payload.get("standard_hours") or 209,
+                "fixed_overtime_hours": payload.get("fixed_overtime_hours") or 0,
+                "attendance_allowance": payload.get("attendance_allowance") or 0,
+                "meal_allowance": payload.get("meal_allowance") or 0,
+                "employment_type": work_type,
+            }
+
+            if work_type == "수습" and hire_date and payload.get("probation_months") and payload.get("probation_rate") is not None:
+                months = int(payload["probation_months"])
+                rate = float(payload["probation_rate"]) / 100
+                rest_request("POST", "payroll_settings_history", body={
+                    **base_settings,
+                    "pay_rate": rate,
+                    "note": f"수습 {months}개월, 요율 {payload['probation_rate']}%",
+                })
+                rest_request("POST", "payroll_settings_history", body={
+                    **base_settings,
+                    "effective_month": add_months(hire_date, months),
+                    "employment_type": "정규직",
+                    "pay_rate": 1.0,
+                    "note": "수습기간 종료 → 정규직 전환(자동)",
+                })
+            elif work_type == "계약직" and hire_date and payload.get("contract_months") and payload.get("contract_rate") is not None:
+                months = int(payload["contract_months"])
+                rate = float(payload["contract_rate"]) / 100
+                end_date = add_months(hire_date, months)
+                note = f"계약 {months}개월, 요율 {payload['contract_rate']}%"
+                if payload.get("contract_fixed_amount"):
+                    note += f", 정액 {payload['contract_fixed_amount']}원 참고"
+                rest_request("POST", "payroll_settings_history", body={
+                    **base_settings,
+                    "pay_rate": rate,
+                    "contract_end_date": end_date,
+                    "note": note,
+                })
+            elif hire_date:
+                # 정규직(특이사항 없음) — 기본 설정만 생성
+                rest_request("POST", "payroll_settings_history", body={
+                    **base_settings,
+                    "pay_rate": 1.0,
+                })
+
             return self._send(201, {"employee": new_emp})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
