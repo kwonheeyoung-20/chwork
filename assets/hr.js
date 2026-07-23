@@ -96,8 +96,52 @@ async function loadEmployees() {
     }
     const data = await res.json();
     renderEmployees(data.employees || []);
+    loadContractExpiring();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+async function loadContractExpiring() {
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees?contract_expiring=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.employees || [];
+    if (list.length === 0) {
+      $('contractExpiryBox').style.display = 'none';
+      return;
+    }
+    $('contractExpiryBox').style.display = 'block';
+    $('contractExpiryList').innerHTML = list.map(e => `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:12px;">
+        <span><b>${esc(e.name)}</b>(${esc(e.branch || '-')}/${esc(e.department || '-')}) — 계약 ${esc(e.contract_end_date)} ${e.is_expired ? '만료됨' : '만료 예정'}</span>
+        <span>
+          <a class="hr-edit-link" onclick="convertContractToRegular('${e.employee_id}', '${esc(e.name)}')">정규직 전환</a>
+          <a class="hr-edit-link" style="margin-left:8px;" onclick="openEditModal('${e.employee_id}')">퇴사 처리(수정에서)</a>
+        </span>
+      </div>
+    `).join('');
+  } catch (e) {
+    $('contractExpiryBox').style.display = 'none';
+  }
+}
+
+async function convertContractToRegular(empId, name) {
+  const month = prompt(`${name} 님을 정규직으로 전환할 시작월을 입력해주세요 (예: 2026-08)`);
+  if (!month) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'convert_to_regular', employee_id: empId, effective_month: `${month}-01` }),
+    });
+    if (!res.ok) throw new Error('convert failed');
+    alert('정규직으로 전환되었습니다.');
+    loadContractExpiring();
+  } catch (e) {
+    alert('전환 중 오류가 발생했습니다.');
   }
 }
 
@@ -192,13 +236,27 @@ async function deleteEmployee(id, name) {
   }
 }
 
+function toggleWorkTypeFields() {
+  if (editingId !== null) return; // 수정 모드에서는 신규입사 전용 조건 섹션 숨김 유지
+  const type = $('f_employment_type').value;
+  $('probationFields').style.display = type === '수습' ? 'grid' : 'none';
+  $('contractFields').style.display = type === '계약직' ? 'grid' : 'none';
+}
+
 function openAddModal() {
   editingId = null;
   $('modalTitle').textContent = '직원 추가';
-  ['name','position','branch','department','hire_date','retire_date','employment_type','note',
+  ['name','position','branch','department','hire_date','retire_date','note',
    'pension_enrollment_date','salary','salary_month','salary_reason'].forEach(f => $('f_' + f).value = '');
   $('f_status').value = '재직';
   $('f_pension_enrolled').value = 'true';
+  $('f_employment_type').value = '정규직';
+  $('f_probation_months').value = '3';
+  $('f_probation_rate').value = '90';
+  $('f_contract_months').value = '';
+  $('f_contract_rate').value = '100';
+  $('f_contract_fixed_amount').value = '';
+  toggleWorkTypeFields();
   $('modalMsg').textContent = '';
   $('salaryHistorySection').style.display = 'none';
   $('empSaveBtn').disabled = false;
@@ -217,7 +275,9 @@ function openEditModal(id) {
   $('f_hire_date').value = emp.hire_date || '';
   $('f_status').value = emp.status || '재직';
   $('f_retire_date').value = emp.retire_date || '';
-  $('f_employment_type').value = emp.employment_type || '';
+  $('f_employment_type').value = emp.employment_type || '정규직';
+  $('probationFields').style.display = 'none';
+  $('contractFields').style.display = 'none';
   $('f_pension_enrolled').value = emp.pension_enrolled ? 'true' : 'false';
   $('f_pension_enrollment_date').value = emp.pension_enrollment_date || '';
   $('f_note').value = emp.note || '';
@@ -270,6 +330,15 @@ async function saveEmployee() {
       if (salaryVal) {
         payload.annual_salary_thousand = Number(salaryVal);
         payload.effective_month = $('f_salary_month').value || payload.hire_date;
+      }
+      payload.work_type = $('f_employment_type').value;
+      if (payload.work_type === '수습') {
+        payload.probation_months = Number($('f_probation_months').value);
+        payload.probation_rate = Number($('f_probation_rate').value);
+      } else if (payload.work_type === '계약직') {
+        payload.contract_months = Number($('f_contract_months').value) || null;
+        payload.contract_rate = Number($('f_contract_rate').value) || 100;
+        payload.contract_fixed_amount = Number($('f_contract_fixed_amount').value) || null;
       }
       const res = await fetch(`${apiBase()}/api/hr_employees`, {
         method: 'POST',
@@ -842,7 +911,29 @@ async function loadPayrollPreview() {
   if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
   const tbody = $('payrollTbody');
   tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  $('retroAdjHeader').textContent = '소급인상분';
+  $('finalTotalHeader').textContent = '최종 지급액';
   try {
+    // 1) 저장된 자료가 있는지 먼저 확인 (있으면 그게 최종 진실)
+    const savedRes = await fetch(`${apiBase()}/api/hr_payroll?year_month=${ym}&saved=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const savedData = await savedRes.json();
+    if (savedRes.ok && savedData.payroll && savedData.payroll.length > 0) {
+      const list = savedData.payroll.map(p => ({
+        ...p,
+        name: p.employees?.name,
+        branch: p.employees?.branch,
+        department: p.employees?.department,
+        position: p.employees?.position,
+        hire_date: p.employees?.hire_date,
+      })).sort((a, b) => (a.hire_date || '').localeCompare(b.hire_date || ''));
+      renderPayroll(list, true);
+      refreshPayrollLockStatus();
+      return;
+    }
+
+    // 2) 저장된 자료가 없으면 실시간 미리보기
     const res = await fetch(`${apiBase()}/api/hr_payroll?year_month=${ym}`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
@@ -851,44 +942,7 @@ async function loadPayrollPreview() {
       tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
       return;
     }
-    $('retroAdjHeader').textContent = '소급인상분';
-    $('finalTotalHeader').textContent = '최종 지급액';
     renderPayroll(data.payroll || [], false);
-    refreshPayrollLockStatus();
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
-  }
-}
-
-async function loadPayrollSaved() {
-  const ym = payrollYearMonthDate();
-  if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
-  const tbody = $('payrollTbody');
-  tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
-  try {
-    const res = await fetch(`${apiBase()}/api/hr_payroll?year_month=${ym}&saved=1`, {
-      headers: { 'X-HR-Password': hrPassword() },
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
-      return;
-    }
-    const list = (data.payroll || []).map(p => ({
-      ...p,
-      name: p.employees?.name,
-      branch: p.employees?.branch,
-      department: p.employees?.department,
-      position: p.employees?.position,
-      hire_date: p.employees?.hire_date,
-    })).sort((a, b) => (a.hire_date || '').localeCompare(b.hire_date || ''));
-    if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">이 달은 아직 "생성/저장"된 자료가 없습니다.</td></tr>`;
-      return;
-    }
-    $('retroAdjHeader').textContent = '소급인상분';
-    $('finalTotalHeader').textContent = '최종 지급액';
-    renderPayroll(list, true);
     refreshPayrollLockStatus();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
@@ -1208,7 +1262,10 @@ async function refreshPayrollLockStatus() {
   const ym = $('payrollMonth').value;
   const locks = await fetchLocks('/api/hr_payroll');
   const current = locks.find(l => l.period_key === ym);
-  $('payrollLockStatus').textContent = current && current.locked ? `🔒 ${ym} 마감됨` : `${ym} 마감 전`;
+  const isLocked = !!(current && current.locked);
+  $('payrollLockStatus').textContent = isLocked ? `🔒 ${ym} 마감됨` : `${ym} 마감 전`;
+  $('lockBtn').style.display = isLocked ? 'none' : '';
+  $('unlockBtn').style.display = isLocked ? '' : 'none';
 }
 
 /* ── 성과급/기타지급 연도 마감 ── */
