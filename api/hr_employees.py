@@ -36,6 +36,18 @@ def add_months(date_str, months):
     return datetime.date(ny, nm, nd).isoformat()
 
 
+def calendar_months_later_first_day(date_str, months):
+    """입사한 달을 1개월차로 세어, N개월 뒤 '다음 달' 1일을 반환.
+    예: 2026-07-22 + 3개월 수습 → 7,8,9월이 수습기간이므로 10월 1일을 반환.
+    (정확한 일수 계산이 아니라, 급여가 달 단위로 적용되는 것에 맞춘 계산)"""
+    import datetime
+    y, m = int(date_str[:4]), int(date_str[5:7])
+    total = (y * 12 + (m - 1)) + months
+    ny, nm = divmod(total, 12)
+    nm += 1
+    return datetime.date(ny, nm, 1).isoformat()
+
+
 class SupabaseError(Exception):
     def __init__(self, status, body):
         self.status = status
@@ -235,7 +247,7 @@ class handler(BaseHTTPRequestHandler):
                 })
                 rest_request("POST", "payroll_settings_history", body={
                     **base_settings,
-                    "effective_month": add_months(hire_date, months),
+                    "effective_month": calendar_months_later_first_day(hire_date, months),
                     "employment_type": "정규직",
                     "pay_rate": 1.0,
                     "note": "수습기간 종료 → 정규직 전환(자동)",
