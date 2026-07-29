@@ -289,7 +289,11 @@ function openEditModal(id) {
   $('f_salary_reason').value = '';
   $('pr_month').value = '';
   $('pr_rate').value = '';
+  $('pr_employment_type').value = '';
+  $('pr_contract_end').value = '';
+  togglePrContractEnd();
   $('payRateMsg').textContent = '';
+  loadSettingsHistoryInModal(id);
   $('modalMsg').textContent = `현재 연봉: ${fmt(emp.current_salary_thousand)}천원 — 아래는 "변경"이 있을 때만 입력하세요.`;
   $('modalMsg').className = 'hr-msg';
   $('salaryHistorySection').style.display = 'block';
@@ -1909,29 +1913,87 @@ async function saveBulkSalary() {
   }
 }
 
+function togglePrContractEnd() {
+  const type = $('pr_employment_type').value;
+  $('prContractEndWrap').style.display = type === '계약직' ? 'block' : 'none';
+}
+
+async function loadSettingsHistoryInModal(employeeId) {
+  $('settingsHistoryTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:12px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?settings_history=1&employee_id=${employeeId}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.settings_history || [];
+    if (list.length === 0) {
+      $('settingsHistoryTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:12px;">이력이 없습니다.</td></tr>`;
+      return;
+    }
+    $('settingsHistoryTbody').innerHTML = list.map(s => `
+      <tr>
+        <td>${esc(s.effective_month)}</td>
+        <td class="num">${s.pay_rate != null ? Math.round(s.pay_rate * 100) + '%' : '-'}</td>
+        <td>${esc(s.employment_type || '-')}</td>
+        <td>${esc(s.contract_end_date || '-')}</td>
+        <td>${esc(s.note || '-')}</td>
+        <td><a class="hr-edit-link" onclick="deleteSettingsHistoryRow('${s.id}', '${employeeId}')">삭제</a></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    $('settingsHistoryTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:12px;">불러오기 실패</td></tr>`;
+  }
+}
+
+async function deleteSettingsHistoryRow(id, employeeId) {
+  if (!confirm('이 급여 요율 이력을 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?settings_id=${id}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('delete failed');
+    loadSettingsHistoryInModal(employeeId);
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
 async function savePayRate() {
   const empId = editingId;
   const month = $('pr_month').value;
   const rate = Number($('pr_rate').value);
+  const employmentType = $('pr_employment_type').value;
+  const contractEnd = $('pr_contract_end').value;
   if (!empId || !month || !rate) {
     $('payRateMsg').textContent = '적용 시작월, 요율은 필수입니다.';
     return;
   }
+  const payload = {
+    type: 'pay_rate',
+    employee_id: empId,
+    effective_month: `${month}-01`,
+    pay_rate: rate / 100,
+  };
+  if (employmentType) payload.employment_type = employmentType;
+  if (employmentType === '계약직' && contractEnd) payload.contract_end_date = contractEnd;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-      body: JSON.stringify({
-        type: 'pay_rate',
-        employee_id: empId,
-        effective_month: `${month}-01`,
-        pay_rate: rate / 100,
-      }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'save failed');
     $('payRateMsg').className = 'hr-msg success';
     $('payRateMsg').textContent = `적용되었습니다 (${rate}%, ${month}부터).`;
+    $('pr_month').value = '';
+    $('pr_rate').value = '';
+    $('pr_employment_type').value = '';
+    $('pr_contract_end').value = '';
+    togglePrContractEnd();
+    loadSettingsHistoryInModal(empId);
+    loadEmployees();
   } catch (e) {
     $('payRateMsg').className = 'hr-msg';
     $('payRateMsg').textContent = '저장 중 오류가 발생했습니다.';
