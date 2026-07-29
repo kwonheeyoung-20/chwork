@@ -140,7 +140,7 @@ class handler(BaseHTTPRequestHandler):
 
             select = "select=*,salary_history(effective_month,annual_salary_thousand,reason)"
             filt = "" if show_all else f"&status=eq.{quote('재직')}"
-            data = rest_request("GET", f"employees?{select}{filt}&order=hire_date.asc")
+            data = rest_request("GET", f"employees?{select}{filt}&order=hire_date.asc,name.asc")
 
             if not isinstance(data, list):
                 return self._send(502, {"error": "unexpected_response", "detail": str(data)})

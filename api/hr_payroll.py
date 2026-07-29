@@ -132,7 +132,7 @@ class handler(BaseHTTPRequestHandler):
                 if not from_month or not to_month:
                     return self._send(400, {"error": "from_month, to_month은 필수입니다"})
                 employees = rest_request(
-                    "GET", f"employees?status=eq.{quote('재직')}&select=id,name,branch,department,position&order=hire_date.asc"
+                    "GET", f"employees?status=eq.{quote('재직')}&select=id,name,branch,department,position&order=hire_date.asc,name.asc"
                 ) or []
 
                 # from_month ~ to_month 사이의 월 목록 생성
@@ -196,7 +196,7 @@ class handler(BaseHTTPRequestHandler):
             employees = rest_request(
                 "GET",
                 f"employees?hire_date=lte.{month_end_of(year_month)}&or=(retire_date.is.null,retire_date.gte.{year_month})"
-                f"&select=id,name,branch,department,position&order=hire_date.asc"
+                f"&select=id,name,branch,department,position&order=hire_date.asc,name.asc"
             ) or []
 
             results = []
