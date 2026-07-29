@@ -117,7 +117,7 @@ class handler(BaseHTTPRequestHandler):
                 locks = rest_request("GET", "period_locks?module=eq.pension&select=*&order=period_key.desc")
                 return self._send(200, {"locks": locks})
 
-            # 특정 직원의 불입 내역 또는 보정 내역 조회
+            # 특정 직원의 불입 내역 또는 보정 내역 또는 연도별 발생액 조회
             if employee_id:
                 if qs.get("type", [None])[0] == "adjustment":
                     items = rest_request(
@@ -125,6 +125,9 @@ class handler(BaseHTTPRequestHandler):
                         f"pension_accrual_adjustments?employee_id=eq.{employee_id}&select=*&order=effective_date.desc",
                     )
                     return self._send(200, {"adjustments": items})
+                if qs.get("type", [None])[0] == "yearly":
+                    yearly = self._build_yearly_for_employee(employee_id)
+                    return self._send(200, {"yearly": yearly})
                 items = rest_request(
                     "GET",
                     f"pension_contributions?employee_id=eq.{employee_id}&select=*&order=contribution_date.desc",
@@ -150,6 +153,44 @@ class handler(BaseHTTPRequestHandler):
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
         except Exception as e:
             return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
+
+    def _build_yearly_for_employee(self, employee_id):
+        import datetime
+        emp = rest_request("GET", f"employees?id=eq.{employee_id}&select=hire_date,retire_date")
+        if not emp:
+            return []
+        hire_date = emp[0]["hire_date"]
+        retire_date = emp[0].get("retire_date")
+        hire_year = int(hire_date[:4])
+        end_year = int(retire_date[:4]) if retire_date else datetime.date.today().year
+
+        history = rest_request(
+            "GET", f"pension_cumulative_history?employee_id=eq.{employee_id}&select=year,cumulative_estimate"
+        ) or []
+        history_by_year = {h["year"]: h["cumulative_estimate"] for h in history}
+        earliest_known_year = min(history_by_year.keys()) if history_by_year else 2026
+
+        start_year = max(hire_year, earliest_known_year)
+        today = datetime.date.today().isoformat()
+
+        rows = []
+        for y in range(start_year, end_year + 1):
+            if y in history_by_year:
+                cum_estimate = history_by_year[y]
+            else:
+                as_of = retire_date if (retire_date and y == end_year) else (today if y == end_year else f"{y}-12-31")
+                cum_estimate = rpc("pension_cumulative_estimate", {"p_employee_id": employee_id, "p_as_of": as_of}) or 0
+
+            as_of_paid = retire_date if (retire_date and y == end_year) else (today if y == end_year else f"{y}-12-31")
+            cum_paid = rpc("pension_contributed_as_of", {"p_employee_id": employee_id, "p_as_of": as_of_paid}) or 0
+
+            rows.append({
+                "year": y,
+                "cumulative_estimate": round(cum_estimate),
+                "cumulative_paid": round(cum_paid),
+                "balance": round(cum_estimate - cum_paid),
+            })
+        return rows
 
     def do_POST(self):
         try:
