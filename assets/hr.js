@@ -284,6 +284,9 @@ function openEditModal(id) {
   $('f_salary').value = '';
   $('f_salary_month').value = '';
   $('f_salary_reason').value = '';
+  $('pr_month').value = '';
+  $('pr_rate').value = '';
+  $('payRateMsg').textContent = '';
   $('modalMsg').textContent = `현재 연봉: ${fmt(emp.current_salary_thousand)}천원 — 아래는 "변경"이 있을 때만 입력하세요.`;
   $('modalMsg').className = 'hr-msg';
   $('salaryHistorySection').style.display = 'block';
@@ -1904,11 +1907,11 @@ async function saveBulkSalary() {
 }
 
 async function savePayRate() {
-  const empId = $('pr_employee_id').value;
+  const empId = editingId;
   const month = $('pr_month').value;
   const rate = Number($('pr_rate').value);
   if (!empId || !month || !rate) {
-    $('payRateMsg').textContent = '직원, 적용 시작월, 요율은 필수입니다.';
+    $('payRateMsg').textContent = '적용 시작월, 요율은 필수입니다.';
     return;
   }
   try {
@@ -1942,7 +1945,6 @@ function toggleLeaveAdjustFields() {
 
 async function populateLeaveAdjustEmployeeSelect() {
   await populateEmployeeSelectById('la_employee_id');
-  await populateEmployeeSelectById('pr_employee_id');
 }
 
 async function populateEmployeeSelectById(elId) {
