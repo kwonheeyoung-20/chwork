@@ -149,6 +149,17 @@ class handler(BaseHTTPRequestHandler):
                 hist = sorted(emp.get("salary_history") or [], key=lambda h: h["effective_month"])
                 emp["current_salary_thousand"] = hist[-1]["annual_salary_thousand"] if hist else None
 
+            # 오늘 날짜 기준 실제 적용 중인 고용형태/요율을 한 번에 조회해서 병합
+            try:
+                type_rows = rest_request("POST", "rpc/employees_current_employment_types", body={}) or []
+                type_map = {r["employee_id"]: r for r in type_rows}
+                for emp in data:
+                    info = type_map.get(emp["id"])
+                    emp["current_employment_type"] = info.get("current_employment_type") if info else None
+                    emp["current_pay_rate"] = info.get("current_pay_rate") if info else None
+            except SupabaseError:
+                pass  # 이 정보는 부가정보이므로 실패해도 직원 목록 자체는 정상 반환
+
             return self._send(200, {"employees": data})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
