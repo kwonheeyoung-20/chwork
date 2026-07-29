@@ -153,7 +153,7 @@ function renderEmployees(list) {
   populateFieldDatalists(list);
   const tbody = $('empTbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">직원이 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">직원이 없습니다.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(emp => `
@@ -164,6 +164,7 @@ function renderEmployees(list) {
       <td>${esc(emp.department || '-')}</td>
       <td>${esc(emp.hire_date || '-')}</td>
       <td><span class="hr-badge ${emp.status === '재직' ? 'active' : 'retired'}">${esc(emp.status)}</span></td>
+      <td>${esc(emp.current_employment_type || '-')}${emp.current_pay_rate != null && emp.current_pay_rate != 1 ? ` (${Math.round(emp.current_pay_rate*100)}%)` : ''}</td>
       <td class="num">${fmt(emp.current_salary_thousand)}</td>
       <td><span class="hr-badge ${emp.pension_enrolled ? 'yes' : 'no'}">${emp.pension_enrolled ? '가입' : '미가입'}</span></td>
       <td><a class="hr-edit-link" onclick="openEditModal('${emp.id}')">수정</a> · <a class="hr-edit-link" onclick="deleteEmployee('${emp.id}', '${esc(emp.name)}')">삭제</a></td>
@@ -173,7 +174,7 @@ function renderEmployees(list) {
   const totalSalary = list.reduce((s, e) => s + (Number(e.current_salary_thousand) || 0), 0);
   tbody.innerHTML += `
     <tr class="hr-total-row">
-      <td colspan="6">합계 (${list.length}명)</td>
+      <td colspan="7">합계 (${list.length}명)</td>
       <td class="num">${fmt(totalSalary)}</td>
       <td colspan="2"></td>
     </tr>
@@ -188,14 +189,14 @@ function renderEmployees(list) {
     byBranch[b].push(e);
   });
   tbody.innerHTML += `
-    <tr><td colspan="9" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
+    <tr><td colspan="10" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
   `;
   branchOrder.forEach(b => {
     const arr = byBranch[b];
     const branchTotal = arr.reduce((s, e) => s + (Number(e.current_salary_thousand) || 0), 0);
     tbody.innerHTML += `
       <tr class="hr-total-row">
-        <td colspan="6">${esc(b)} (${arr.length}명)</td>
+        <td colspan="7">${esc(b)} (${arr.length}명)</td>
         <td class="num">${fmt(branchTotal)}</td>
         <td colspan="2"></td>
       </tr>
@@ -251,6 +252,7 @@ function openAddModal() {
   $('f_status').value = '재직';
   $('f_pension_enrolled').value = 'true';
   $('f_employment_type').value = '정규직';
+  $('editModeWorkTypeHint').style.display = 'none';
   $('f_probation_months').value = '3';
   $('f_probation_rate').value = '90';
   $('f_contract_months').value = '';
@@ -278,6 +280,7 @@ function openEditModal(id) {
   $('f_employment_type').value = emp.employment_type || '정규직';
   $('probationFields').style.display = 'none';
   $('contractFields').style.display = 'none';
+  $('editModeWorkTypeHint').style.display = 'block';
   $('f_pension_enrolled').value = emp.pension_enrolled ? 'true' : 'false';
   $('f_pension_enrollment_date').value = emp.pension_enrollment_date || '';
   $('f_note').value = emp.note || '';
