@@ -986,7 +986,7 @@ function renderPayroll(list, savedMode) {
       <td class="num">${fmt(p.total_pay)}</td>
       <td class="num">${savedMode ? (retro ? fmt(retro) : '') : '-'}</td>
       <td class="num">${savedMode ? fmt(finalTotal) : '-'}</td>
-      <td><a class="hr-edit-link" onclick="openPayslipModal(${idx})">명세서</a></td>
+      <td><a class="hr-edit-link" onclick="openPayslipModal(${idx})">명세서</a>${savedMode ? ` · <a class="hr-edit-link" onclick="deletePayrollRecord('${p.id}', '${esc(p.name)}')">삭제</a>` : ''}</td>
     </tr>
   `;
   }).join('');
@@ -1048,6 +1048,22 @@ function renderPayroll(list, savedMode) {
     `).join('');
   } else {
     $('payrollAdjustNoteBox').style.display = 'none';
+  }
+}
+
+async function deletePayrollRecord(employeeId, name) {
+  const ym = payrollYearMonthDate();
+  if (!confirm(`${name} 님의 ${$('payrollMonth').value} 급여 기록을 삭제하시겠습니까?\n(직원 자체는 삭제되지 않고, 이 달의 급여 저장 기록만 지워집니다. 이후 삭제 안 되던 직원이 삭제 가능해질 수 있어요.)`)) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?payroll_employee_id=${employeeId}&payroll_month=${ym}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'delete failed');
+    loadPayrollPreview();
+  } catch (e) {
+    alert(e.message && e.message.includes('마감') ? e.message : '삭제 중 오류가 발생했습니다.');
   }
 }
 
