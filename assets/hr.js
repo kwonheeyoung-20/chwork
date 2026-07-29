@@ -937,7 +937,7 @@ async function loadPayrollPreview() {
         department: p.employees?.department,
         position: p.employees?.position,
         hire_date: p.employees?.hire_date,
-      })).sort((a, b) => (a.hire_date || '').localeCompare(b.hire_date || ''));
+      })).sort((a, b) => (a.hire_date || '').localeCompare(b.hire_date || '') || (a.name || '').localeCompare(b.name || '', 'ko'));
       renderPayroll(list, true);
       refreshPayrollLockStatus();
       return;
