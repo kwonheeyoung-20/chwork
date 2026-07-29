@@ -880,6 +880,32 @@ async function openHistoryModal(employeeId, name) {
     $('contribHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
   }
   await loadAdjustHistory(employeeId);
+  await loadYearlyHistory(employeeId);
+}
+
+async function loadYearlyHistory(employeeId) {
+  $('yearlyHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:12px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension?employee_id=${employeeId}&type=yearly`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.yearly || [];
+    if (list.length === 0) {
+      $('yearlyHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:12px;">데이터가 없습니다.</td></tr>`;
+      return;
+    }
+    $('yearlyHistoryTbody').innerHTML = list.map(r => `
+      <tr>
+        <td>${r.year}년</td>
+        <td class="num">${fmt(r.cumulative_estimate)}</td>
+        <td class="num">${fmt(r.cumulative_paid)}</td>
+        <td class="num ${r.balance > 0 ? 'negative' : ''}">${fmt(r.balance)}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    $('yearlyHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:12px;">불러오기 실패</td></tr>`;
+  }
 }
 
 function closeHistoryModal() {
