@@ -2043,6 +2043,9 @@ async function populateEmployeeSelectById(elId) {
   }
 }
 
+let leaveAdjustCache = [];
+let showPastLeaveAdjustments = false;
+
 async function loadLeaveAdjustments() {
   const tbody = $('leaveAdjustTbody');
   tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
@@ -2051,24 +2054,40 @@ async function loadLeaveAdjustments() {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
-    const list = data.adjustments || [];
-    if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 조정 내역이 없습니다.</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = list.map(a => `
-      <tr>
-        <td>${esc(a.employees?.name || '-')}</td>
-        <td>${esc(a.employees?.branch || '-')}</td>
-        <td>${esc(a.reason_type)}</td>
-        <td>${esc(a.start_date)} ~ ${esc(a.end_date)}</td>
-        <td>${esc(a.note || '-')}</td>
-        <td><a class="hr-edit-link" onclick="deleteLeaveAdjustment('${a.id}')">삭제</a></td>
-      </tr>
-    `).join('');
+    leaveAdjustCache = data.adjustments || [];
+    renderLeaveAdjustments();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
   }
+}
+
+function renderLeaveAdjustments() {
+  const tbody = $('leaveAdjustTbody');
+  const today = new Date().toISOString().slice(0, 10);
+  const list = showPastLeaveAdjustments
+    ? leaveAdjustCache
+    : leaveAdjustCache.filter(a => !a.end_date || a.end_date >= today);
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">${showPastLeaveAdjustments ? '등록된 조정 내역이 없습니다.' : '진행중/예정인 조정 내역이 없습니다. (지난 내역은 "지난 내역 보기"로 확인 가능)'}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(a => `
+    <tr>
+      <td>${esc(a.employees?.name || '-')}</td>
+      <td>${esc(a.employees?.branch || '-')}</td>
+      <td>${esc(a.reason_type)}</td>
+      <td>${esc(a.start_date)} ~ ${esc(a.end_date)}</td>
+      <td>${esc(a.note || '-')}</td>
+      <td><a class="hr-edit-link" onclick="deleteLeaveAdjustment('${a.id}')">삭제</a></td>
+    </tr>
+  `).join('');
+}
+
+function togglePastLeaveAdjustments() {
+  showPastLeaveAdjustments = !showPastLeaveAdjustments;
+  $('pastAdjustToggleBtn').textContent = showPastLeaveAdjustments ? '지난 내역 숨기기' : '지난 내역 보기';
+  renderLeaveAdjustments();
 }
 
 async function saveLeaveAdjustment() {
