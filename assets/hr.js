@@ -237,6 +237,37 @@ async function deleteEmployee(id, name) {
   }
 }
 
+function toggleSettingsOverview() {
+  const wrap = $('settingsOverviewWrap');
+  const isHidden = wrap.style.display === 'none';
+  wrap.style.display = isHidden ? 'block' : 'none';
+  $('settingsOverviewToggleBtn').textContent = isHidden ? '접기' : '펼치기';
+  if (isHidden) renderSettingsOverview();
+}
+
+function renderSettingsOverview() {
+  const tbody = $('settingsOverviewTbody');
+  if (!employeesCache || employeesCache.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:16px;">직원 목록을 먼저 불러와주세요.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = employeesCache.map(e => `
+    <tr>
+      <td>${esc(e.name)}</td>
+      <td>${esc(e.branch || '-')}</td>
+      <td>${esc(e.department || '-')}</td>
+      <td>${esc(e.position || '-')}</td>
+      <td>${esc(e.current_employment_type || '-')}</td>
+      <td class="num">${e.current_pay_rate != null ? Math.round(e.current_pay_rate*100)+'%' : '-'}</td>
+      <td class="num">${e.current_standard_hours != null ? fmt(e.current_standard_hours) : '-'}</td>
+      <td class="num">${e.current_fixed_overtime_hours != null ? fmt(e.current_fixed_overtime_hours) : '-'}</td>
+      <td class="num">${e.current_attendance_allowance != null ? fmt(e.current_attendance_allowance) : '-'}</td>
+      <td class="num">${e.current_meal_allowance != null ? fmt(e.current_meal_allowance) : '-'}</td>
+      <td>${esc(e.current_contract_end_date || '-')}</td>
+    </tr>
+  `).join('');
+}
+
 function toggleWorkTypeFields() {
   if (editingId !== null) return; // 수정 모드에서는 신규입사 전용 조건 섹션 숨김 유지
   const type = $('f_employment_type').value;
@@ -2162,6 +2193,20 @@ function openPayslipModal(idx) {
   $('ps_meal').textContent = fmt(p.meal_allowance) + '원';
   $('ps_retro').textContent = hasSaved ? (retro ? (fmt(retro) + '원') : '없음') : '- (저장된 자료 아님)';
   $('ps_total').textContent = fmt(hasSaved ? finalTotal : p.total_pay) + '원';
+
+  const empInfo = (employeesCache || []).find(e => e.id === p.id);
+  if (empInfo) {
+    const parts = [];
+    if (empInfo.current_employment_type) parts.push(`고용형태: ${empInfo.current_employment_type}`);
+    if (empInfo.current_pay_rate != null) parts.push(`요율: ${Math.round(empInfo.current_pay_rate*100)}%`);
+    if (empInfo.current_standard_hours != null) parts.push(`기본시간: ${fmt(empInfo.current_standard_hours)}시간`);
+    if (empInfo.current_fixed_overtime_hours != null) parts.push(`고정연장시간: ${fmt(empInfo.current_fixed_overtime_hours)}시간`);
+    if (empInfo.current_attendance_allowance != null) parts.push(`만근수당: ${fmt(empInfo.current_attendance_allowance)}원`);
+    if (empInfo.current_meal_allowance != null) parts.push(`식대: ${fmt(empInfo.current_meal_allowance)}원`);
+    $('ps_conditions').textContent = parts.length > 0 ? parts.join(' · ') : '설정 정보 없음';
+  } else {
+    $('ps_conditions').textContent = '설정 정보 없음 (직원마스터 탭을 먼저 열어주세요)';
+  }
 
   if (p.adjustment_note || p.proration_note) {
     $('ps_adjust_note_wrap').style.display = 'block';
