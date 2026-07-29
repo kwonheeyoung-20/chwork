@@ -91,6 +91,30 @@
           </div>
 
           <div style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <h3 style="font-size:14px; margin-bottom:6px;">직원별 급여 조건 현황</h3>
+              <button class="secondary" onclick="toggleSettingsOverview()" id="settingsOverviewToggleBtn" style="font-size:12px; padding:4px 10px;">펼치기</button>
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              직원마다 다르게 설정된 고정연장시간·만근수당·식대·요율을 한눈에 비교할 수 있어요 (오늘 기준 적용 중인 조건).
+            </p>
+            <div class="table-wrap" id="settingsOverviewWrap" style="display:none;">
+              <table class="table" id="settingsOverviewTable">
+                <thead>
+                  <tr>
+                    <th>이름</th><th>지사</th><th>부서</th><th>직급</th>
+                    <th>고용형태</th><th class="num">요율</th>
+                    <th class="num">기본시간</th><th class="num">고정연장시간</th>
+                    <th class="num">만근수당</th><th class="num">식대</th>
+                    <th>계약종료일</th>
+                  </tr>
+                </thead>
+                <tbody id="settingsOverviewTbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style="margin-top:32px; padding-top:20px; border-top:0.5px solid var(--border);">
             <h3 style="font-size:14px; margin-bottom:6px;">일괄 연봉 인상</h3>
             <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
               연초 등 여러 명이 한꺼번에 인상될 때 사용하세요. 개별 조정은 위 직원 목록의 "수정"에서 그대로 하시면 됩니다.
@@ -688,6 +712,10 @@
       <div class="settle-row"><span>식대</span><b id="ps_meal">-</b></div>
       <div class="settle-row"><span>소급인상분</span><b id="ps_retro">-</b></div>
       <div class="settle-row highlight" style="margin-top:8px;"><span>최종 지급액</span><b id="ps_total">-</b></div>
+      <div style="margin-top:14px; padding:10px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary);">
+        <b style="display:block; margin-bottom:4px; color:var(--text-primary);">적용 급여 조건</b>
+        <span id="ps_conditions">-</span>
+      </div>
       <div id="ps_adjust_note_wrap" style="display:none; margin-top:14px; padding:10px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary);">
         <b>재직자 조정 안내</b><br>
         <span id="ps_adjust_note"></span>
