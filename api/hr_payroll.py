@@ -173,6 +173,16 @@ class handler(BaseHTTPRequestHandler):
                 )
                 return self._send(200, {"settings": rows[0] if rows else None})
 
+            if qs.get("settings_history", ["0"])[0] == "1":
+                emp_id = qs.get("employee_id", [None])[0]
+                if not emp_id:
+                    return self._send(400, {"error": "employee_id는 필수입니다"})
+                rows = rest_request(
+                    "GET",
+                    f"payroll_settings_history?employee_id=eq.{emp_id}&select=*&order=effective_month.desc",
+                )
+                return self._send(200, {"settings_history": rows})
+
             if not year_month:
                 return self._send(400, {"error": "year_month는 필수입니다 (예: 2026-07-01)"})
 
@@ -216,7 +226,7 @@ class handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
 
-            # 수습요율 등 급여 설정 변경: {"type": "pay_rate", employee_id, effective_month, pay_rate, employment_type, note}
+            # 수습요율 등 급여 설정 변경: {"type": "pay_rate", employee_id, effective_month, pay_rate, employment_type, contract_end_date, note}
             if isinstance(payload, dict) and payload.get("type") == "pay_rate":
                 emp_id = payload.get("employee_id")
                 effective_month = payload.get("effective_month")
@@ -232,7 +242,7 @@ class handler(BaseHTTPRequestHandler):
                     "standard_hours": 209, "fixed_overtime_hours": 0,
                     "attendance_allowance": 0, "meal_allowance": 0, "severance_included": False,
                 }
-                created = rest_request("POST", "payroll_settings_history", body={
+                body = {
                     "employee_id": emp_id,
                     "effective_month": effective_month,
                     "standard_hours": base.get("standard_hours", 209),
@@ -243,7 +253,10 @@ class handler(BaseHTTPRequestHandler):
                     "employment_type": payload.get("employment_type") or base.get("employment_type"),
                     "pay_rate": pay_rate,
                     "note": payload.get("note"),
-                }, prefer="return=representation")
+                }
+                if payload.get("contract_end_date"):
+                    body["contract_end_date"] = payload["contract_end_date"]
+                created = rest_request("POST", "payroll_settings_history", body=body, prefer="return=representation")
                 return self._send(201, {"settings": created[0] if created else None})
 
             # 재직자 조정 추가: {"type": "leave_adjustment", employee_id, reason_type, start_date, end_date, standard_hours, reduced_hours, note}
@@ -422,6 +435,11 @@ class handler(BaseHTTPRequestHandler):
             leave_adj_id = qs.get("leave_adjustment_id", [None])[0]
             if leave_adj_id:
                 rest_request("DELETE", f"leave_adjustments?id=eq.{leave_adj_id}")
+                return self._send(200, {"ok": True})
+
+            settings_id = qs.get("settings_id", [None])[0]
+            if settings_id:
+                rest_request("DELETE", f"payroll_settings_history?id=eq.{settings_id}")
                 return self._send(200, {"ok": True})
 
             revert_employee_id = qs.get("revert_employee_id", [None])[0]
