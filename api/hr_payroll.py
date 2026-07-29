@@ -442,6 +442,17 @@ class handler(BaseHTTPRequestHandler):
                 rest_request("DELETE", f"payroll_settings_history?id=eq.{settings_id}")
                 return self._send(200, {"ok": True})
 
+            payroll_employee_id = qs.get("payroll_employee_id", [None])[0]
+            payroll_month = qs.get("payroll_month", [None])[0]
+            if payroll_employee_id and payroll_month:
+                if is_period_locked(payroll_month[:7]):
+                    return self._send(423, {"error": f"{payroll_month[:7]}은(는) 마감되어 있어 삭제할 수 없습니다. 먼저 마감해제해주세요."})
+                rest_request(
+                    "DELETE",
+                    f"monthly_payroll?employee_id=eq.{payroll_employee_id}&year_month=eq.{payroll_month}",
+                )
+                return self._send(200, {"ok": True})
+
             revert_employee_id = qs.get("revert_employee_id", [None])[0]
             revert_all = qs.get("revert_all", ["0"])[0] == "1"
 
