@@ -79,12 +79,13 @@
                 <tr>
                   <th>이름</th><th>직급</th><th>지사</th><th>부서</th>
                   <th>입사일</th><th>재직상태</th>
+                  <th>고용형태(현재)</th>
                   <th class="num">현재 연봉(천원)</th>
                   <th>DC가입</th><th></th>
                 </tr>
               </thead>
               <tbody id="empTbody">
-                <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+                <tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
               </tbody>
             </table>
           </div>
@@ -525,6 +526,9 @@
           <option value="계약직">계약직</option>
         </select>
       </label>
+      <div id="editModeWorkTypeHint" class="hr-span2" style="display:none; font-size:11px; color:var(--text-muted); margin-top:-6px;">
+        이 값은 최초 입사시 분류이며, 실제 현재 적용 중인 고용형태는 목록의 "고용형태(현재)" 칸에서 자동 계산되어 보입니다. 수습/계약 요율 조정은 아래 "급여 요율 조정"에서 해주세요.
+      </div>
       <label>퇴직연금(DC) 가입
         <select id="f_pension_enrolled" class="hr-input">
           <option value="true">가입</option>
