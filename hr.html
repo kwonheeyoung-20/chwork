@@ -673,6 +673,28 @@
       </table>
     </div>
 
+    <h3 style="font-size:13px; margin-top:24px; padding-top:16px; border-top:0.5px solid var(--border); margin-bottom:4px;">적립 배수 설정</h3>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+      대표이사 상여금포함 3배수처럼, 이 사람만 연봉기반 발생액(2026년 이후분)에 배수를 곱해야 하는 경우 등록하세요. (2025년 이전 확정값에는 영향 없음)
+    </p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr 1fr 1fr auto; align-items:end; gap:8px;">
+      <label style="font-size:12px;">적용 시작일 <input id="mult_date" type="date" class="hr-input"></label>
+      <label style="font-size:12px;">배수 <input id="mult_value" type="number" step="0.1" class="hr-input" placeholder="예: 3"></label>
+      <label style="font-size:12px;">사유 <input id="mult_note" class="hr-input" placeholder="예: 상여금포함 3배수"></label>
+      <button class="primary" onclick="saveMultiplier()" style="height:34px;">추가</button>
+    </div>
+    <label class="hr-checkbox" style="margin-top:8px;">
+      <input type="checkbox" id="mult_include_other">
+      그 해 성과급/기타수당(성과급/기타지급)까지 합산한 뒤 배수 적용
+    </label>
+    <div id="multiplierMsg" class="hr-msg"></div>
+    <div class="table-wrap" style="margin-top:8px;">
+      <table class="table" id="multiplierHistoryTable">
+        <thead><tr><th>적용 시작일</th><th class="num">배수</th><th>성과급 포함</th><th>사유</th><th></th></tr></thead>
+        <tbody id="multiplierHistoryTbody"></tbody>
+      </table>
+    </div>
+
     <h3 style="font-size:13px; margin-top:24px; padding-top:16px; border-top:0.5px solid var(--border); margin-bottom:8px;">연도별 누적추계액/불입액</h3>
     <div class="table-wrap">
       <table class="table" id="yearlyHistoryTable">
