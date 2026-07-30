@@ -6,6 +6,10 @@
   <title>인사관리 | 창현 Dashboard</title>
   <link rel="stylesheet" href="assets/styles.css">
   <link rel="stylesheet" href="assets/hr.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#c82828">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -30,7 +34,10 @@
         <h1>인사관리 — 직원마스터</h1>
         <p>급여관리·퇴직연금 공통 직원 기준정보를 관리합니다.</p>
       </div>
-      <div class="pill">Vercel 배포</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="secondary" onclick="downloadFullBackup()" id="backupBtn">전체 데이터 백업</button>
+        <div class="pill">Vercel 배포</div>
+      </div>
     </header>
 
     <div class="content">
@@ -771,5 +778,12 @@
 </div>
 
 <script src="assets/hr.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
 </body>
 </html>
