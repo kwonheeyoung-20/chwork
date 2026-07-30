@@ -880,7 +880,86 @@ async function openHistoryModal(employeeId, name) {
     $('contribHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
   }
   await loadAdjustHistory(employeeId);
+  await loadMultiplierHistory(employeeId);
   await loadYearlyHistory(employeeId);
+}
+
+async function loadMultiplierHistory(employeeId) {
+  $('multiplierHistoryTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:12px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension?employee_id=${employeeId}&type=multiplier`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.multipliers || [];
+    if (list.length === 0) {
+      $('multiplierHistoryTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:12px;">등록된 배수가 없습니다 (기본 1배 적용).</td></tr>`;
+      return;
+    }
+    $('multiplierHistoryTbody').innerHTML = list.map(m => `
+      <tr>
+        <td>${esc(m.effective_date)}</td>
+        <td class="num">${m.multiplier}배</td>
+        <td>${m.include_other_payments ? '포함' : '미포함'}</td>
+        <td>${esc(m.note || '-')}</td>
+        <td><a class="hr-edit-link" onclick="deleteMultiplier('${m.id}', '${employeeId}')">삭제</a></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    $('multiplierHistoryTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:12px;">불러오기 실패</td></tr>`;
+  }
+}
+
+async function saveMultiplier() {
+  const date = $('mult_date').value;
+  const value = Number($('mult_value').value);
+  const note = $('mult_note').value.trim() || null;
+  const includeOther = $('mult_include_other').checked;
+  if (!date || !value) {
+    $('multiplierMsg').textContent = '적용 시작일과 배수는 필수입니다.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({
+        type: 'multiplier',
+        employee_id: currentAdjustEmployeeId,
+        effective_date: date,
+        multiplier: value,
+        include_other_payments: includeOther,
+        note,
+      }),
+    });
+    if (!res.ok) throw new Error('save failed');
+    $('mult_date').value = '';
+    $('mult_value').value = '';
+    $('mult_note').value = '';
+    $('mult_include_other').checked = false;
+    $('multiplierMsg').className = 'hr-msg success';
+    $('multiplierMsg').textContent = '저장되었습니다.';
+    loadMultiplierHistory(currentAdjustEmployeeId);
+    loadYearlyHistory(currentAdjustEmployeeId);
+  } catch (e) {
+    $('multiplierMsg').className = 'hr-msg';
+    $('multiplierMsg').textContent = '저장 중 오류가 발생했습니다.';
+  }
+}
+
+async function deleteMultiplier(id, employeeId) {
+  if (!confirm('이 배수 설정을 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension?id=${id}&type=multiplier`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('delete failed');
+    loadMultiplierHistory(employeeId);
+    loadYearlyHistory(employeeId);
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
 }
 
 async function loadYearlyHistory(employeeId) {
