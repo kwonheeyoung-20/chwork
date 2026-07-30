@@ -8,6 +8,11 @@ function hrPassword() { return sessionStorage.getItem('chwork_hr_pw') || ''; }
 
 /* ── 로그인 ── */
 /* ── 전체 데이터 백업 ── */
+function refreshLastBackupLabel() {
+  const saved = localStorage.getItem('chwork_last_backup');
+  $('lastBackupLabel').textContent = saved ? `마지막 백업: ${saved}` : '아직 백업한 적 없음';
+}
+
 async function downloadFullBackup() {
   const btn = $('backupBtn');
   const original = btn.textContent;
@@ -37,6 +42,11 @@ async function downloadFullBackup() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    localStorage.setItem('chwork_last_backup', stamp);
+    refreshLastBackupLabel();
   } catch (e) {
     alert('백업 다운로드 중 오류가 발생했습니다: ' + (e.message || ''));
   } finally {
@@ -80,6 +90,7 @@ function switchHrTab(name) {
   $('tab-settlement').style.display = name === 'settlement' ? 'block' : 'none';
   $('tab-payroll').style.display = name === 'payroll' ? 'block' : 'none';
   $('tab-otherpay').style.display = name === 'otherpay' ? 'block' : 'none';
+  $('tab-annual').style.display = name === 'annual' ? 'block' : 'none';
   if (name === 'pension') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
   if (name === 'payroll') {
@@ -95,6 +106,10 @@ function switchHrTab(name) {
     populateYearSelect('otherpayYear');
     populateOtherPayEmployeeSelect();
     loadOtherPayments();
+  }
+  if (name === 'annual') {
+    populateEmployeeSelectById('annualEmployeeId');
+    populateYearSelect('annualYear');
   }
 }
 
@@ -113,6 +128,7 @@ function populateYearSelect(elId) {
 window.addEventListener('DOMContentLoaded', () => {
   if (hrPassword()) showMain();
   $('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') hrLogin(); });
+  refreshLastBackupLabel();
 });
 
 /* ── 직원 목록 ── */
@@ -2468,4 +2484,97 @@ function printPayrollRegister() {
 
   document.head.removeChild(landscapeStyle);
   $('registerPrintArea').style.display = 'none';
+}
+
+/* ── 직원별 연간 급여 종합 ── */
+let annualSummaryCache = null;
+
+async function loadAnnualSummary() {
+  const empId = $('annualEmployeeId').value;
+  const year = $('annualYear').value;
+  if (!empId || !year) { alert('직원과 연도를 선택해주세요.'); return; }
+
+  $('annualResult').style.display = 'none';
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?annual_summary=1&employee_id=${empId}&year=${year}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '조회 실패');
+    annualSummaryCache = data;
+    renderAnnualSummary(data);
+  } catch (e) {
+    alert(e.message || '조회 중 오류가 발생했습니다.');
+  }
+}
+
+function renderAnnualSummary(data) {
+  const emp = data.employee;
+  $('annual_emp_name').textContent = emp.name;
+  $('annual_emp_org').textContent = `${emp.branch || '-'} / ${emp.department || '-'} / ${emp.position || '-'}`;
+
+  const tbody = $('annualTbody');
+  tbody.innerHTML = data.months.map(m => `
+    <tr>
+      <td>${m.month.slice(5)}월${m.has_payroll_data ? '' : ' <span style="color:var(--text-muted); font-size:10px;">(자료없음)</span>'}</td>
+      <td class="num">${fmt(m.base_pay)}</td>
+      <td class="num">${fmt(m.fixed_overtime_pay)}</td>
+      <td class="num">${fmt(m.attendance_allowance)}</td>
+      <td class="num">${fmt(m.meal_allowance)}</td>
+      <td class="num">${m.retroactive_adjustment ? fmt(m.retroactive_adjustment) : ''}</td>
+      <td class="num">${fmt(m.monthly_total)}</td>
+      <td class="num">${m['성과급1차'] ? fmt(m['성과급1차']) : ''}</td>
+      <td class="num">${m['성과급2차'] ? fmt(m['성과급2차']) : ''}</td>
+      <td class="num">${m['상여금'] ? fmt(m['상여금']) : ''}</td>
+      <td class="num">${m['기타수당'] ? fmt(m['기타수당']) : ''}</td>
+      <td class="num">${m['연차수당'] ? fmt(m['연차수당']) : ''}</td>
+      <td class="num" style="font-weight:500;">${fmt(m.grand_total)}</td>
+    </tr>
+  `).join('');
+
+  const t = data.totals;
+  tbody.innerHTML += `
+    <tr class="hr-total-row">
+      <td>합계</td>
+      <td class="num">${fmt(t.base_pay)}</td>
+      <td class="num">${fmt(t.fixed_overtime_pay)}</td>
+      <td class="num">${fmt(t.attendance_allowance)}</td>
+      <td class="num">${fmt(t.meal_allowance)}</td>
+      <td class="num">${fmt(t.retroactive_adjustment)}</td>
+      <td class="num">${fmt(t.monthly_total)}</td>
+      <td class="num">${fmt(t['성과급1차'])}</td>
+      <td class="num">${fmt(t['성과급2차'])}</td>
+      <td class="num">${fmt(t['상여금'])}</td>
+      <td class="num">${fmt(t['기타수당'])}</td>
+      <td class="num">${fmt(t['연차수당'])}</td>
+      <td class="num">${fmt(t.grand_total)}</td>
+    </tr>
+  `;
+
+  $('annualResult').style.display = 'block';
+}
+
+function downloadAnnualSummaryExcel() {
+  if (!annualSummaryCache) { alert('먼저 조회해주세요.'); return; }
+  const data = annualSummaryCache;
+  const rows = [[
+    '월', '기본급', '고정연장수당', '만근수당', '식대', '소급인상분', '월급여 합계',
+    '성과급1차', '성과급2차', '상여금', '기타수당', '연차수당', '월 총합계',
+  ]];
+  data.months.forEach(m => {
+    rows.push([
+      `${data.year}-${m.month.slice(5)}`, m.base_pay, m.fixed_overtime_pay, m.attendance_allowance, m.meal_allowance,
+      m.retroactive_adjustment, m.monthly_total, m['성과급1차'], m['성과급2차'], m['상여금'], m['기타수당'], m['연차수당'],
+      m.grand_total,
+    ]);
+  });
+  const t = data.totals;
+  rows.push([
+    '합계', t.base_pay, t.fixed_overtime_pay, t.attendance_allowance, t.meal_allowance, t.retroactive_adjustment,
+    t.monthly_total, t['성과급1차'], t['성과급2차'], t['상여금'], t['기타수당'], t['연차수당'], t.grand_total,
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${data.year}년`);
+  XLSX.writeFile(wb, `연간급여종합_${data.employee.name}_${data.year}.xlsx`);
 }
