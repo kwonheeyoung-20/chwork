@@ -1,0 +1,14 @@
+{
+  "name": "창현 Dashboard",
+  "short_name": "창현",
+  "description": "창현 인사/급여/경영관리 대시보드",
+  "start_url": "/hr.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#c82828",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
