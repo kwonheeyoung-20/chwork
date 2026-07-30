@@ -119,6 +119,83 @@ class handler(BaseHTTPRequestHandler):
                 locks = rest_request("GET", "period_locks?module=eq.payroll&select=*&order=period_key.desc")
                 return self._send(200, {"locks": locks})
 
+            if qs.get("annual_summary", ["0"])[0] == "1":
+                emp_id = qs.get("employee_id", [None])[0]
+                year = qs.get("year", [None])[0]
+                if not emp_id or not year:
+                    return self._send(400, {"error": "employee_id, year는 필수입니다"})
+
+                emp = rest_request("GET", f"employees?id=eq.{emp_id}&select=id,name,branch,department,position")
+                if not emp:
+                    return self._send(404, {"error": "직원을 찾을 수 없습니다"})
+
+                payroll_rows = rest_request(
+                    "GET",
+                    f"monthly_payroll?employee_id=eq.{emp_id}&year_month=gte.{year}-01-01&year_month=lte.{year}-12-31"
+                    f"&select=year_month,base_pay,fixed_overtime_pay,attendance_allowance,meal_allowance,total_pay,retroactive_adjustment"
+                    f"&order=year_month.asc",
+                ) or []
+                payroll_by_month = {r["year_month"][:7]: r for r in payroll_rows}
+
+                other_rows = rest_request(
+                    "GET",
+                    f"other_payments?employee_id=eq.{emp_id}&payment_date=gte.{year}-01-01&payment_date=lte.{year}-12-31"
+                    f"&select=payment_date,payment_type,amount",
+                ) or []
+
+                PAYMENT_TYPES = ["성과급1차", "성과급2차", "상여금", "기타수당", "연차수당"]
+                other_by_month = {}
+                for r in other_rows:
+                    mo = r["payment_date"][:7]
+                    other_by_month.setdefault(mo, {t: 0 for t in PAYMENT_TYPES})
+                    ptype = r["payment_type"] if r["payment_type"] in PAYMENT_TYPES else "기타수당"
+                    other_by_month[mo][ptype] = other_by_month[mo].get(ptype, 0) + (r["amount"] or 0)
+
+                months = []
+                totals = {"base_pay": 0, "fixed_overtime_pay": 0, "attendance_allowance": 0, "meal_allowance": 0,
+                          "monthly_total": 0, "retroactive_adjustment": 0, "grand_total": 0}
+                for t in PAYMENT_TYPES:
+                    totals[t] = 0
+
+                for m in range(1, 13):
+                    mo_key = f"{year}-{m:02d}"
+                    p = payroll_by_month.get(mo_key)
+                    o = other_by_month.get(mo_key, {t: 0 for t in PAYMENT_TYPES})
+                    base_pay = p["base_pay"] if p else 0
+                    fixed_overtime_pay = p["fixed_overtime_pay"] if p else 0
+                    attendance_allowance = p["attendance_allowance"] if p else 0
+                    meal_allowance = p["meal_allowance"] if p else 0
+                    retro = (p.get("retroactive_adjustment") or 0) if p else 0
+                    monthly_total = (p["total_pay"] if p else 0) + retro
+                    other_sum = sum(o.values())
+                    grand_total = monthly_total + other_sum
+
+                    row = {
+                        "month": mo_key,
+                        "has_payroll_data": p is not None,
+                        "base_pay": base_pay,
+                        "fixed_overtime_pay": fixed_overtime_pay,
+                        "attendance_allowance": attendance_allowance,
+                        "meal_allowance": meal_allowance,
+                        "retroactive_adjustment": retro,
+                        "monthly_total": monthly_total,
+                        "grand_total": grand_total,
+                    }
+                    row.update(o)
+                    months.append(row)
+
+                    totals["base_pay"] += base_pay
+                    totals["fixed_overtime_pay"] += fixed_overtime_pay
+                    totals["attendance_allowance"] += attendance_allowance
+                    totals["meal_allowance"] += meal_allowance
+                    totals["retroactive_adjustment"] += retro
+                    totals["monthly_total"] += monthly_total
+                    totals["grand_total"] += grand_total
+                    for t in PAYMENT_TYPES:
+                        totals[t] += o.get(t, 0)
+
+                return self._send(200, {"employee": emp[0], "year": int(year), "months": months, "totals": totals})
+
             if qs.get("retro_log", ["0"])[0] == "1":
                 logs = rest_request(
                     "GET",
