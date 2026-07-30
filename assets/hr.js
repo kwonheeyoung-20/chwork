@@ -18,8 +18,14 @@ async function downloadFullBackup() {
       headers: { 'X-HR-Password': hrPassword() },
     });
     if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || '백업 생성 실패');
+      let detail = `상태코드 ${res.status}`;
+      try {
+        const data = await res.json();
+        detail = data.error ? `${data.error}${data.detail ? ' — ' + data.detail : ''}` : detail;
+      } catch (parseErr) {
+        detail += ' (서버가 JSON이 아닌 응답을 반환함 — 시간초과일 가능성)';
+      }
+      throw new Error(detail);
     }
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
