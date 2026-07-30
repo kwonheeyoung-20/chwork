@@ -2353,18 +2353,18 @@ function openPayslipModal(idx) {
   $('ps_retro').textContent = hasSaved ? (retro ? (fmt(retro) + '원') : '없음') : '- (저장된 자료 아님)';
   $('ps_total').textContent = fmt(hasSaved ? finalTotal : p.total_pay) + '원';
 
-  const empInfo = (employeesCache || []).find(e => e.id === p.id);
+  const empInfo = p.current_settings || (employeesCache || []).find(e => e.id === p.id);
   if (empInfo) {
     const parts = [];
     if (empInfo.current_employment_type) parts.push(`고용형태: ${empInfo.current_employment_type}`);
     if (empInfo.current_pay_rate != null) parts.push(`요율: ${Math.round(empInfo.current_pay_rate*100)}%`);
     if (empInfo.current_standard_hours != null) parts.push(`기본시간: ${fmt(empInfo.current_standard_hours)}시간`);
-    if (empInfo.current_fixed_overtime_hours != null) parts.push(`고정연장시간: ${fmt(empInfo.current_fixed_overtime_hours)}시간`);
+    if (empInfo.current_fixed_overtime_hours != null) parts.push(`고정연장시간(1.5배적용): ${fmt(empInfo.current_fixed_overtime_hours)}시간`);
     if (empInfo.current_attendance_allowance != null) parts.push(`만근수당: ${fmt(empInfo.current_attendance_allowance)}원`);
     if (empInfo.current_meal_allowance != null) parts.push(`식대: ${fmt(empInfo.current_meal_allowance)}원`);
     $('ps_conditions').textContent = parts.length > 0 ? parts.join(' · ') : '설정 정보 없음';
   } else {
-    $('ps_conditions').textContent = '설정 정보 없음 (직원마스터 탭을 먼저 열어주세요)';
+    $('ps_conditions').textContent = '설정 정보 없음';
   }
 
   if (p.adjustment_note || p.proration_note) {
