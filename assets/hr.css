@@ -1,5 +1,4 @@
 /* hr.css — 인사 모듈 전용 스타일 (기존 styles.css 디자인 토큰 재사용) */
-
 .hr-input {
   width: 100%;
   border: 0.5px solid var(--border-strong);
@@ -12,30 +11,23 @@
   font-family: inherit;
 }
 .hr-input:focus { border-color: var(--accent-mid); background: var(--surface); }
-
 .hr-msg { font-size: 12px; color: var(--red); min-height: 16px; }
 .hr-msg.success { color: var(--green); }
-
 .hr-count { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
-
 .hr-checkbox { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
-
 .hr-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
 .hr-badge.active { background: var(--green-light); color: var(--green); }
 .hr-badge.retired { background: var(--bg); color: var(--text-muted); }
 .hr-badge.yes { background: var(--accent-light); color: var(--accent); }
 .hr-badge.no { background: var(--bg); color: var(--text-muted); }
-
 .hr-edit-link { font-size: 12px; color: var(--accent); cursor: pointer; text-decoration: none; }
 .hr-edit-link:hover { text-decoration: underline; }
-
 .tab-btn {
   background: none; border: none; padding: 10px 16px; font-size: 13px;
   color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
   margin-bottom: -1px; font-family: inherit;
 }
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
-
 .settle-row {
   display: flex; justify-content: space-between; align-items: center;
   padding: 10px 4px; font-size: 13px; color: var(--text-secondary);
@@ -43,9 +35,7 @@
 }
 .settle-row b { font-size: 14px; color: var(--text-primary); font-weight: 500; }
 .settle-row.highlight { background: var(--bg-accent, var(--bg)); padding: 12px 8px; border-radius: var(--radius-sm); border-bottom: none; }
-
 .hr-total-row td { font-weight: 500; background: var(--bg); border-top: 1.5px solid var(--border-strong); color: var(--text-primary); }
-
 @media print {
   body * { visibility: hidden; }
   #printArea, #printArea *, #payslipPrintArea, #payslipPrintArea *,
@@ -69,7 +59,6 @@
     padding: 0 !important;
   }
 }
-
 /* 모달 */
 .hr-modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.35);
@@ -83,7 +72,6 @@
   box-shadow: 0 12px 40px rgba(0,0,0,0.18);
 }
 .hr-modal h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
-
 .hr-form-grid {
   display: grid; grid-template-columns: 1fr 1fr;
   gap: 12px 14px;
@@ -93,8 +81,19 @@
   font-size: 12px; color: var(--text-secondary); font-weight: 500;
 }
 .hr-form-grid .hr-span2 { grid-column: span 2; }
-
 @media (max-width: 520px) {
   .hr-form-grid { grid-template-columns: 1fr; }
   .hr-form-grid .hr-span2 { grid-column: span 1; }
+}
+
+/* 모바일 가벼운 개선 (표는 그대로 두고 좌우 스와이프, 여백/글자만 조정) */
+@media (max-width: 600px) {
+  .hr-modal { padding: 18px 16px; width: 100%; max-width: 100vw; max-height: 92vh; border-radius: var(--radius-md); }
+  .hr-modal h2 { font-size: 14px; }
+  .hr-input { font-size: 16px; padding: 9px 10px; } /* 16px 이상이어야 iOS에서 확대 안 됨 */
+  .hr-edit-link { font-size: 13px; padding: 2px 0; display: inline-block; } /* 탭하기 쉽게 */
+  .settle-row { font-size: 12.5px; }
+  .settle-row b { font-size: 13px; }
+  /* 상단 백업버튼/배지 줄이 좁은 화면에서 겹치지 않게 */
+  .topbar > div[style*="display:flex"] { flex-wrap: wrap; gap: 6px !important; }
 }
