@@ -128,6 +128,12 @@ class handler(BaseHTTPRequestHandler):
                 if qs.get("type", [None])[0] == "yearly":
                     yearly = self._build_yearly_for_employee(employee_id)
                     return self._send(200, {"yearly": yearly})
+                if qs.get("type", [None])[0] == "multiplier":
+                    items = rest_request(
+                        "GET",
+                        f"pension_multiplier_history?employee_id=eq.{employee_id}&select=*&order=effective_date.desc",
+                    )
+                    return self._send(200, {"multipliers": items})
                 items = rest_request(
                     "GET",
                     f"pension_contributions?employee_id=eq.{employee_id}&select=*&order=contribution_date.desc",
@@ -199,6 +205,22 @@ class handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
+
+            # 적립배수 추가: {"type": "multiplier", employee_id, effective_date, multiplier, note}
+            if isinstance(payload, dict) and payload.get("type") == "multiplier":
+                emp_id = payload.get("employee_id")
+                effective_date = payload.get("effective_date")
+                multiplier = payload.get("multiplier")
+                if not emp_id or not effective_date or multiplier is None:
+                    return self._send(400, {"error": "employee_id, effective_date, multiplier는 필수입니다"})
+                created = rest_request("POST", "pension_multiplier_history", body={
+                    "employee_id": emp_id,
+                    "effective_date": effective_date,
+                    "multiplier": multiplier,
+                    "include_other_payments": bool(payload.get("include_other_payments")),
+                    "note": payload.get("note"),
+                }, prefer="return=representation")
+                return self._send(201, {"multiplier": created[0] if created else None})
 
             # 마감/마감해제: {"type": "lock", period_key: "2026", locked: true/false, note}
             if isinstance(payload, dict) and payload.get("type") == "lock":
@@ -346,6 +368,11 @@ class handler(BaseHTTPRequestHandler):
             item_id = qs.get("id", [None])[0]
             if not item_id:
                 return self._send(400, {"error": "id는 필수입니다"})
+
+            if qs.get("type", [None])[0] == "multiplier":
+                rest_request("DELETE", f"pension_multiplier_history?id=eq.{item_id}")
+                return self._send(200, {"ok": True})
+
             is_adjustment = qs.get("type", [None])[0] == "adjustment"
             table = "pension_accrual_adjustments" if is_adjustment else "pension_contributions"
             date_field = "effective_date" if is_adjustment else "contribution_date"
