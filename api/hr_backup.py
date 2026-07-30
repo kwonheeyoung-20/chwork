@@ -15,6 +15,7 @@ import datetime
 import traceback
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
@@ -114,13 +115,21 @@ class handler(BaseHTTPRequestHandler):
                 "tables": {},
             }
             errors = {}
-            for table in BACKUP_TABLES:
+
+            def fetch_one(table):
                 try:
-                    backup["tables"][table] = rest_request(f"{table}?select=*")
+                    return table, rest_request(f"{table}?select=*"), None
                 except SupabaseError as e:
-                    # 테이블 하나가 실패해도(예: 아직 안 만든 테이블) 나머지는 계속 진행
-                    errors[table] = str(e)
-                    backup["tables"][table] = []
+                    return table, [], str(e)
+
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(fetch_one, t) for t in BACKUP_TABLES]
+                for fut in as_completed(futures):
+                    table, rows, err = fut.result()
+                    backup["tables"][table] = rows
+                    if err:
+                        errors[table] = err
+
             if errors:
                 backup["_errors"] = errors
 
