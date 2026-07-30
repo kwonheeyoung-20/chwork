@@ -108,6 +108,13 @@ class handler(BaseHTTPRequestHandler):
             self.send_header(k, v)
         self.end_headers()
 
+    def _fetch_settings_map(self):
+        try:
+            rows = rest_request("POST", "rpc/employees_current_employment_types", body={}) or []
+            return {r["employee_id"]: r for r in rows}
+        except SupabaseError:
+            return {}
+
     def do_GET(self):
         try:
             if not self._authorized():
@@ -267,7 +274,11 @@ class handler(BaseHTTPRequestHandler):
                 data = rest_request(
                     "GET",
                     f"monthly_payroll?year_month=eq.{year_month}&select=*,employees(name,branch,department,position,hire_date)&order=created_at",
-                )
+                ) or []
+                settings_map = self._fetch_settings_map()
+                for row in data:
+                    info = settings_map.get(row.get("employee_id"))
+                    row["current_settings"] = info
                 return self._send(200, {"payroll": data})
 
             employees = rest_request(
@@ -276,6 +287,7 @@ class handler(BaseHTTPRequestHandler):
                 f"&select=id,name,branch,department,position&order=hire_date.asc,name.asc"
             ) or []
 
+            settings_map = self._fetch_settings_map()
             results = []
             for emp in employees:
                 calc = rpc("payroll_calc_prorated", {"p_employee_id": emp["id"], "p_year_month": year_month})
@@ -287,6 +299,7 @@ class handler(BaseHTTPRequestHandler):
                 if mw and mw[0].get("is_floored"):
                     existing_note = row.get("adjustment_note")
                     row["adjustment_note"] = (existing_note + " / " if existing_note else "") + mw[0]["note"]
+                row["current_settings"] = settings_map.get(emp["id"])
                 results.append({**emp, **row})
 
             return self._send(200, {"payroll": results})
