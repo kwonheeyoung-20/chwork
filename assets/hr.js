@@ -7,6 +7,38 @@ function apiBase() { return window.location.origin; }
 function hrPassword() { return sessionStorage.getItem('chwork_hr_pw') || ''; }
 
 /* ── 로그인 ── */
+/* ── 전체 데이터 백업 ── */
+async function downloadFullBackup() {
+  const btn = $('backupBtn');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '백업 생성 중…';
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_backup`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || '백업 생성 실패');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const today = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `chwork_backup_${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('백업 다운로드 중 오류가 발생했습니다: ' + (e.message || ''));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
 async function hrLogin() {
   const pw = $('pwInput').value;
   $('loginMsg').textContent = '';
