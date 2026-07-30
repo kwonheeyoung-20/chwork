@@ -36,6 +36,7 @@
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
         <button class="secondary" onclick="downloadFullBackup()" id="backupBtn">전체 데이터 백업</button>
+        <span id="lastBackupLabel" style="font-size:12px; color:var(--text-muted);"></span>
         <div class="pill">Vercel 배포</div>
       </div>
     </header>
@@ -61,6 +62,7 @@
           <button class="tab-btn" data-tab="settlement" onclick="switchHrTab('settlement')">퇴사자 정산</button>
           <button class="tab-btn" data-tab="payroll" onclick="switchHrTab('payroll')">월별 급여명세</button>
           <button class="tab-btn" data-tab="otherpay" onclick="switchHrTab('otherpay')">성과급/기타지급</button>
+          <button class="tab-btn" data-tab="annual" onclick="switchHrTab('annual')">직원별 연간 급여 종합</button>
         </div>
 
         <section class="panel" id="tab-employees">
@@ -476,6 +478,47 @@
                 <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
               </tbody>
             </table>
+          </div>
+        </section>
+
+        <section class="panel" id="tab-annual" style="display:none;">
+          <div class="panel-header">
+            <h2>직원별 연간 급여 종합</h2>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            한 직원의 1년치 월급여(기본급+고정연장수당+만근수당+식대+소급인상분) + 성과급/상여/연차수당 등을 한 화면에 합산해서 보여줍니다.
+            2026년은 7월부터 자료가 있어 1년치로는 정확하지 않고, 2027년부터 정확한 연간 자료가 나옵니다.
+          </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">직원:</label>
+            <select id="annualEmployeeId" class="hr-input" style="width:160px;"></select>
+            <label style="font-size:13px; color:var(--text-secondary);">연도:</label>
+            <select id="annualYear" class="hr-input" style="width:100px;"></select>
+            <button class="secondary" onclick="loadAnnualSummary()">조회</button>
+            <button class="secondary" onclick="downloadAnnualSummaryExcel()">엑셀 다운로드</button>
+          </div>
+
+          <div id="annualResult" style="display:none;">
+            <div style="margin-bottom:14px;">
+              <b id="annual_emp_name" style="font-size:15px;"></b>
+              <span id="annual_emp_org" style="font-size:12px; color:var(--text-muted); margin-left:6px;"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="table" id="annualTable">
+                <thead>
+                  <tr>
+                    <th>월</th>
+                    <th class="num">기본급</th><th class="num">고정연장수당</th><th class="num">만근수당</th><th class="num">식대</th>
+                    <th class="num">소급인상분</th><th class="num">월급여 합계</th>
+                    <th class="num">성과급1차</th><th class="num">성과급2차</th><th class="num">상여금</th>
+                    <th class="num">기타수당</th><th class="num">연차수당</th>
+                    <th class="num">월 총합계</th>
+                  </tr>
+                </thead>
+                <tbody id="annualTbody"></tbody>
+              </table>
+            </div>
           </div>
         </section>
 
