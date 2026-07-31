@@ -97,3 +97,6 @@
   /* 상단 백업버튼/배지 줄이 좁은 화면에서 겹치지 않게 */
   .topbar > div[style*="display:flex"] { flex-wrap: wrap; gap: 6px !important; }
 }
+.nav-sub a {
+  cursor: pointer;
+}
