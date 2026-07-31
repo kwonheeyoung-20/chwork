@@ -126,6 +126,97 @@ class handler(BaseHTTPRequestHandler):
                 locks = rest_request("GET", "period_locks?module=eq.payroll&select=*&order=period_key.desc")
                 return self._send(200, {"locks": locks})
 
+            if qs.get("contract_data", ["0"])[0] == "1":
+                year = qs.get("year", [None])[0]
+                if not year:
+                    return self._send(400, {"error": "year는 필수입니다"})
+                year = int(year)
+
+                employees = rest_request(
+                    "GET",
+                    f"employees?hire_date=lte.{year}-12-31&or=(retire_date.is.null,retire_date.gte.{year}-01-01)"
+                    f"&select=id,name&order=hire_date.asc,name.asc",
+                ) or []
+
+                rows = []
+                for emp in employees:
+                    terms = rpc("payroll_contract_terms", {"p_employee_id": emp["id"], "p_year": year})
+                    t = terms[0] if terms else None
+                    if not t or not t.get("annual_salary"):
+                        continue
+                    rows.append({
+                        "name": emp["name"],
+                        "position": t.get("emp_position") or "",
+                        "branch": t.get("branch") or "",
+                        "contract_year": year,
+                        "annual_salary": t["annual_salary"],
+                        "monthly_salary": t["monthly_salary"],
+                        "base_pay": t["base_pay"],
+                        "overtime_pay": t["overtime_pay"],
+                        "attendance": t["attendance_allowance"],
+                        "meal": t["meal_allowance"],
+                        "fixed_overtime_hours_raw": t["fixed_overtime_hours_raw"],
+                        "is_probation": t.get("is_probation"),
+                        "probation_amount": t.get("probation_monthly_amount"),
+                    })
+
+                return self._send(200, {"year": year, "employees": rows})
+
+            if qs.get("annual_summary_all", ["0"])[0] == "1":
+                year = qs.get("year", [None])[0]
+                if not year:
+                    return self._send(400, {"error": "year는 필수입니다"})
+
+                employees = rest_request(
+                    "GET",
+                    f"employees?hire_date=lte.{year}-12-31&or=(retire_date.is.null,retire_date.gte.{year}-01-01)"
+                    f"&select=id,name,branch,department,position&order=hire_date.asc,name.asc",
+                ) or []
+
+                payroll_rows = rest_request(
+                    "GET",
+                    f"monthly_payroll?year_month=gte.{year}-01-01&year_month=lte.{year}-12-31"
+                    f"&select=employee_id,total_pay,retroactive_adjustment",
+                ) or []
+                payroll_by_emp = {}
+                for r in payroll_rows:
+                    e = payroll_by_emp.setdefault(r["employee_id"], {"monthly_total": 0})
+                    e["monthly_total"] += (r.get("total_pay") or 0) + (r.get("retroactive_adjustment") or 0)
+
+                other_rows = rest_request(
+                    "GET",
+                    f"other_payments?payment_date=gte.{year}-01-01&payment_date=lte.{year}-12-31"
+                    f"&select=employee_id,payment_type,amount",
+                ) or []
+                PAYMENT_TYPES = ["성과급1차", "성과급2차", "상여금", "기타수당", "연차수당"]
+                other_by_emp = {}
+                for r in other_rows:
+                    e = other_by_emp.setdefault(r["employee_id"], {t: 0 for t in PAYMENT_TYPES})
+                    ptype = r["payment_type"] if r["payment_type"] in PAYMENT_TYPES else "기타수당"
+                    e[ptype] = e.get(ptype, 0) + (r["amount"] or 0)
+
+                rows = []
+                totals = {"monthly_total": 0, "grand_total": 0}
+                for t in PAYMENT_TYPES:
+                    totals[t] = 0
+
+                for emp in employees:
+                    p = payroll_by_emp.get(emp["id"], {"monthly_total": 0})
+                    o = other_by_emp.get(emp["id"], {t: 0 for t in PAYMENT_TYPES})
+                    monthly_total = p["monthly_total"]
+                    other_sum = sum(o.values())
+                    grand_total = monthly_total + other_sum
+                    row = {**emp, "monthly_total": monthly_total, "grand_total": grand_total}
+                    row.update(o)
+                    rows.append(row)
+
+                    totals["monthly_total"] += monthly_total
+                    totals["grand_total"] += grand_total
+                    for t in PAYMENT_TYPES:
+                        totals[t] += o.get(t, 0)
+
+                return self._send(200, {"year": int(year), "employees": rows, "totals": totals})
+
             if qs.get("annual_summary", ["0"])[0] == "1":
                 emp_id = qs.get("employee_id", [None])[0]
                 year = qs.get("year", [None])[0]
