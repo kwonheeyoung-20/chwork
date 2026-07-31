@@ -131,11 +131,12 @@ class handler(BaseHTTPRequestHandler):
                 if not year:
                     return self._send(400, {"error": "year는 필수입니다"})
                 year = int(year)
+                jan1 = f"{year}-01-01"
 
                 employees = rest_request(
                     "GET",
                     f"employees?hire_date=lte.{year}-12-31&or=(retire_date.is.null,retire_date.gte.{year}-01-01)"
-                    f"&select=id,name&order=hire_date.asc,name.asc",
+                    f"&select=id,name,hire_date&order=hire_date.asc,name.asc",
                 ) or []
 
                 rows = []
@@ -144,11 +145,16 @@ class handler(BaseHTTPRequestHandler):
                     t = terms[0] if terms else None
                     if not t or not t.get("annual_salary"):
                         continue
+                    hire_date = emp.get("hire_date")
+                    is_mid_year_hire = bool(hire_date and hire_date > jan1)
+                    contract_start_date = hire_date if is_mid_year_hire else jan1
                     rows.append({
                         "name": emp["name"],
-                        "position": t.get("position") or "",
+                        "position": t.get("emp_position") or "",
                         "branch": t.get("branch") or "",
                         "contract_year": year,
+                        "contract_start_date": contract_start_date,
+                        "is_mid_year_hire": is_mid_year_hire,
                         "annual_salary": t["annual_salary"],
                         "monthly_salary": t["monthly_salary"],
                         "base_pay": t["base_pay"],
