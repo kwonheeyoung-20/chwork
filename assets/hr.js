@@ -79,12 +79,60 @@ async function hrLogin() {
 function showMain() {
   $('loginPanel').style.display = 'none';
   $('hrMain').style.display = 'flex';
+  switchMenuGroup('home');
   loadEmployees();
 }
 
 /* ── 탭 전환 ── */
+const MENU_GROUPS = {
+  home: { label: null, tabs: [{ id: 'employees', label: '직원마스터' }] },
+  payroll: {
+    label: '급여관리',
+    tabs: [
+      { id: 'payroll', label: '월별 급여명세' },
+      { id: 'otherpay', label: '성과급/기타지급' },
+      { id: 'annual', label: '직원별 연간 급여 종합' },
+      { id: 'contracts', label: '연봉계약서' },
+    ],
+  },
+  pension: {
+    label: '퇴직급여관리',
+    tabs: [
+      { id: 'pension', label: '퇴직연금 현황' },
+      { id: 'settlement', label: '퇴사자 정산' },
+    ],
+  },
+};
+
+let currentMenuGroup = 'home';
+
+function switchMenuGroup(group) {
+  currentMenuGroup = group;
+  const g = MENU_GROUPS[group];
+
+  // 사이드바 활성 표시
+  document.querySelectorAll('.nav-sub a').forEach(a => a.classList.toggle('active', a.textContent === g.label));
+  $('navHrHome').classList.toggle('active', group === 'home');
+
+  // 상단 탭바 렌더링
+  const bar = $('hrTabBar');
+  if (g.tabs.length <= 1) {
+    bar.style.display = 'none';
+    $('hrGroupLabel').style.display = 'none';
+  } else {
+    bar.style.display = 'flex';
+    $('hrGroupLabel').style.display = 'block';
+    $('hrGroupLabel').textContent = g.label;
+    bar.innerHTML = g.tabs.map((t, i) => `
+      <button class="tab-btn${i === 0 ? ' active' : ''}" data-tab="${t.id}" onclick="switchHrTab('${t.id}')">${t.label}</button>
+    `).join('');
+  }
+
+  switchHrTab(g.tabs[0].id);
+}
+
 function switchHrTab(name) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('#hrTabBar .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   $('tab-employees').style.display = name === 'employees' ? 'block' : 'none';
   $('tab-pension').style.display = name === 'pension' ? 'block' : 'none';
   $('tab-settlement').style.display = name === 'settlement' ? 'block' : 'none';
