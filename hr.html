@@ -11,6 +11,7 @@
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 </head>
 <body>
 <div id="installBanner" style="display:none; position:sticky; top:0; z-index:200; background:#c82828; color:white; padding:10px 16px; align-items:center; justify-content:space-between; gap:12px; font-size:13px;">
@@ -569,6 +570,7 @@
           <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
             연봉계약서 작성에 필요한 항목만 뽑아서 엑셀로 정리해드려요. 이 파일을 그룹웨어에 업로드해서 계약서 양식을 자동 완성하시면 됩니다.
             "고정연장근무시간"은 계약서 특성상 <b>실제시간(1.5배 적용 전)</b>으로 표기됩니다. 수습 대상자는 수습급여도 자동으로 같이 채워집니다.
+            계약시작일은 기본 1월 1일이며, 그 해 중도입사자는 실제 입사일로 표기되고 해당 줄이 회색으로 구분 표시됩니다.
           </p>
 
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
