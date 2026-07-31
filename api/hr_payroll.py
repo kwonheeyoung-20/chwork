@@ -146,7 +146,7 @@ class handler(BaseHTTPRequestHandler):
                         continue
                     rows.append({
                         "name": emp["name"],
-                        "position": t.get("emp_position") or "",
+                        "position": t.get("position") or "",
                         "branch": t.get("branch") or "",
                         "contract_year": year,
                         "annual_salary": t["annual_salary"],
