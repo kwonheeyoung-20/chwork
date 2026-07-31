@@ -13,6 +13,13 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
+<div id="installBanner" style="display:none; position:sticky; top:0; z-index:200; background:#c82828; color:white; padding:10px 16px; align-items:center; justify-content:space-between; gap:12px; font-size:13px;">
+  <span>📱 창현 Dashboard를 앱으로 설치하면 더 빠르게 쓸 수 있어요.</span>
+  <span style="display:flex; gap:8px; flex-shrink:0;">
+    <button onclick="triggerInstallPrompt()" style="background:white; color:#c82828; border:none; border-radius:6px; padding:6px 14px; font-size:12px; font-weight:600; cursor:pointer;">설치</button>
+    <button onclick="dismissInstallBanner()" style="background:transparent; color:white; border:1px solid rgba(255,255,255,0.5); border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer;">나중에</button>
+  </span>
+</div>
 <div class="layout">
 
   <aside class="sidebar">
@@ -63,6 +70,7 @@
           <button class="tab-btn" data-tab="payroll" onclick="switchHrTab('payroll')">월별 급여명세</button>
           <button class="tab-btn" data-tab="otherpay" onclick="switchHrTab('otherpay')">성과급/기타지급</button>
           <button class="tab-btn" data-tab="annual" onclick="switchHrTab('annual')">직원별 연간 급여 종합</button>
+          <button class="tab-btn" data-tab="contracts" onclick="switchHrTab('contracts')">연봉계약서</button>
         </div>
 
         <section class="panel" id="tab-employees">
@@ -486,40 +494,90 @@
             <h2>직원별 연간 급여 종합</h2>
           </div>
           <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
-            한 직원의 1년치 월급여(기본급+고정연장수당+만근수당+식대+소급인상분) + 성과급/상여/연차수당 등을 한 화면에 합산해서 보여줍니다.
+            월급여(기본급+고정연장수당+만근수당+식대+소급인상분) + 성과급/상여/연차수당 등을 합산해서 보여줍니다.
             2026년은 7월부터 자료가 있어 1년치로는 정확하지 않고, 2027년부터 정확한 연간 자료가 나옵니다.
           </p>
 
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <label style="font-size:13px; color:var(--text-secondary);">직원:</label>
-            <select id="annualEmployeeId" class="hr-input" style="width:160px;"></select>
-            <label style="font-size:13px; color:var(--text-secondary);">연도:</label>
-            <select id="annualYear" class="hr-input" style="width:100px;"></select>
-            <button class="secondary" onclick="loadAnnualSummary()">조회</button>
-            <button class="secondary" onclick="downloadAnnualSummaryExcel()">엑셀 다운로드</button>
+          <div style="display:flex; gap:4px; border-bottom: 0.5px solid var(--border); margin-bottom:14px;">
+            <button class="tab-btn active" data-annualsub="personal" onclick="switchAnnualSubTab('personal')">개인별</button>
+            <button class="tab-btn" data-annualsub="all" onclick="switchAnnualSubTab('all')">전 직원</button>
           </div>
 
-          <div id="annualResult" style="display:none;">
-            <div style="margin-bottom:14px;">
-              <b id="annual_emp_name" style="font-size:15px;"></b>
-              <span id="annual_emp_org" style="font-size:12px; color:var(--text-muted); margin-left:6px;"></span>
+          <div id="annualPersonalView">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+              <label style="font-size:13px; color:var(--text-secondary);">직원:</label>
+              <select id="annualEmployeeId" class="hr-input" style="width:160px;"></select>
+              <label style="font-size:13px; color:var(--text-secondary);">연도:</label>
+              <select id="annualYear" class="hr-input" style="width:100px;"></select>
+              <button class="secondary" onclick="loadAnnualSummary()">조회</button>
+              <button class="secondary" onclick="downloadAnnualSummaryExcel()">엑셀 다운로드</button>
+            </div>
+
+            <div id="annualResult" style="display:none;">
+              <div style="margin-bottom:14px;">
+                <b id="annual_emp_name" style="font-size:15px;"></b>
+                <span id="annual_emp_org" style="font-size:12px; color:var(--text-muted); margin-left:6px;"></span>
+              </div>
+              <div class="table-wrap">
+                <table class="table" id="annualTable">
+                  <thead>
+                    <tr>
+                      <th>월</th>
+                      <th class="num">기본급</th><th class="num">고정연장수당</th><th class="num">만근수당</th><th class="num">식대</th>
+                      <th class="num">소급인상분</th><th class="num">월급여 합계</th>
+                      <th class="num">성과급1차</th><th class="num">성과급2차</th><th class="num">상여금</th>
+                      <th class="num">기타수당</th><th class="num">연차수당</th>
+                      <th class="num">월 총합계</th>
+                    </tr>
+                  </thead>
+                  <tbody id="annualTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div id="annualAllView" style="display:none;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+              <label style="font-size:13px; color:var(--text-secondary);">연도:</label>
+              <select id="annualAllYear" class="hr-input" style="width:100px;"></select>
+              <button class="secondary" onclick="loadAnnualSummaryAll()">조회</button>
+              <button class="secondary" onclick="downloadAnnualSummaryAllExcel()">엑셀 다운로드</button>
             </div>
             <div class="table-wrap">
-              <table class="table" id="annualTable">
+              <table class="table" id="annualAllTable">
                 <thead>
                   <tr>
-                    <th>월</th>
-                    <th class="num">기본급</th><th class="num">고정연장수당</th><th class="num">만근수당</th><th class="num">식대</th>
-                    <th class="num">소급인상분</th><th class="num">월급여 합계</th>
+                    <th>이름</th><th>지사</th><th>부서</th><th>직급</th>
+                    <th class="num">월급여 합계(연간)</th>
                     <th class="num">성과급1차</th><th class="num">성과급2차</th><th class="num">상여금</th>
                     <th class="num">기타수당</th><th class="num">연차수당</th>
-                    <th class="num">월 총합계</th>
+                    <th class="num">연간 총계</th>
                   </tr>
                 </thead>
-                <tbody id="annualTbody"></tbody>
+                <tbody id="annualAllTbody">
+                  <tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">연도를 선택하고 조회해주세요.</td></tr>
+                </tbody>
               </table>
             </div>
           </div>
+        </section>
+
+        <section class="panel" id="tab-contracts" style="display:none;">
+          <div class="panel-header">
+            <h2>연봉계약서용 데이터 다운로드</h2>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            연봉계약서 작성에 필요한 항목만 뽑아서 엑셀로 정리해드려요. 이 파일을 그룹웨어에 업로드해서 계약서 양식을 자동 완성하시면 됩니다.
+            "고정연장근무시간"은 계약서 특성상 <b>실제시간(1.5배 적용 전)</b>으로 표기됩니다. 수습 대상자는 수습급여도 자동으로 같이 채워집니다.
+          </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">계약연도:</label>
+            <select id="contractYear" class="hr-input" style="width:100px;"></select>
+            <button class="primary" onclick="downloadContractDataExcel()" id="contractsAllBtn">엑셀 다운로드</button>
+          </div>
+
+          <div id="contractsMsg" class="hr-msg"></div>
         </section>
 
       </div>
@@ -827,6 +885,40 @@
       navigator.serviceWorker.register('sw.js').catch(() => {});
     });
   }
+
+  // ── 커스텀 설치 유도 배너 (Android Chrome 등에서 beforeinstallprompt 지원시) ──
+  let deferredInstallPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    if (!sessionStorage.getItem('chwork_install_dismissed')) {
+      const banner = document.getElementById('installBanner');
+      if (banner) banner.style.display = 'flex';
+    }
+  });
+
+  function triggerInstallPrompt() {
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.style.display = 'none';
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    deferredInstallPrompt.userChoice.finally(() => {
+      deferredInstallPrompt = null;
+    });
+  }
+
+  function dismissInstallBanner() {
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.style.display = 'none';
+    sessionStorage.setItem('chwork_install_dismissed', '1');
+  }
+
+  window.addEventListener('appinstalled', () => {
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.style.display = 'none';
+    deferredInstallPrompt = null;
+  });
 </script>
 </body>
 </html>
