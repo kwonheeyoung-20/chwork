@@ -100,3 +100,11 @@
 .nav-sub a {
   cursor: pointer;
 }
+@media (max-width: 520px) {
+  .hr-form-grid { grid-template-columns: 1fr; }
+  .hr-form-grid .hr-span2 { grid-column: span 1; }
+}
+
+.nav-sub a {
+  cursor: pointer;
+}
