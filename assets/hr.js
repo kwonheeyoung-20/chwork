@@ -2696,22 +2696,52 @@ async function downloadContractDataExcel() {
       return;
     }
 
-    const rows = [[
-      '이름', '직위', '근무지(지사)', '계약연도',
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet(`${year}년 연봉계약`);
+
+    const headers = [
+      '이름', '직위', '근무지(지사)', '계약연도', '계약시작일',
       '연봉액', '월급여', '기본급', '고정연장근로수당', '만근수당', '식대',
       '고정연장근무시간(실제시간)', '수습대상여부', '수습급여(최초3개월)',
-    ]];
+    ];
+    const headerRow = sheet.addRow(headers);
+    headerRow.font = { bold: true };
+    headerRow.eachCell(cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+    });
+
+    const grayFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+
     list.forEach(e => {
-      rows.push([
-        e.name, e.position, e.branch, e.contract_year,
+      const row = sheet.addRow([
+        e.name, e.position, e.branch, e.contract_year, e.contract_start_date,
         e.annual_salary, e.monthly_salary, e.base_pay, e.overtime_pay, e.attendance, e.meal,
         e.fixed_overtime_hours_raw, e.is_probation ? '예' : '아니오', e.probation_amount || '',
       ]);
+      if (e.is_mid_year_hire) {
+        row.eachCell({ includeEmpty: true }, cell => { cell.fill = grayFill; });
+      }
     });
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `${year}년 연봉계약`);
-    XLSX.writeFile(wb, `연봉계약서_데이터_${year}.xlsx`);
+
+    sheet.columns.forEach(col => { col.width = 16; });
+    sheet.getColumn(1).width = 10; // 이름
+
+    if (list.some(e => e.is_mid_year_hire)) {
+      const noteRow = sheet.addRow(['※ 회색으로 표시된 줄은 그 해 중도입사자로, 계약시작일이 1월 1일이 아니라 실제 입사일입니다.']);
+      sheet.mergeCells(noteRow.number, 1, noteRow.number, headers.length);
+      noteRow.font = { italic: true, size: 10, color: { argb: 'FF888888' } };
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `연봉계약서_데이터_${year}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 
     $('contractsMsg').className = 'hr-msg success';
     $('contractsMsg').textContent = `${list.length}명분 다운로드되었습니다.`;
