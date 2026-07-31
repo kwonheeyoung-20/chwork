@@ -91,6 +91,7 @@ function switchHrTab(name) {
   $('tab-payroll').style.display = name === 'payroll' ? 'block' : 'none';
   $('tab-otherpay').style.display = name === 'otherpay' ? 'block' : 'none';
   $('tab-annual').style.display = name === 'annual' ? 'block' : 'none';
+  $('tab-contracts').style.display = name === 'contracts' ? 'block' : 'none';
   if (name === 'pension') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
   if (name === 'payroll') {
@@ -110,7 +111,17 @@ function switchHrTab(name) {
   if (name === 'annual') {
     populateEmployeeSelectById('annualEmployeeId');
     populateYearSelect('annualYear');
+    populateYearSelect('annualAllYear');
   }
+  if (name === 'contracts') {
+    populateYearSelect('contractYear');
+  }
+}
+
+function switchAnnualSubTab(name) {
+  document.querySelectorAll('[data-annualsub]').forEach(b => b.classList.toggle('active', b.dataset.annualsub === name));
+  $('annualPersonalView').style.display = name === 'personal' ? 'block' : 'none';
+  $('annualAllView').style.display = name === 'all' ? 'block' : 'none';
 }
 
 function populateYearSelect(elId) {
@@ -2577,4 +2588,138 @@ function downloadAnnualSummaryExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, `${data.year}년`);
   XLSX.writeFile(wb, `연간급여종합_${data.employee.name}_${data.year}.xlsx`);
+}
+
+/* ── 직원별 연간 급여 종합 — 전 직원 보기 ── */
+let annualSummaryAllCache = null;
+
+async function loadAnnualSummaryAll() {
+  const year = $('annualAllYear').value;
+  if (!year) { alert('연도를 선택해주세요.'); return; }
+  const tbody = $('annualAllTbody');
+  tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?annual_summary_all=1&year=${year}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '조회 실패');
+    annualSummaryAllCache = data;
+    renderAnnualSummaryAll(data);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function renderAnnualSummaryAll(data) {
+  const tbody = $('annualAllTbody');
+  const list = data.employees || [];
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">데이터가 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(e => `
+    <tr>
+      <td>${esc(e.name)}</td>
+      <td>${esc(e.branch || '-')}</td>
+      <td>${esc(e.department || '-')}</td>
+      <td>${esc(e.position || '-')}</td>
+      <td class="num">${fmt(e.monthly_total)}</td>
+      <td class="num">${e['성과급1차'] ? fmt(e['성과급1차']) : ''}</td>
+      <td class="num">${e['성과급2차'] ? fmt(e['성과급2차']) : ''}</td>
+      <td class="num">${e['상여금'] ? fmt(e['상여금']) : ''}</td>
+      <td class="num">${e['기타수당'] ? fmt(e['기타수당']) : ''}</td>
+      <td class="num">${e['연차수당'] ? fmt(e['연차수당']) : ''}</td>
+      <td class="num" style="font-weight:500;">${fmt(e.grand_total)}</td>
+    </tr>
+  `).join('');
+
+  const t = data.totals;
+  tbody.innerHTML += `
+    <tr class="hr-total-row">
+      <td colspan="4">합계 (${list.length}명)</td>
+      <td class="num">${fmt(t.monthly_total)}</td>
+      <td class="num">${fmt(t['성과급1차'])}</td>
+      <td class="num">${fmt(t['성과급2차'])}</td>
+      <td class="num">${fmt(t['상여금'])}</td>
+      <td class="num">${fmt(t['기타수당'])}</td>
+      <td class="num">${fmt(t['연차수당'])}</td>
+      <td class="num">${fmt(t.grand_total)}</td>
+    </tr>
+  `;
+}
+
+function downloadAnnualSummaryAllExcel() {
+  if (!annualSummaryAllCache) { alert('먼저 조회해주세요.'); return; }
+  const data = annualSummaryAllCache;
+  const rows = [[
+    '이름', '지사', '부서', '직급', '월급여 합계(연간)',
+    '성과급1차', '성과급2차', '상여금', '기타수당', '연차수당', '연간 총계',
+  ]];
+  data.employees.forEach(e => {
+    rows.push([
+      e.name, e.branch || '', e.department || '', e.position || '', e.monthly_total,
+      e['성과급1차'], e['성과급2차'], e['상여금'], e['기타수당'], e['연차수당'], e.grand_total,
+    ]);
+  });
+  const t = data.totals;
+  rows.push([
+    `합계(${data.employees.length}명)`, '', '', '', t.monthly_total,
+    t['성과급1차'], t['성과급2차'], t['상여금'], t['기타수당'], t['연차수당'], t.grand_total,
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${data.year}년 전직원`);
+  XLSX.writeFile(wb, `연간급여종합_전직원_${data.year}.xlsx`);
+}
+
+/* ── 연봉계약서용 데이터 다운로드(엑셀) ── */
+async function downloadContractDataExcel() {
+  const year = $('contractYear').value;
+  if (!year) { alert('계약연도를 선택해주세요.'); return; }
+
+  const btn = $('contractsAllBtn');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '불러오는 중…';
+  $('contractsMsg').textContent = '';
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll?contract_data=1&year=${year}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '조회 실패');
+
+    const list = data.employees || [];
+    if (list.length === 0) {
+      $('contractsMsg').textContent = '해당 연도에 급여 정보가 있는 직원이 없습니다.';
+      return;
+    }
+
+    const rows = [[
+      '이름', '직위', '근무지(지사)', '계약연도',
+      '연봉액', '월급여', '기본급', '고정연장근로수당', '만근수당', '식대',
+      '고정연장근무시간(실제시간)', '수습대상여부', '수습급여(최초3개월)',
+    ]];
+    list.forEach(e => {
+      rows.push([
+        e.name, e.position, e.branch, e.contract_year,
+        e.annual_salary, e.monthly_salary, e.base_pay, e.overtime_pay, e.attendance, e.meal,
+        e.fixed_overtime_hours_raw, e.is_probation ? '예' : '아니오', e.probation_amount || '',
+      ]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `${year}년 연봉계약`);
+    XLSX.writeFile(wb, `연봉계약서_데이터_${year}.xlsx`);
+
+    $('contractsMsg').className = 'hr-msg success';
+    $('contractsMsg').textContent = `${list.length}명분 다운로드되었습니다.`;
+  } catch (e) {
+    $('contractsMsg').className = 'hr-msg';
+    $('contractsMsg').textContent = e.message || '다운로드 중 오류가 발생했습니다.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
 }
