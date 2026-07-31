@@ -29,7 +29,11 @@
     <nav class="nav">
       <a href="index.html">대시보드</a>
       <a href="corporate-profit.html">기업손익분석</a>
-      <a class="active" href="hr.html">인사/급여관리</a>
+      <a id="navHrHome" class="active" href="hr.html" onclick="switchMenuGroup('home'); return false;">인사/급여관리</a>
+      <div class="nav-sub">
+        <a onclick="switchMenuGroup('payroll')">급여관리</a>
+        <a onclick="switchMenuGroup('pension')">퇴직급여관리</a>
+      </div>
       <a href="#">계약/증빙관리</a>
       <a href="#">월간 보고서</a>
       <a href="#">설정</a>
@@ -64,15 +68,8 @@
       <!-- 인사 메인 화면 (로그인 후 표시) -->
       <div id="hrMain" style="display:none; flex-direction:column; gap:20px;">
 
-        <div style="display:flex; gap:4px; border-bottom: 0.5px solid var(--border);">
-          <button class="tab-btn active" data-tab="employees" onclick="switchHrTab('employees')">직원마스터</button>
-          <button class="tab-btn" data-tab="pension" onclick="switchHrTab('pension')">퇴직연금 현황</button>
-          <button class="tab-btn" data-tab="settlement" onclick="switchHrTab('settlement')">퇴사자 정산</button>
-          <button class="tab-btn" data-tab="payroll" onclick="switchHrTab('payroll')">월별 급여명세</button>
-          <button class="tab-btn" data-tab="otherpay" onclick="switchHrTab('otherpay')">성과급/기타지급</button>
-          <button class="tab-btn" data-tab="annual" onclick="switchHrTab('annual')">직원별 연간 급여 종합</button>
-          <button class="tab-btn" data-tab="contracts" onclick="switchHrTab('contracts')">연봉계약서</button>
-        </div>
+        <div id="hrGroupLabel" style="display:none; font-size:12px; color:var(--text-muted); margin-bottom:-10px;"></div>
+        <div id="hrTabBar" style="display:flex; gap:4px; border-bottom: 0.5px solid var(--border); flex-wrap:wrap;"></div>
 
         <section class="panel" id="tab-employees">
           <div class="panel-header">
