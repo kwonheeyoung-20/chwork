@@ -445,8 +445,8 @@ class handler(BaseHTTPRequestHandler):
                     body["contract_end_date"] = payload["contract_end_date"]
                 if payload.get("fixed_monthly_amount") is not None:
                     body["fixed_monthly_amount"] = payload["fixed_monthly_amount"] or None
-                if "prorate_partial_month" in payload:
-                    body["prorate_partial_month"] = payload["prorate_partial_month"]
+                if payload.get("proration_mode"):
+                    body["proration_mode"] = payload["proration_mode"]
                 created = rest_request("POST", "payroll_settings_history", body=body, prefer="return=representation")
                 return self._send(201, {"settings": created[0] if created else None})
 

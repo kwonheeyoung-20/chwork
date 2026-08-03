@@ -279,7 +279,7 @@ class handler(BaseHTTPRequestHandler):
                     **base_settings,
                     "pay_rate": rate,
                     "contract_end_date": end_date,
-                    "prorate_partial_month": payload.get("contract_prorate", True),
+                    "proration_mode": payload.get("contract_proration_mode") or "daily",
                     "note": note,
                 }
                 if fixed_amount:
