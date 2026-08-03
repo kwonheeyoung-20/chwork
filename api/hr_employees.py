@@ -272,15 +272,19 @@ class handler(BaseHTTPRequestHandler):
                 months = int(payload["contract_months"])
                 rate = float(payload["contract_rate"]) / 100
                 end_date = add_months(hire_date, months)
-                note = f"계약 {months}개월, 요율 {payload['contract_rate']}%"
-                if payload.get("contract_fixed_amount"):
-                    note += f", 정액 {payload['contract_fixed_amount']}원 참고"
-                rest_request("POST", "payroll_settings_history", body={
+                fixed_amount = payload.get("contract_fixed_amount")
+                note = f"계약 {months}개월"
+                note += f", 정액 {fixed_amount:,.0f}원" if fixed_amount else f", 요율 {payload['contract_rate']}%"
+                settings_body = {
                     **base_settings,
                     "pay_rate": rate,
                     "contract_end_date": end_date,
+                    "prorate_partial_month": payload.get("contract_prorate", True),
                     "note": note,
-                })
+                }
+                if fixed_amount:
+                    settings_body["fixed_monthly_amount"] = fixed_amount
+                rest_request("POST", "payroll_settings_history", body=settings_body)
             elif hire_date:
                 # 정규직(특이사항 없음) — 기본 설정만 생성
                 rest_request("POST", "payroll_settings_history", body={
