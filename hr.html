@@ -689,7 +689,11 @@
     <div id="contractFields" class="hr-form-grid" style="display:none; margin-top:10px; padding-top:10px; border-top:0.5px dashed var(--border);">
       <label>계약 기간(개월) <input id="f_contract_months" type="number" class="hr-input" placeholder="예: 12"></label>
       <label>계약 요율(%) <input id="f_contract_rate" type="number" class="hr-input" value="100"></label>
-      <label class="hr-span2">정액(있는 경우만, 참고용 메모) <input id="f_contract_fixed_amount" type="number" class="hr-input" placeholder="원 단위"></label>
+      <label class="hr-span2">정액(월 고정지급액, 입력시 연봉 공식 대신 이 금액 그대로 적용) <input id="f_contract_fixed_amount" type="number" class="hr-input" placeholder="예: 2200000"></label>
+      <label class="hr-span2" style="flex-direction:row; align-items:center; gap:6px;">
+        <input type="checkbox" id="f_contract_prorate" checked style="width:auto;">
+        <span style="font-weight:400;">월 중간 입사/퇴사시 일할계산 적용 (체크 해제하면 첫/마지막 달도 전액 지급)</span>
+      </label>
       <div class="hr-span2" style="font-size:11px; color:var(--text-muted);">계약 종료일이 되어도 자동으로 전환되지 않습니다. 만료 시점에 "계약 만료 대상" 목록에 뜨면 그때 정규직 전환 또는 퇴사 처리를 직접 선택해주세요.</div>
     </div>
 
@@ -727,6 +731,13 @@
       <div id="prContractEndWrap" style="display:none; margin-top:8px;">
         <label style="font-size:12px;">새 계약 종료일(연장시 여기 입력) <input id="pr_contract_end" type="date" class="hr-input" style="max-width:220px;"></label>
       </div>
+      <div class="hr-form-grid" style="grid-template-columns: 1fr 1fr; margin-top:8px; gap:8px;">
+        <label style="font-size:12px;">정액(월 고정지급액, 입력시 요율/연봉 공식 대신 이 금액 그대로 적용) <input id="pr_fixed_amount" type="number" class="hr-input" placeholder="비워두면 정액 해제"></label>
+        <label style="font-size:12px; flex-direction:row; align-items:center; gap:6px; margin-top:20px;">
+          <input type="checkbox" id="pr_prorate" checked style="width:auto;">
+          <span style="font-weight:400;">월 중간 입사/퇴사시 일할계산 적용</span>
+        </label>
+      </div>
       <div style="text-align:right; margin-top:8px;">
         <button class="primary" onclick="savePayRate()">적용</button>
       </div>
@@ -735,7 +746,7 @@
       <h3 style="font-size:13px; margin:16px 0 8px;">급여 요율 이력</h3>
       <div class="table-wrap">
         <table class="table" id="settingsHistoryTable">
-          <thead><tr><th>적용 시작월</th><th class="num">요율</th><th>고용형태</th><th>계약종료일</th><th>비고</th><th></th></tr></thead>
+          <thead><tr><th>적용 시작월</th><th class="num">요율</th><th>고용형태</th><th>계약종료일</th><th>정액/일할계산</th><th>비고</th><th></th></tr></thead>
           <tbody id="settingsHistoryTbody"></tbody>
         </table>
       </div>
