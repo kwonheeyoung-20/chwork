@@ -1253,7 +1253,7 @@ function renderPayroll(list, savedMode) {
       <td class="num">${fmt(p.total_pay)}</td>
       <td class="num">${savedMode ? (retro ? fmt(retro) : '') : '-'}</td>
       <td class="num">${savedMode ? fmt(finalTotal) : '-'}</td>
-      <td><a class="hr-edit-link" onclick="openPayslipModal(${idx})">명세서</a>${savedMode ? ` · <a class="hr-edit-link" onclick="deletePayrollRecord('${p.id}', '${esc(p.name)}')">삭제</a>` : ''}</td>
+      <td><a class="hr-edit-link" onclick="openPayslipModal(${idx})">명세서</a>${savedMode ? ` · <a class="hr-edit-link" onclick="deletePayrollRecord('${p.employee_id}', '${esc(p.name)}')">삭제</a>` : ''}</td>
     </tr>
   `;
   }).join('');
