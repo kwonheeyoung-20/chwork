@@ -690,9 +690,12 @@
       <label>계약 기간(개월) <input id="f_contract_months" type="number" class="hr-input" placeholder="예: 12"></label>
       <label>계약 요율(%) <input id="f_contract_rate" type="number" class="hr-input" value="100"></label>
       <label class="hr-span2">정액(월 고정지급액, 입력시 연봉 공식 대신 이 금액 그대로 적용) <input id="f_contract_fixed_amount" type="number" class="hr-input" placeholder="예: 2200000"></label>
-      <label class="hr-span2" style="flex-direction:row; align-items:center; gap:6px;">
-        <input type="checkbox" id="f_contract_prorate" checked style="width:auto;">
-        <span style="font-weight:400;">월 중간 입사/퇴사시 일할계산 적용 (체크 해제하면 첫/마지막 달도 전액 지급)</span>
+      <label class="hr-span2">첫/마지막 달 급여 반영 방식
+        <select id="f_contract_proration_mode" class="hr-input">
+          <option value="daily">일할계산 (그 달 재직일수만큼 비례 지급)</option>
+          <option value="current_month">당월반영 (입사한 달에 전액 지급)</option>
+          <option value="next_month">익월반영 (입사한 달 0원, 다음달에 합산 지급)</option>
+        </select>
       </label>
       <div class="hr-span2" style="font-size:11px; color:var(--text-muted);">계약 종료일이 되어도 자동으로 전환되지 않습니다. 만료 시점에 "계약 만료 대상" 목록에 뜨면 그때 정규직 전환 또는 퇴사 처리를 직접 선택해주세요.</div>
     </div>
@@ -733,9 +736,12 @@
       </div>
       <div class="hr-form-grid" style="grid-template-columns: 1fr 1fr; margin-top:8px; gap:8px;">
         <label style="font-size:12px;">정액(월 고정지급액, 입력시 요율/연봉 공식 대신 이 금액 그대로 적용) <input id="pr_fixed_amount" type="number" class="hr-input" placeholder="비워두면 정액 해제"></label>
-        <label style="font-size:12px; flex-direction:row; align-items:center; gap:6px; margin-top:20px;">
-          <input type="checkbox" id="pr_prorate" checked style="width:auto;">
-          <span style="font-weight:400;">월 중간 입사/퇴사시 일할계산 적용</span>
+        <label style="font-size:12px;">첫/마지막 달 급여 반영 방식
+          <select id="pr_proration_mode" class="hr-input">
+            <option value="daily">일할계산</option>
+            <option value="current_month">당월반영(전액)</option>
+            <option value="next_month">익월반영(합산)</option>
+          </select>
         </label>
       </div>
       <div style="text-align:right; margin-top:8px;">
