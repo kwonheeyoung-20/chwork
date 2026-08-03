@@ -780,24 +780,31 @@
       </table>
     </div>
 
-    <h3 style="font-size:13px; margin-top:24px; padding-top:16px; border-top:0.5px solid var(--border); margin-bottom:4px;">적립 배수 설정</h3>
+    <h3 style="font-size:13px; margin-top:24px; padding-top:16px; border-top:0.5px solid var(--border); margin-bottom:4px;">적립 배수 설정 (등기임원 전용)</h3>
     <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
-      대표이사 상여금포함 3배수처럼, 이 사람만 연봉기반 발생액(2026년 이후분)에 배수를 곱해야 하는 경우 등록하세요. (2025년 이전 확정값에는 영향 없음)
+      대표이사 등 등기임원은 정관상 산정방식이 따로 있어요: <b>(조회시점 최신 연봉 + 그 해 포함 수당 합계) ÷ 10 × 배수</b>.
+      이 설정을 등록하면 그 사람은 일반 직원의 "근무일수 누적" 방식 대신 이 공식으로 자동 계산됩니다. (2025년 이전 확정값에는 영향 없음)
     </p>
     <div class="hr-form-grid" style="grid-template-columns:1fr 1fr 1fr auto; align-items:end; gap:8px;">
       <label style="font-size:12px;">적용 시작일 <input id="mult_date" type="date" class="hr-input"></label>
       <label style="font-size:12px;">배수 <input id="mult_value" type="number" step="0.1" class="hr-input" placeholder="예: 3"></label>
-      <label style="font-size:12px;">사유 <input id="mult_note" class="hr-input" placeholder="예: 상여금포함 3배수"></label>
+      <label style="font-size:12px;">사유 <input id="mult_note" class="hr-input" placeholder="예: 정관상 임원 퇴직금"></label>
       <button class="primary" onclick="saveMultiplier()" style="height:34px;">추가</button>
     </div>
-    <label class="hr-checkbox" style="margin-top:8px;">
-      <input type="checkbox" id="mult_include_other">
-      그 해 성과급/기타수당(성과급/기타지급)까지 합산한 뒤 배수 적용
-    </label>
+    <div style="margin-top:10px;">
+      <div style="font-size:12px; color:var(--text-secondary); margin-bottom:6px;">그 해 발생분 중 아래 항목을 연봉에 합산할지 개별 선택하세요:</div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <label class="hr-checkbox"><input type="checkbox" id="mult_bonus1"> 성과급1차</label>
+        <label class="hr-checkbox"><input type="checkbox" id="mult_bonus2"> 성과급2차</label>
+        <label class="hr-checkbox"><input type="checkbox" id="mult_severance_bonus"> 상여금</label>
+        <label class="hr-checkbox"><input type="checkbox" id="mult_other_allowance"> 기타수당</label>
+        <label class="hr-checkbox"><input type="checkbox" id="mult_annual_leave_pay"> 연차수당</label>
+      </div>
+    </div>
     <div id="multiplierMsg" class="hr-msg"></div>
     <div class="table-wrap" style="margin-top:8px;">
       <table class="table" id="multiplierHistoryTable">
-        <thead><tr><th>적용 시작일</th><th class="num">배수</th><th>성과급 포함</th><th>사유</th><th></th></tr></thead>
+        <thead><tr><th>적용 시작일</th><th class="num">배수</th><th>포함 수당</th><th>사유</th><th></th></tr></thead>
         <tbody id="multiplierHistoryTbody"></tbody>
       </table>
     </div>
