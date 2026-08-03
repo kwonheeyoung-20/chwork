@@ -1006,18 +1006,25 @@ async function loadMultiplierHistory(employeeId) {
     const data = await res.json();
     const list = data.multipliers || [];
     if (list.length === 0) {
-      $('multiplierHistoryTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:12px;">등록된 배수가 없습니다 (기본 1배 적용).</td></tr>`;
+      $('multiplierHistoryTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:12px;">등록된 배수가 없습니다 (일반 직원 방식으로 계산됩니다).</td></tr>`;
       return;
     }
-    $('multiplierHistoryTbody').innerHTML = list.map(m => `
+    const typeLabels = [
+      ['include_bonus1', '성과급1차'], ['include_bonus2', '성과급2차'], ['include_severance_bonus', '상여금'],
+      ['include_other_allowance', '기타수당'], ['include_annual_leave_pay', '연차수당'],
+    ];
+    $('multiplierHistoryTbody').innerHTML = list.map(m => {
+      const included = typeLabels.filter(([key]) => m[key]).map(([, label]) => label);
+      return `
       <tr>
         <td>${esc(m.effective_date)}</td>
         <td class="num">${m.multiplier}배</td>
-        <td>${m.include_other_payments ? '포함' : '미포함'}</td>
+        <td>${included.length > 0 ? esc(included.join(', ')) : '없음'}</td>
         <td>${esc(m.note || '-')}</td>
         <td><a class="hr-edit-link" onclick="deleteMultiplier('${m.id}', '${employeeId}')">삭제</a></td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   } catch (e) {
     $('multiplierHistoryTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:12px;">불러오기 실패</td></tr>`;
   }
@@ -1027,7 +1034,6 @@ async function saveMultiplier() {
   const date = $('mult_date').value;
   const value = Number($('mult_value').value);
   const note = $('mult_note').value.trim() || null;
-  const includeOther = $('mult_include_other').checked;
   if (!date || !value) {
     $('multiplierMsg').textContent = '적용 시작일과 배수는 필수입니다.';
     return;
@@ -1041,7 +1047,11 @@ async function saveMultiplier() {
         employee_id: currentAdjustEmployeeId,
         effective_date: date,
         multiplier: value,
-        include_other_payments: includeOther,
+        include_bonus1: $('mult_bonus1').checked,
+        include_bonus2: $('mult_bonus2').checked,
+        include_severance_bonus: $('mult_severance_bonus').checked,
+        include_other_allowance: $('mult_other_allowance').checked,
+        include_annual_leave_pay: $('mult_annual_leave_pay').checked,
         note,
       }),
     });
@@ -1049,7 +1059,11 @@ async function saveMultiplier() {
     $('mult_date').value = '';
     $('mult_value').value = '';
     $('mult_note').value = '';
-    $('mult_include_other').checked = false;
+    $('mult_bonus1').checked = false;
+    $('mult_bonus2').checked = false;
+    $('mult_severance_bonus').checked = false;
+    $('mult_other_allowance').checked = false;
+    $('mult_annual_leave_pay').checked = false;
     $('multiplierMsg').className = 'hr-msg success';
     $('multiplierMsg').textContent = '저장되었습니다.';
     loadMultiplierHistory(currentAdjustEmployeeId);
