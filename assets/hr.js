@@ -1333,14 +1333,7 @@ async function deletePayrollRecord(employeeId, name) {
     alert(e.message && e.message.includes('마감') ? e.message : '삭제 중 오류가 발생했습니다.');
   }
 }
-async function deletePayrollRecord(employeeId, name) {
-  const ym = payrollYearMonthDate();
-  if (!confirm(`${name} 님의 ${$('payrollMonth').value} 급여 기록을 삭제하시겠습니까?\n(직원 자체는 삭제되지 않고, 이 달의 급여 저장 기록만 지워집니다.)`)) return;
-  try {
-    const res = await fetch(`${apiBase()}/api/hr_payroll?payroll_employee_id=${employeeId}&payroll_month=${ym}`, {
-      method: 'DELETE',
-      headers: { 'X-HR-Password': hrPassword() },
-    });
+
 async function generatePayroll() {
   const ym = payrollYearMonthDate();
   if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
