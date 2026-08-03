@@ -402,7 +402,7 @@ function openAddModal() {
   $('f_contract_months').value = '';
   $('f_contract_rate').value = '100';
   $('f_contract_fixed_amount').value = '';
-  $('f_contract_prorate').checked = true;
+  $('f_contract_proration_mode').value = 'daily';
   toggleWorkTypeFields();
   $('modalMsg').textContent = '';
   $('salaryHistorySection').style.display = 'none';
@@ -437,7 +437,7 @@ function openEditModal(id) {
   $('pr_employment_type').value = '';
   $('pr_contract_end').value = '';
   $('pr_fixed_amount').value = '';
-  $('pr_prorate').checked = true;
+  $('pr_proration_mode').value = 'daily';
   togglePrContractEnd();
   $('payRateMsg').textContent = '';
   loadSettingsHistoryInModal(id);
@@ -496,7 +496,7 @@ async function saveEmployee() {
         payload.contract_months = Number($('f_contract_months').value) || null;
         payload.contract_rate = Number($('f_contract_rate').value) || 100;
         payload.contract_fixed_amount = Number($('f_contract_fixed_amount').value) || null;
-        payload.contract_prorate = $('f_contract_prorate').checked;
+        payload.contract_proration_mode = $('f_contract_proration_mode').value;
       }
       const res = await fetch(`${apiBase()}/api/hr_employees`, {
         method: 'POST',
@@ -1253,7 +1253,7 @@ function renderPayroll(list, savedMode) {
       <td class="num">${fmt(p.total_pay)}</td>
       <td class="num">${savedMode ? (retro ? fmt(retro) : '') : '-'}</td>
       <td class="num">${savedMode ? fmt(finalTotal) : '-'}</td>
-      <td><a class="hr-edit-link" onclick="openPayslipModal(${idx})">명세서</a>${savedMode ? ` · <a class="hr-edit-link" onclick="deletePayrollRecord('${p.employee_id}', '${esc(p.name)}')">삭제</a>` : ''}</td>
+      <td><a class="hr-edit-link" onclick="openPayslipModal(${idx})">명세서</a>${savedMode ? ` · <a class="hr-edit-link" onclick="deletePayrollRecord('${p.id}', '${esc(p.name)}')">삭제</a>` : ''}</td>
     </tr>
   `;
   }).join('');
@@ -2219,7 +2219,7 @@ async function loadSettingsHistoryInModal(employeeId) {
         <td class="num">${s.pay_rate != null ? Math.round(s.pay_rate * 100) + '%' : '-'}</td>
         <td>${esc(s.employment_type || '-')}</td>
         <td>${esc(s.contract_end_date || '-')}</td>
-        <td>${s.fixed_monthly_amount ? fmt(s.fixed_monthly_amount) + '원(정액)' : '-'}${s.prorate_partial_month === false ? ' / 일할계산 안함' : ''}</td>
+        <td>${s.fixed_monthly_amount ? fmt(s.fixed_monthly_amount) + '원(정액)' : '-'}${s.proration_mode === 'current_month' ? ' / 당월반영' : s.proration_mode === 'next_month' ? ' / 익월반영' : ''}</td>
         <td>${esc(s.note || '-')}</td>
         <td><a class="hr-edit-link" onclick="deleteSettingsHistoryRow('${s.id}', '${employeeId}')">삭제</a></td>
       </tr>
@@ -2263,7 +2263,7 @@ async function savePayRate() {
   if (employmentType === '계약직' && contractEnd) payload.contract_end_date = contractEnd;
   const fixedAmount = $('pr_fixed_amount').value;
   payload.fixed_monthly_amount = fixedAmount ? Number(fixedAmount) : null;
-  payload.prorate_partial_month = $('pr_prorate').checked;
+  payload.proration_mode = $('pr_proration_mode').value;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll`, {
       method: 'POST',
@@ -2279,7 +2279,7 @@ async function savePayRate() {
     $('pr_employment_type').value = '';
     $('pr_contract_end').value = '';
     $('pr_fixed_amount').value = '';
-    $('pr_prorate').checked = true;
+    $('pr_proration_mode').value = 'daily';
     togglePrContractEnd();
     loadSettingsHistoryInModal(empId);
     loadEmployees();
