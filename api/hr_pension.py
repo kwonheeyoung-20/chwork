@@ -206,7 +206,8 @@ class handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
 
-            # 적립배수 추가: {"type": "multiplier", employee_id, effective_date, multiplier, note}
+            # 적립배수 추가: {"type": "multiplier", employee_id, effective_date, multiplier,
+            #   include_bonus1, include_bonus2, include_severance_bonus, include_other_allowance, include_annual_leave_pay, note}
             if isinstance(payload, dict) and payload.get("type") == "multiplier":
                 emp_id = payload.get("employee_id")
                 effective_date = payload.get("effective_date")
@@ -217,7 +218,11 @@ class handler(BaseHTTPRequestHandler):
                     "employee_id": emp_id,
                     "effective_date": effective_date,
                     "multiplier": multiplier,
-                    "include_other_payments": bool(payload.get("include_other_payments")),
+                    "include_bonus1": bool(payload.get("include_bonus1")),
+                    "include_bonus2": bool(payload.get("include_bonus2")),
+                    "include_severance_bonus": bool(payload.get("include_severance_bonus")),
+                    "include_other_allowance": bool(payload.get("include_other_allowance")),
+                    "include_annual_leave_pay": bool(payload.get("include_annual_leave_pay")),
                     "note": payload.get("note"),
                 }, prefer="return=representation")
                 return self._send(201, {"multiplier": created[0] if created else None})
