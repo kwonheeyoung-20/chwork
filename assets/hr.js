@@ -402,6 +402,7 @@ function openAddModal() {
   $('f_contract_months').value = '';
   $('f_contract_rate').value = '100';
   $('f_contract_fixed_amount').value = '';
+  $('f_contract_prorate').checked = true;
   toggleWorkTypeFields();
   $('modalMsg').textContent = '';
   $('salaryHistorySection').style.display = 'none';
@@ -435,6 +436,8 @@ function openEditModal(id) {
   $('pr_rate').value = '';
   $('pr_employment_type').value = '';
   $('pr_contract_end').value = '';
+  $('pr_fixed_amount').value = '';
+  $('pr_prorate').checked = true;
   togglePrContractEnd();
   $('payRateMsg').textContent = '';
   loadSettingsHistoryInModal(id);
@@ -493,6 +496,7 @@ async function saveEmployee() {
         payload.contract_months = Number($('f_contract_months').value) || null;
         payload.contract_rate = Number($('f_contract_rate').value) || 100;
         payload.contract_fixed_amount = Number($('f_contract_fixed_amount').value) || null;
+        payload.contract_prorate = $('f_contract_prorate').checked;
       }
       const res = await fetch(`${apiBase()}/api/hr_employees`, {
         method: 'POST',
@@ -2198,7 +2202,7 @@ function togglePrContractEnd() {
 }
 
 async function loadSettingsHistoryInModal(employeeId) {
-  $('settingsHistoryTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:12px;">불러오는 중…</td></tr>`;
+  $('settingsHistoryTbody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:12px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?settings_history=1&employee_id=${employeeId}`, {
       headers: { 'X-HR-Password': hrPassword() },
@@ -2206,7 +2210,7 @@ async function loadSettingsHistoryInModal(employeeId) {
     const data = await res.json();
     const list = data.settings_history || [];
     if (list.length === 0) {
-      $('settingsHistoryTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:12px;">이력이 없습니다.</td></tr>`;
+      $('settingsHistoryTbody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:12px;">이력이 없습니다.</td></tr>`;
       return;
     }
     $('settingsHistoryTbody').innerHTML = list.map(s => `
@@ -2215,12 +2219,13 @@ async function loadSettingsHistoryInModal(employeeId) {
         <td class="num">${s.pay_rate != null ? Math.round(s.pay_rate * 100) + '%' : '-'}</td>
         <td>${esc(s.employment_type || '-')}</td>
         <td>${esc(s.contract_end_date || '-')}</td>
+        <td>${s.fixed_monthly_amount ? fmt(s.fixed_monthly_amount) + '원(정액)' : '-'}${s.prorate_partial_month === false ? ' / 일할계산 안함' : ''}</td>
         <td>${esc(s.note || '-')}</td>
         <td><a class="hr-edit-link" onclick="deleteSettingsHistoryRow('${s.id}', '${employeeId}')">삭제</a></td>
       </tr>
     `).join('');
   } catch (e) {
-    $('settingsHistoryTbody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:12px;">불러오기 실패</td></tr>`;
+    $('settingsHistoryTbody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:12px;">불러오기 실패</td></tr>`;
   }
 }
 
@@ -2256,6 +2261,9 @@ async function savePayRate() {
   };
   if (employmentType) payload.employment_type = employmentType;
   if (employmentType === '계약직' && contractEnd) payload.contract_end_date = contractEnd;
+  const fixedAmount = $('pr_fixed_amount').value;
+  payload.fixed_monthly_amount = fixedAmount ? Number(fixedAmount) : null;
+  payload.prorate_partial_month = $('pr_prorate').checked;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll`, {
       method: 'POST',
@@ -2270,6 +2278,8 @@ async function savePayRate() {
     $('pr_rate').value = '';
     $('pr_employment_type').value = '';
     $('pr_contract_end').value = '';
+    $('pr_fixed_amount').value = '';
+    $('pr_prorate').checked = true;
     togglePrContractEnd();
     loadSettingsHistoryInModal(empId);
     loadEmployees();
