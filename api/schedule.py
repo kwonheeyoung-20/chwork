@@ -205,6 +205,41 @@ class handler(BaseHTTPRequestHandler):
                 rest_request("PATCH", f"tax_schedule_occurrences?id=eq.{occ_id}", body={"status": "skipped"})
                 return self._send(200, {"ok": True})
 
+            # 엑셀 업로드 등 일괄 등록: {"items": [{title, anchor_date, recurrence_type, ...}, ...]}
+            if isinstance(payload, dict) and "items" in payload:
+                items = payload.get("items") or []
+                if not items:
+                    return self._send(400, {"error": "items가 비어있습니다"})
+                valid = []
+                skipped = []
+                for idx, it in enumerate(items):
+                    title = it.get("title")
+                    anchor_date = it.get("anchor_date")
+                    recurrence_type = it.get("recurrence_type", "once")
+                    if not title or not anchor_date or recurrence_type not in ("once", "weekly", "monthly"):
+                        skipped.append(f"{idx + 1}번째 항목({title or '제목없음'}): 필수값 누락 또는 형식 오류")
+                        continue
+                    valid.append({
+                        "title": title,
+                        "category": it.get("category"),
+                        "recurrence_type": recurrence_type,
+                        "interval_value": int(it.get("interval_value") or 1),
+                        "anchor_date": anchor_date,
+                        "day_mode": it.get("day_mode", "fixed"),
+                        "end_date": it.get("end_date") or None,
+                        "reminder_days_before": int(it.get("reminder_days_before") or 5),
+                        "note": it.get("note"),
+                        "active": True,
+                    })
+                if not valid:
+                    return self._send(400, {"error": "유효한 항목이 없습니다", "skipped": skipped})
+                created = rest_request("POST", "tax_schedule_tasks", body=valid, prefer="return=representation")
+                _ensure_occurrences_generated()
+                result = {"count": len(created) if created else 0}
+                if skipped:
+                    result["skipped"] = skipped
+                return self._send(201, result)
+
             # 기본: 새 업무 등록
             title = payload.get("title")
             anchor_date = payload.get("anchor_date")
