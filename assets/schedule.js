@@ -39,6 +39,7 @@ function showMain() {
   loadReminderBanner();
   loadTasks();
   loadOccurrences();
+  loadCalendar();
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -166,6 +167,19 @@ function dDayBadge(dueDateStr) {
   return `<span class="sch-dday ${cls}">${label}</span>`;
 }
 
+const KOR_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+function weekdayLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return KOR_WEEKDAYS[d.getDay()];
+}
+
+function weekdayClass(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  return day === 0 ? 'sun' : (day === 6 ? 'sat' : '');
+}
+
 function renderOccurrences(list) {
   $('occCount').textContent = `총 ${list.length}건`;
   const tbody = $('occTbody');
@@ -204,7 +218,7 @@ function renderOccurrences(list) {
           완료
         </label>
       </td>
-      <td>${esc(o.due_date)} ${dDayBadge(o.due_date)}</td>
+      <td>${esc(o.due_date)} <span style="font-size:11px; color:${weekdayClass(o.due_date) === 'sun' ? 'var(--red)' : (weekdayClass(o.due_date) === 'sat' ? '#3366cc' : 'var(--text-muted)')};">(${weekdayLabel(o.due_date)})</span> ${dDayBadge(o.due_date)}</td>
       <td>${esc(task.title || '-')}</td>
       <td>${esc(task.category || '-')}</td>
       <td>${recurrenceLabel(task)}</td>
@@ -253,6 +267,7 @@ async function setCompleteStatus(occId, done, note) {
     if (!res.ok) throw new Error('failed');
     loadOccurrences();
     loadReminderBanner();
+    loadCalendar();
   } catch (e) {
     alert('처리 중 오류가 발생했습니다.');
     loadOccurrences();
@@ -270,6 +285,7 @@ async function skipOccurrence(occId) {
     if (!res.ok) throw new Error('failed');
     loadOccurrences();
     loadReminderBanner();
+    loadCalendar();
   } catch (e) {
     alert('처리 중 오류가 발생했습니다.');
   }
@@ -285,6 +301,7 @@ async function deleteOccurrence(occId) {
     if (!res.ok) throw new Error('failed');
     loadOccurrences();
     loadReminderBanner();
+    loadCalendar();
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
   }
@@ -372,6 +389,7 @@ async function toggleTaskActive(id, newActive) {
     loadTasks();
     loadOccurrences();
     loadReminderBanner();
+    loadCalendar();
   } catch (e) {
     alert('처리 중 오류가 발생했습니다.');
   }
@@ -388,6 +406,7 @@ async function deleteTask(id, title) {
     loadTasks();
     loadOccurrences();
     loadReminderBanner();
+    loadCalendar();
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
   }
@@ -530,6 +549,7 @@ async function saveTask() {
     loadTasks();
     loadOccurrences();
     loadReminderBanner();
+    loadCalendar();
   } catch (e) {
     $('taskModalMsg').textContent = '저장 중 오류가 발생했습니다.';
   } finally {
@@ -654,9 +674,116 @@ function handleScheduleUploadFile(event) {
       loadTasks();
       loadOccurrences();
       loadReminderBanner();
+      loadCalendar();
     } catch (err) {
       alert('엑셀 업로드 중 오류가 발생했습니다: ' + (err.message || ''));
     }
   };
   reader.readAsArrayBuffer(file);
+}
+
+/* ── 달력 뷰 ── */
+let calYear, calMonth; // calMonth: 0-indexed (0=1월)
+
+function initCalendarState() {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth();
+}
+initCalendarState();
+
+function calPrevMonth() {
+  calMonth -= 1;
+  if (calMonth < 0) { calMonth = 11; calYear -= 1; }
+  loadCalendar();
+}
+
+function calNextMonth() {
+  calMonth += 1;
+  if (calMonth > 11) { calMonth = 0; calYear += 1; }
+  loadCalendar();
+}
+
+function calToday() {
+  initCalendarState();
+  loadCalendar();
+}
+
+async function loadCalendar() {
+  $('calMonthLabel').textContent = `${calYear}년 ${calMonth + 1}월`;
+
+  const monthStart = new Date(calYear, calMonth, 1);
+  const monthEnd = new Date(calYear, calMonth + 1, 0);
+  const fromStr = toISO(monthStart);
+  const toStr = toISO(monthEnd);
+
+  try {
+    const res = await fetch(`${apiBase()}/api/schedule?from=${fromStr}&to=${toStr}&status=all`, {
+      headers: authHeaders(),
+    });
+    if (handle401(res)) return;
+    const data = await res.json();
+    renderCalendar(data.occurrences || [], monthStart, monthEnd);
+  } catch (e) {
+    $('calGrid').innerHTML = `<div style="grid-column:1/-1; text-align:center; color:var(--red); padding:16px;">달력 불러오기 실패</div>`;
+  }
+}
+
+function renderCalendar(occurrences, monthStart, monthEnd) {
+  const byDate = {};
+  occurrences.forEach(o => {
+    if (!byDate[o.due_date]) byDate[o.due_date] = [];
+    byDate[o.due_date].push(o);
+  });
+
+  const todayStr = toISO(new Date());
+  const firstWeekday = monthStart.getDay(); // 0=일
+  const daysInMonth = monthEnd.getDate();
+
+  let html = '';
+  // 이번달 1일 이전 빈칸
+  for (let i = 0; i < firstWeekday; i++) {
+    html += `<div class="sch-cal-cell empty"></div>`;
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateObj = new Date(calYear, calMonth, day);
+    const dateStr = toISO(dateObj);
+    const weekday = dateObj.getDay();
+    const isToday = dateStr === todayStr;
+    const dayItems = (byDate[dateStr] || []).slice().sort((a, b) => (a.status === 'done' ? 1 : 0) - (b.status === 'done' ? 1 : 0));
+
+    const maxShow = 3;
+    const itemsHtml = dayItems.slice(0, maxShow).map(o => {
+      const task = o.tax_schedule_tasks || {};
+      let cls = 'normal';
+      if (o.status === 'done') cls = 'done';
+      else if (o.status === 'skipped') cls = 'skipped';
+      else {
+        const diff = Math.round((dateObj - new Date(new Date().setHours(0,0,0,0))) / (1000*60*60*24));
+        if (diff < 0) cls = 'overdue';
+        else if (diff <= 7) cls = 'soon';
+      }
+      return `<div class="sch-cal-item ${cls}" title="${esc(task.title || '')}">${esc(task.title || '')}</div>`;
+    }).join('');
+    const moreHtml = dayItems.length > maxShow ? `<div class="sch-cal-more">+${dayItems.length - maxShow}개 더</div>` : '';
+
+    const dayNumClass = weekday === 0 ? 'sun' : (weekday === 6 ? 'sat' : '');
+    html += `
+      <div class="sch-cal-cell ${isToday ? 'today' : ''}">
+        <div class="sch-cal-daynum ${dayNumClass}">${day}</div>
+        ${itemsHtml}
+        ${moreHtml}
+      </div>
+    `;
+  }
+
+  // 마지막주 뒤 빈칸 (7의 배수로 맞춰서 그리드 깨지지 않도록)
+  const totalCells = firstWeekday + daysInMonth;
+  const remain = (7 - (totalCells % 7)) % 7;
+  for (let i = 0; i < remain; i++) {
+    html += `<div class="sch-cal-cell empty"></div>`;
+  }
+
+  $('calGrid').innerHTML = html;
 }
