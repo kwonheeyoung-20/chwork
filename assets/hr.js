@@ -102,6 +102,7 @@ const MENU_GROUPS = {
       { id: 'settlement', label: '퇴사자 정산' },
     ],
   },
+  contacts: { label: null, tabs: [{ id: 'contacts', label: '거래처 연락처' }] },
 };
 
 let currentMenuGroup = 'home';
@@ -113,6 +114,7 @@ function switchMenuGroup(group) {
   // 사이드바 활성 표시
   document.querySelectorAll('.nav-sub a').forEach(a => a.classList.toggle('active', a.textContent === g.label));
   $('navHrHome').classList.toggle('active', group === 'home');
+  $('navContacts').classList.toggle('active', group === 'contacts');
 
   // 상단 탭바 렌더링
   const bar = $('hrTabBar');
@@ -140,6 +142,7 @@ function switchHrTab(name) {
   $('tab-otherpay').style.display = name === 'otherpay' ? 'block' : 'none';
   $('tab-annual').style.display = name === 'annual' ? 'block' : 'none';
   $('tab-contracts').style.display = name === 'contracts' ? 'block' : 'none';
+  $('tab-contacts').style.display = name === 'contacts' ? 'block' : 'none';
   if (name === 'pension') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
   if (name === 'payroll') {
@@ -163,6 +166,9 @@ function switchHrTab(name) {
   }
   if (name === 'contracts') {
     populateYearSelect('contractYear');
+  }
+  if (name === 'contacts') {
+    loadContacts();
   }
 }
 
@@ -2837,5 +2843,166 @@ async function downloadContractDataExcel() {
   } finally {
     btn.disabled = false;
     btn.textContent = original;
+  }
+}
+
+/* ── 거래처 연락처 관리 ── */
+let contactCache = [];
+let editingContactId = null;
+
+async function loadContacts() {
+  const tbody = $('contactTbody');
+  tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/contacts`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (res.status === 401) {
+      sessionStorage.removeItem('chwork_hr_pw');
+      $('loginPanel').style.display = 'block';
+      $('hrMain').style.display = 'none';
+      return;
+    }
+    const data = await res.json();
+    contactCache = data.contacts || [];
+    populateContactCategoryFilter();
+    renderContacts();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function populateContactCategoryFilter() {
+  const cats = [...new Set(contactCache.map(c => c.category).filter(Boolean))].sort();
+  const sel = $('contactCategoryFilter');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">전체</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  sel.value = current;
+}
+
+function renderContacts() {
+  const categoryFilter = $('contactCategoryFilter').value;
+  const search = $('contactSearch').value.trim().toLowerCase();
+
+  let list = contactCache;
+  if (categoryFilter) list = list.filter(c => (c.category || '') === categoryFilter);
+  if (search) {
+    list = list.filter(c =>
+      (c.company_name || '').toLowerCase().includes(search) ||
+      (c.contact_name || '').toLowerCase().includes(search) ||
+      (c.phone || '').toLowerCase().includes(search)
+    );
+  }
+
+  $('contactCount').textContent = `총 ${list.length}건`;
+  const tbody = $('contactTbody');
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 거래처가 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(c => `
+    <tr>
+      <td>${esc(c.company_name)}</td>
+      <td>${esc(c.category || '-')}</td>
+      <td>${esc(c.contact_name || '-')}</td>
+      <td>${esc(c.phone || '-')}</td>
+      <td>${esc(c.email || '-')}</td>
+      <td>${esc(c.address || '-')}</td>
+      <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
+      <td>
+        <a class="hr-edit-link" onclick="editContact('${c.id}')">수정</a>
+        · <a class="hr-edit-link" onclick="deleteContact('${c.id}', '${esc(c.company_name)}')">삭제</a>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openContactModal() {
+  editingContactId = null;
+  $('contactModalTitle').textContent = '거래처 추가';
+  ['company_name', 'category', 'contact_name', 'phone', 'email', 'address', 'note'].forEach(f => $('ct_' + f).value = '');
+  $('contactModalMsg').textContent = '';
+  $('contactSaveBtn').disabled = false;
+  $('contactModal').style.display = 'flex';
+}
+
+function editContact(id) {
+  const c = contactCache.find(x => x.id === id);
+  if (!c) return;
+  editingContactId = id;
+  $('contactModalTitle').textContent = `거래처 수정 — ${c.company_name}`;
+  $('ct_company_name').value = c.company_name || '';
+  $('ct_category').value = c.category || '';
+  $('ct_contact_name').value = c.contact_name || '';
+  $('ct_phone').value = c.phone || '';
+  $('ct_email').value = c.email || '';
+  $('ct_address').value = c.address || '';
+  $('ct_note').value = c.note || '';
+  $('contactModalMsg').textContent = '';
+  $('contactSaveBtn').disabled = false;
+  $('contactModal').style.display = 'flex';
+}
+
+function closeContactModal() {
+  $('contactModal').style.display = 'none';
+}
+
+async function saveContact() {
+  const btn = $('contactSaveBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+
+  const payload = {
+    company_name: $('ct_company_name').value.trim(),
+    category: $('ct_category').value.trim() || null,
+    contact_name: $('ct_contact_name').value.trim() || null,
+    phone: $('ct_phone').value.trim() || null,
+    email: $('ct_email').value.trim() || null,
+    address: $('ct_address').value.trim() || null,
+    note: $('ct_note').value.trim() || null,
+  };
+
+  if (!payload.company_name) {
+    $('contactModalMsg').textContent = '업체명은 필수입니다.';
+    btn.disabled = false;
+    return;
+  }
+
+  try {
+    let res;
+    if (editingContactId) {
+      res = await fetch(`${apiBase()}/api/contacts?id=${editingContactId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+        body: JSON.stringify(payload),
+      });
+    } else {
+      res = await fetch(`${apiBase()}/api/contacts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+        body: JSON.stringify(payload),
+      });
+    }
+    if (!res.ok) throw new Error('save failed');
+    closeContactModal();
+    loadContacts();
+  } catch (e) {
+    $('contactModalMsg').textContent = '저장 중 오류가 발생했습니다.';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteContact(id, name) {
+  if (!confirm(`"${name}" 거래처를 삭제하시겠습니까?`)) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/contacts?id=${id}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('delete failed');
+    loadContacts();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
   }
 }
