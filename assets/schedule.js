@@ -104,7 +104,14 @@ async function loadReminderBanner() {
 }
 
 /* ── 기간 프리셋 ── */
-function toISO(d) { return d.toISOString().slice(0, 10); }
+function toISO(d) {
+  // 로컬 날짜 기준으로 YYYY-MM-DD 생성 (toISOString()은 UTC 변환이라
+  // 한국 시간대에서는 날짜가 하루 밀리는 문제가 있어 직접 조립합니다)
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 function setPresetRange(type) {
   const now = new Date();
@@ -528,4 +535,128 @@ async function saveTask() {
   } finally {
     btn.disabled = false;
   }
+}
+
+/* ── 엑셀 양식 다운로드 / 업로드 (일괄 등록) ── */
+function downloadScheduleTemplate() {
+  const headers = ['제목', '분류', '반복유형', '반복간격(사용자지정일때만)', '기준일자', '말일고정(예/아니오)', '종료일(선택)', '사전알림일수', '비고'];
+  const example = [
+    ['원천세 신고·납부', '원천세', '매월', '', '2026-01-10', '아니오', '', '5', '매월 10일까지'],
+    ['재고실사', '기타', '사용자지정', '2', '2026-01-15', '아니오', '', '3', '2개월마다 실시'],
+    ['창립기념일 행사 준비', '기타', '일회성', '', '2026-09-01', '아니오', '', '7', ''],
+  ];
+  const guide = [
+    ['업무일정 엑셀 업로드 양식 — 작성 안내'],
+    [''],
+    ['1. 반복유형에 들어갈 수 있는 값: 일회성, 매주, 매월, 분기, 반기, 매년, 사용자지정'],
+    ['2. 반복간격은 "사용자지정"일 때만 숫자로 입력 (몇 개월마다인지). "매주"를 여러 주 간격으로 하고 싶을 때도 이 칸에 숫자 입력 (비워두면 1)'],
+    ['3. 기준일자 — 일회성은 마감일 그 자체, 매주는 그 날짜의 요일이 매주 반복 기준, 매월/분기/반기/매년/사용자지정은 그 날짜의 "일(day)"이 매번 반복됩니다'],
+    ['4. 날짜는 YYYY-MM-DD 형식으로 입력해주세요 (예: 2026-01-10)'],
+    ['5. 말일고정에 "예"를 입력하면 매번 그 달의 말일로 계산됩니다 (2월은 28/29일, 4월은 30일 등) — 월 단위 반복에만 적용됩니다'],
+    ['6. 사전알림일수를 비워두면 5일이 기본 적용됩니다'],
+    ['7. "일정목록" 시트의 1행(제목줄)은 그대로 두고, 2행부터 실제 데이터를 입력해주세요'],
+  ];
+  const wsData = XLSX.utils.aoa_to_sheet([headers, ...example]);
+  wsData['!cols'] = headers.map(() => ({ wch: 20 }));
+  const wsGuide = XLSX.utils.aoa_to_sheet(guide);
+  wsGuide['!cols'] = [{ wch: 90 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsData, '일정목록');
+  XLSX.utils.book_append_sheet(wb, wsGuide, '작성안내');
+  XLSX.writeFile(wb, '업무일정_업로드양식.xlsx');
+}
+
+function triggerScheduleUpload() {
+  $('scheduleUploadInput').click();
+}
+
+function mapExcelRecurrence(typeLabel, intervalRaw) {
+  const t = String(typeLabel || '').trim();
+  const interval = Number(intervalRaw) || 1;
+  if (t === '일회성') return { type: 'once', interval: 1 };
+  if (t === '매주') return { type: 'weekly', interval };
+  if (t === '매월') return { type: 'monthly', interval: 1 };
+  if (t === '분기') return { type: 'monthly', interval: 3 };
+  if (t === '반기') return { type: 'monthly', interval: 6 };
+  if (t === '매년') return { type: 'monthly', interval: 12 };
+  if (t === '사용자지정') return { type: 'monthly', interval };
+  return null;
+}
+
+function normalizeExcelDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return toISO(v);
+  const s = String(v).trim();
+  const m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/);
+  if (!m) return null;
+  return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+}
+
+function handleScheduleUploadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = ''; // 같은 파일 다시 선택해도 change 이벤트 발생하도록
+
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const wb = XLSX.read(data, { type: 'array', cellDates: true });
+      const sheet = wb.Sheets['일정목록'] || wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
+
+      const items = [];
+      const errors = [];
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || r.length === 0 || !r[0]) continue; // 빈 줄은 건너뜀
+        const [title, category, typeLabel, intervalRaw, anchorRaw, lastDayRaw, endRaw, reminderRaw, note] = r;
+
+        const mapped = mapExcelRecurrence(typeLabel, intervalRaw);
+        if (!mapped) { errors.push(`${i + 1}행: 반복유형 값을 확인해주세요 ("${typeLabel}")`); continue; }
+        const anchorDate = normalizeExcelDate(anchorRaw);
+        if (!anchorDate) { errors.push(`${i + 1}행: 기준일자를 확인해주세요 ("${anchorRaw}")`); continue; }
+
+        items.push({
+          title: String(title).trim(),
+          category: category ? String(category).trim() : null,
+          recurrence_type: mapped.type,
+          interval_value: mapped.interval,
+          anchor_date: anchorDate,
+          day_mode: String(lastDayRaw || '').trim() === '예' ? 'last_day' : 'fixed',
+          end_date: normalizeExcelDate(endRaw) || null,
+          reminder_days_before: reminderRaw ? Number(reminderRaw) : 5,
+          note: note ? String(note).trim() : null,
+        });
+      }
+
+      if (items.length === 0) {
+        alert('업로드할 유효한 일정이 없습니다.' + (errors.length ? '\n\n' + errors.join('\n') : ''));
+        return;
+      }
+      let confirmMsg = `${items.length}건을 등록하시겠습니까?`;
+      if (errors.length > 0) confirmMsg += `\n\n(형식 오류로 제외되는 ${errors.length}건)\n` + errors.join('\n');
+      if (!confirm(confirmMsg)) return;
+
+      const res = await fetch(`${apiBase()}/api/schedule`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({ items }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'upload failed');
+
+      let msg = `${result.count}건 등록되었습니다.`;
+      if (result.skipped && result.skipped.length > 0) {
+        msg += `\n\n서버에서 제외된 항목(${result.skipped.length}건):\n` + result.skipped.join('\n');
+      }
+      alert(msg);
+      loadTasks();
+      loadOccurrences();
+      loadReminderBanner();
+    } catch (err) {
+      alert('엑셀 업로드 중 오류가 발생했습니다: ' + (err.message || ''));
+    }
+  };
+  reader.readAsArrayBuffer(file);
 }
