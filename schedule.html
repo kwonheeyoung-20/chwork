@@ -23,6 +23,29 @@
     .sch-dday.soon { background:#fff4e5; color:#8a5b00; }
     .sch-dday.normal { background:var(--bg); color:var(--text-muted); }
     .sch-filter-bar { display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap; }
+
+    .sch-cal-header { display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:14px; }
+    .sch-cal-header h3 { font-size:16px; min-width:120px; text-align:center; }
+    .sch-cal-nav-btn { background:var(--bg); border:0.5px solid var(--border-strong); border-radius:var(--radius-sm); width:30px; height:30px; cursor:pointer; font-size:14px; color:var(--text-secondary); }
+    .sch-cal-nav-btn:hover { background:var(--surface); }
+    .sch-cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+    .sch-cal-weekday { text-align:center; font-size:12px; font-weight:600; color:var(--text-muted); padding:4px 0 8px; }
+    .sch-cal-weekday.sun { color:var(--red); }
+    .sch-cal-weekday.sat { color:#3366cc; }
+    .sch-cal-cell { min-height:88px; border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:6px; background:var(--surface); display:flex; flex-direction:column; gap:2px; }
+    .sch-cal-cell.empty { background:transparent; border-color:transparent; }
+    .sch-cal-cell.today { border:1.5px solid var(--red); background:#fff8f7; }
+    .sch-cal-daynum { font-size:12px; font-weight:600; color:var(--text-secondary); }
+    .sch-cal-daynum.sun { color:var(--red); }
+    .sch-cal-daynum.sat { color:#3366cc; }
+    .sch-cal-cell.today .sch-cal-daynum { color:var(--red); font-weight:800; }
+    .sch-cal-item { font-size:10.5px; padding:1px 5px; border-radius:4px; line-height:1.5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sch-cal-item.overdue { background:#fdecea; color:var(--red); }
+    .sch-cal-item.soon { background:#fff4e5; color:#8a5b00; }
+    .sch-cal-item.normal { background:var(--bg); color:var(--text-secondary); }
+    .sch-cal-item.done { background:var(--green-light); color:var(--green); text-decoration:line-through; }
+    .sch-cal-item.skipped { background:var(--bg); color:var(--text-muted); text-decoration:line-through; }
+    .sch-cal-more { font-size:10px; color:var(--text-muted); padding-left:5px; }
   </style>
 </head>
 <body>
@@ -33,7 +56,6 @@
     <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
     <nav class="nav">
       <a href="index.html">대시보드</a>
-      <a href="corporate-profit.html">기업손익분석</a>
       <a href="hr.html">인사/급여관리</a>
       <a class="active" href="schedule.html">업무 일정관리</a>
       <a href="#">계약/증빙관리</a>
@@ -69,6 +91,25 @@
 
         <!-- 알림 배너 -->
         <div id="reminderBannerWrap"></div>
+
+        <section class="panel">
+          <div class="sch-cal-header">
+            <button class="sch-cal-nav-btn" onclick="calPrevMonth()">◀</button>
+            <h3 id="calMonthLabel">2026년 8월</h3>
+            <button class="sch-cal-nav-btn" onclick="calNextMonth()">▶</button>
+            <button class="secondary" onclick="calToday()" style="margin-left:6px;">오늘</button>
+          </div>
+          <div class="sch-cal-grid" id="calWeekdayRow">
+            <div class="sch-cal-weekday sun">일</div>
+            <div class="sch-cal-weekday">월</div>
+            <div class="sch-cal-weekday">화</div>
+            <div class="sch-cal-weekday">수</div>
+            <div class="sch-cal-weekday">목</div>
+            <div class="sch-cal-weekday">금</div>
+            <div class="sch-cal-weekday sat">토</div>
+          </div>
+          <div class="sch-cal-grid" id="calGrid" style="margin-top:4px;"></div>
+        </section>
 
         <section class="panel">
           <div class="panel-header">
