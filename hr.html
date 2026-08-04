@@ -28,13 +28,13 @@
     <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
     <nav class="nav">
       <a href="index.html">대시보드</a>
-      <a href="corporate-profit.html">기업손익분석</a>
       <a id="navHrHome" class="active" href="hr.html" onclick="switchMenuGroup('home'); return false;">인사/급여관리</a>
       <div class="nav-sub">
         <a onclick="switchMenuGroup('payroll')">급여관리</a>
         <a onclick="switchMenuGroup('pension')">퇴직급여관리</a>
       </div>
       <a href="schedule.html">업무 일정관리</a>
+      <a id="navContacts" onclick="switchMenuGroup('contacts'); return false;">거래처 연락처</a>
       <a href="#">계약/증빙관리</a>
       <a href="#">월간 보고서</a>
       <a href="#">설정</a>
@@ -580,6 +580,38 @@
           <div id="contractsMsg" class="hr-msg"></div>
         </section>
 
+        <section class="panel" id="tab-contacts" style="display:none;">
+          <div class="panel-header">
+            <h2>거래처 연락처 <span id="contactCount" class="hr-count"></span></h2>
+            <button class="primary" onclick="openContactModal()">+ 거래처 추가</button>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            세무사무소·노무사·은행·보험사 등 자주 연락하는 업체 정보를 모아둡니다.
+          </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">유형:</label>
+            <select id="contactCategoryFilter" class="hr-input" style="width:150px;" onchange="renderContacts()">
+              <option value="">전체</option>
+            </select>
+            <label style="font-size:13px; color:var(--text-secondary);">검색:</label>
+            <input id="contactSearch" class="hr-input" style="width:220px;" placeholder="업체명·담당자·전화번호" oninput="renderContacts()">
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="contactTable">
+              <thead>
+                <tr>
+                  <th>업체명</th><th>유형</th><th>담당자</th><th>전화번호</th><th>이메일</th><th>주소</th><th>비고</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="contactTbody">
+                <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
       </div>
 
     </div>
@@ -902,6 +934,32 @@
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:20px;">
       <button class="secondary" onclick="closePayslipModal()">닫기</button>
       <button class="primary" onclick="printPayslip()">인쇄</button>
+    </div>
+  </div>
+</div>
+
+<!-- 거래처 연락처 추가/수정 모달 -->
+<div id="contactModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:480px;">
+    <h2 id="contactModalTitle">거래처 추가</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>업체명 <input id="ct_company_name" class="hr-input"></label>
+      <label>유형 <input id="ct_category" class="hr-input" list="contactCategoryList" placeholder="예: 세무사무소, 노무사, 은행, 보험사">
+        <datalist id="contactCategoryList">
+          <option value="세무사무소"><option value="노무사"><option value="은행"><option value="보험사">
+          <option value="4대보험공단"><option value="IT지원"><option value="사무용품"><option value="기타">
+        </datalist>
+      </label>
+      <label>담당자명 <input id="ct_contact_name" class="hr-input"></label>
+      <label>전화번호 <input id="ct_phone" class="hr-input" placeholder="예: 02-1234-5678"></label>
+      <label>이메일 <input id="ct_email" class="hr-input" type="email"></label>
+      <label>주소 <input id="ct_address" class="hr-input"></label>
+      <label>비고 <input id="ct_note" class="hr-input"></label>
+    </div>
+    <div id="contactModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeContactModal()">취소</button>
+      <button class="primary" id="contactSaveBtn" onclick="saveContact()">저장</button>
     </div>
   </div>
 </div>
