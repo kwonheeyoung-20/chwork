@@ -2478,6 +2478,20 @@ function openPayslipModal(idx) {
     $('ps_calc_detail_wrap').style.display = 'none';
   }
 
+  // 통상시급 산정시간(급여명세서 표기용) — 조정 여부와 무관하게 항상 표시.
+  // 재직자 조정이 없으면(before===after) 자동으로 209시간이 나옵니다.
+  // 조정이 있으면 (기본급+식대) 비율만큼 209시간에서 환산된 시간이 나옵니다.
+  {
+    const beforeBase = (p.base_pay_before != null) ? Number(p.base_pay_before) : (Number(p.base_pay) || 0);
+    const beforeMeal = (p.meal_allowance_before != null) ? Number(p.meal_allowance_before) : (Number(p.meal_allowance) || 0);
+    const afterBase = Number(p.base_pay) || 0;
+    const afterMeal = Number(p.meal_allowance) || 0;
+    const beforeSum = beforeBase + beforeMeal;
+    const afterSum = afterBase + afterMeal;
+    const normalWageHours = beforeSum > 0 ? 209 * (afterSum / beforeSum) : 209;
+    $('ps_normal_wage_hours').textContent = normalWageHours.toFixed(2) + '시간';
+  }
+
   $('payslipModal').style.display = 'flex';
 }
 
