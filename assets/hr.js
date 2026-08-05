@@ -3408,7 +3408,8 @@ function renderContractDocs() {
 function openContractDocModal() {
   editingContractDocId = null;
   $('contractDocModalTitle').textContent = '서류 업로드';
-  ['doc_type', 'vendor_name', 'contract_title', 'start_date', 'end_date', 'note'].forEach(f => $('cd_' + f).value = '');
+  ['vendor_name', 'contract_title', 'start_date', 'end_date', 'note'].forEach(f => $('cd_' + f).value = '');
+  $('cd_doc_type').value = '계약서[일반]';
   $('cd_reminder_days').value = '14';
   $('cd_auto_renew').checked = false;
   $('cd_file').value = '';
