@@ -103,6 +103,8 @@ const MENU_GROUPS = {
     ],
   },
   contacts: { label: null, tabs: [{ id: 'contacts', label: '거래처 연락처' }] },
+  credentials: { label: null, tabs: [{ id: 'credentials', label: '사이트 계정관리' }] },
+  contractdocs: { label: null, tabs: [{ id: 'contractdocs', label: '계약/증빙관리' }] },
 };
 
 let currentMenuGroup = 'home';
@@ -115,6 +117,8 @@ function switchMenuGroup(group) {
   document.querySelectorAll('.nav-sub a').forEach(a => a.classList.toggle('active', a.textContent === g.label));
   $('navHrHome').classList.toggle('active', group === 'home');
   $('navContacts').classList.toggle('active', group === 'contacts');
+  $('navCredentials').classList.toggle('active', group === 'credentials');
+  $('navContractDocs').classList.toggle('active', group === 'contractdocs');
 
   // 상단 탭바 렌더링
   const bar = $('hrTabBar');
@@ -143,6 +147,8 @@ function switchHrTab(name) {
   $('tab-annual').style.display = name === 'annual' ? 'block' : 'none';
   $('tab-contracts').style.display = name === 'contracts' ? 'block' : 'none';
   $('tab-contacts').style.display = name === 'contacts' ? 'block' : 'none';
+  $('tab-credentials').style.display = name === 'credentials' ? 'block' : 'none';
+  $('tab-contractdocs').style.display = name === 'contractdocs' ? 'block' : 'none';
   if (name === 'pension') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
   if (name === 'payroll') {
@@ -169,6 +175,12 @@ function switchHrTab(name) {
   }
   if (name === 'contacts') {
     loadContacts();
+  }
+  if (name === 'credentials') {
+    loadCredentials();
+  }
+  if (name === 'contractdocs') {
+    loadContractDocs();
   }
 }
 
@@ -3002,6 +3014,467 @@ async function deleteContact(id, name) {
     });
     if (!res.ok) throw new Error('delete failed');
     loadContacts();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 사이트 계정관리 ── */
+let credCache = [];
+let editingCredentialId = null;
+let credPasswordsRevealed = false;
+
+async function loadCredentials() {
+  const tbody = $('credTbody');
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/credentials`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (res.status === 401) {
+      sessionStorage.removeItem('chwork_hr_pw');
+      $('loginPanel').style.display = 'block';
+      $('hrMain').style.display = 'none';
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패 (암호화 설정을 확인해주세요)')}</td></tr>`;
+      return;
+    }
+    credCache = data.credentials || [];
+    populateCredCategoryFilter();
+    renderCredentials();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function populateCredCategoryFilter() {
+  const cats = [...new Set(credCache.map(c => c.category).filter(Boolean))].sort();
+  const sel = $('credCategoryFilter');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">전체</option>' + cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  sel.value = current;
+}
+
+function renderCredentials() {
+  const categoryFilter = $('credCategoryFilter').value;
+  const search = $('credSearch').value.trim().toLowerCase();
+
+  let list = credCache;
+  if (categoryFilter) list = list.filter(c => (c.category || '') === categoryFilter);
+  if (search) {
+    list = list.filter(c =>
+      (c.site_name || '').toLowerCase().includes(search) ||
+      (c.username || '').toLowerCase().includes(search)
+    );
+  }
+
+  $('credCount').textContent = `총 ${list.length}건`;
+  const tbody = $('credTbody');
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 계정이 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(c => `
+    <tr data-cred-id="${c.id}">
+      <td>${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.site_name)}</a>` : esc(c.site_name)}</td>
+      <td>${esc(c.category || '-')}</td>
+      <td>${esc(c.username || '-')}</td>
+      <td>
+        <span class="cred-pw-masked">${c.password ? '••••••••' : '-'}</span>
+        <span class="cred-pw-plain" style="display:none;">${esc(c.password || '-')}</span>
+        ${c.password ? `<a class="hr-edit-link" style="margin-left:6px;" onclick="toggleRowPassword(this)">보기</a>` : ''}
+      </td>
+      <td>${esc(c.cert_type || '-')}</td>
+      <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
+      <td>
+        <a class="hr-edit-link" onclick="editCredential('${c.id}')">수정</a>
+        · <a class="hr-edit-link" onclick="deleteCredential('${c.id}', '${esc(c.site_name)}')">삭제</a>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function toggleRowPassword(linkEl) {
+  const td = linkEl.closest('td');
+  const masked = td.querySelector('.cred-pw-masked');
+  const plain = td.querySelector('.cred-pw-plain');
+  const showing = plain.style.display !== 'none';
+  masked.style.display = showing ? 'inline' : 'none';
+  plain.style.display = showing ? 'none' : 'inline';
+  linkEl.textContent = showing ? '보기' : '숨기기';
+}
+
+function toggleCredentialPasswordVisibility() {
+  const input = $('cr_password');
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function openCredentialModal() {
+  editingCredentialId = null;
+  $('credentialModalTitle').textContent = '계정 추가';
+  ['site_name', 'url', 'category', 'username', 'password', 'cert_type', 'note'].forEach(f => $('cr_' + f).value = '');
+  $('cr_password').type = 'password';
+  $('credentialModalMsg').textContent = '';
+  $('credentialSaveBtn').disabled = false;
+  $('credentialModal').style.display = 'flex';
+}
+
+function editCredential(id) {
+  const c = credCache.find(x => x.id === id);
+  if (!c) return;
+  editingCredentialId = id;
+  $('credentialModalTitle').textContent = `계정 수정 — ${c.site_name}`;
+  $('cr_site_name').value = c.site_name || '';
+  $('cr_url').value = c.url || '';
+  $('cr_category').value = c.category || '';
+  $('cr_username').value = c.username || '';
+  $('cr_password').value = c.password || '';
+  $('cr_password').type = 'password';
+  $('cr_cert_type').value = c.cert_type || '';
+  $('cr_note').value = c.note || '';
+  $('credentialModalMsg').textContent = '';
+  $('credentialSaveBtn').disabled = false;
+  $('credentialModal').style.display = 'flex';
+}
+
+function closeCredentialModal() {
+  $('credentialModal').style.display = 'none';
+}
+
+async function saveCredential() {
+  const btn = $('credentialSaveBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+
+  const payload = {
+    site_name: $('cr_site_name').value.trim(),
+    url: $('cr_url').value.trim() || null,
+    category: $('cr_category').value.trim() || null,
+    username: $('cr_username').value.trim() || null,
+    password: $('cr_password').value || null,
+    cert_type: $('cr_cert_type').value.trim() || null,
+    note: $('cr_note').value.trim() || null,
+  };
+
+  if (!payload.site_name) {
+    $('credentialModalMsg').textContent = '사이트명은 필수입니다.';
+    btn.disabled = false;
+    return;
+  }
+
+  try {
+    let res;
+    if (editingCredentialId) {
+      res = await fetch(`${apiBase()}/api/credentials?id=${editingCredentialId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+        body: JSON.stringify(payload),
+      });
+    } else {
+      res = await fetch(`${apiBase()}/api/credentials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+        body: JSON.stringify(payload),
+      });
+    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'save failed');
+    closeCredentialModal();
+    loadCredentials();
+  } catch (e) {
+    $('credentialModalMsg').textContent = '저장 중 오류가 발생했습니다: ' + (e.message || '');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteCredential(id, name) {
+  if (!confirm(`"${name}" 계정 정보를 삭제하시겠습니까?`)) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/credentials?id=${id}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('delete failed');
+    loadCredentials();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 계약/증빙관리 ── */
+let contractDocCache = [];
+let editingContractDocId = null;
+
+function cdDDayBadge(dueDateStr) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const due = new Date(dueDateStr + 'T00:00:00');
+  const diff = Math.round((due - today) / (1000 * 60 * 60 * 24));
+  let cls = 'normal';
+  let label = diff === 0 ? 'D-DAY' : (diff > 0 ? `D-${diff}` : `D+${Math.abs(diff)}`);
+  if (diff < 0) cls = 'overdue';
+  else if (diff <= 14) cls = 'soon';
+  return `<span class="sch-dday ${cls}">${label}</span>`;
+}
+
+async function loadContractDocsBanner() {
+  const wrap = $('contractDocsBannerWrap');
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs?upcoming=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.upcoming || [];
+    if (list.length === 0) { wrap.innerHTML = ''; return; }
+    const overdue = list.filter(x => x.days_left < 0);
+    const soon = list.filter(x => x.days_left >= 0);
+    let html = '';
+    if (overdue.length > 0) {
+      html += `<div class="sch-banner danger"><h3>⚠ 계약이 만료된 서류 (${overdue.length}건)</h3>`;
+      html += overdue.map(x => `
+        <div class="sch-banner-row">
+          <span><span class="sch-dday overdue">D+${Math.abs(x.days_left)}</span> ${esc(x.vendor_name || '-')} — ${esc(x.contract_title || x.doc_type || '')} (만료 ${esc(x.contract_end_date)})</span>
+          <a class="hr-edit-link" onclick="dismissContractAlert('${x.id}')">그만 알림</a>
+        </div>
+      `).join('');
+      html += `</div>`;
+    }
+    if (soon.length > 0) {
+      html += `<div class="sch-banner warn"><h3>🔔 만료가 다가오는 서류 (${soon.length}건)</h3>`;
+      html += soon.map(x => `
+        <div class="sch-banner-row">
+          <span><span class="sch-dday soon">D-${x.days_left}</span> ${esc(x.vendor_name || '-')} — ${esc(x.contract_title || x.doc_type || '')} (만료 ${esc(x.contract_end_date)})</span>
+          <a class="hr-edit-link" onclick="dismissContractAlert('${x.id}')">그만 알림</a>
+        </div>
+      `).join('');
+      html += `</div>`;
+    }
+    wrap.innerHTML = html;
+  } catch (e) {
+    wrap.innerHTML = '';
+  }
+}
+
+async function dismissContractAlert(id) {
+  if (!confirm('이 서류의 만료 알림을 그만 보시겠습니까? (서류 자체는 삭제되지 않습니다)')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'dismiss', id }),
+    });
+    if (!res.ok) throw new Error('failed');
+    loadContractDocsBanner();
+    loadContractDocs();
+  } catch (e) {
+    alert('처리 중 오류가 발생했습니다.');
+  }
+}
+
+async function loadContractDocs() {
+  const tbody = $('contractDocTbody');
+  tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  loadContractDocsBanner();
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (res.status === 401) {
+      sessionStorage.removeItem('chwork_hr_pw');
+      $('loginPanel').style.display = 'block';
+      $('hrMain').style.display = 'none';
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      return;
+    }
+    contractDocCache = data.documents || [];
+    populateContractDocTypeFilter();
+    renderContractDocs();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function populateContractDocTypeFilter() {
+  const types = [...new Set(contractDocCache.map(c => c.doc_type).filter(Boolean))].sort();
+  const sel = $('cdTypeFilter');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">전체</option>' + types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  sel.value = current;
+}
+
+function renderContractDocs() {
+  const typeFilter = $('cdTypeFilter').value;
+  const search = $('cdSearch').value.trim().toLowerCase();
+  const expiringOnly = $('cdExpiringOnly').checked;
+  const today = new Date().toISOString().slice(0, 10);
+
+  let list = contractDocCache;
+  if (typeFilter) list = list.filter(c => (c.doc_type || '') === typeFilter);
+  if (search) {
+    list = list.filter(c =>
+      (c.vendor_name || '').toLowerCase().includes(search) ||
+      (c.contract_title || '').toLowerCase().includes(search)
+    );
+  }
+  if (expiringOnly) {
+    list = list.filter(c => {
+      if (!c.contract_end_date) return false;
+      const days = Math.round((new Date(c.contract_end_date) - new Date(today)) / 86400000);
+      return days <= (c.reminder_days_before || 14);
+    });
+  }
+
+  $('contractDocCount').textContent = `총 ${list.length}건`;
+  const tbody = $('contractDocTbody');
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 서류가 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(c => `
+    <tr>
+      <td>${esc(c.doc_type || '-')}</td>
+      <td>${esc(c.vendor_name || '-')}</td>
+      <td>${esc(c.contract_title || '-')}</td>
+      <td style="font-size:12px;">${esc(c.contract_start_date || '-')} ~ ${esc(c.contract_end_date || '-')}</td>
+      <td>${c.contract_end_date ? cdDDayBadge(c.contract_end_date) : '-'}</td>
+      <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
+      <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
+      <td>
+        <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
+        · <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || c.vendor_name || '서류')}')">삭제</a>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openContractDocModal() {
+  editingContractDocId = null;
+  $('contractDocModalTitle').textContent = '서류 업로드';
+  ['doc_type', 'vendor_name', 'contract_title', 'start_date', 'end_date', 'note'].forEach(f => $('cd_' + f).value = '');
+  $('cd_reminder_days').value = '14';
+  $('cd_file').value = '';
+  $('cdFileUploadWrap').style.display = 'block';
+  $('cdExistingFileWrap').style.display = 'none';
+  $('contractDocModalMsg').textContent = '';
+  $('contractDocSaveBtn').disabled = false;
+  $('contractDocModal').style.display = 'flex';
+}
+
+function editContractDoc(id) {
+  const c = contractDocCache.find(x => x.id === id);
+  if (!c) return;
+  editingContractDocId = id;
+  $('contractDocModalTitle').textContent = `서류 수정 — ${c.contract_title || c.vendor_name || ''}`;
+  $('cd_doc_type').value = c.doc_type || '';
+  $('cd_vendor_name').value = c.vendor_name || '';
+  $('cd_contract_title').value = c.contract_title || '';
+  $('cd_start_date').value = c.contract_start_date || '';
+  $('cd_end_date').value = c.contract_end_date || '';
+  $('cd_reminder_days').value = c.reminder_days_before != null ? c.reminder_days_before : 14;
+  $('cd_note').value = c.note || '';
+  $('cdFileUploadWrap').style.display = 'none';
+  if (c.file_name) {
+    $('cdExistingFileWrap').style.display = 'block';
+    $('cdExistingFileLink').textContent = c.file_name;
+    $('cdExistingFileLink').href = c.view_url || '#';
+  } else {
+    $('cdExistingFileWrap').style.display = 'none';
+  }
+  $('contractDocModalMsg').textContent = '';
+  $('contractDocSaveBtn').disabled = false;
+  $('contractDocModal').style.display = 'flex';
+}
+
+function closeContractDocModal() {
+  $('contractDocModal').style.display = 'none';
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result; // "data:<mime>;base64,<data>"
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function saveContractDoc() {
+  const btn = $('contractDocSaveBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+
+  const payload = {
+    doc_type: $('cd_doc_type').value.trim() || null,
+    vendor_name: $('cd_vendor_name').value.trim() || null,
+    contract_title: $('cd_contract_title').value.trim() || null,
+    contract_start_date: $('cd_start_date').value || null,
+    contract_end_date: $('cd_end_date').value || null,
+    reminder_days_before: Number($('cd_reminder_days').value) || 0,
+    note: $('cd_note').value.trim() || null,
+  };
+
+  try {
+    if (editingContractDocId) {
+      const res = await fetch(`${apiBase()}/api/contract_docs?id=${editingContractDocId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('save failed');
+    } else {
+      const file = $('cd_file').files[0];
+      if (!file) {
+        $('contractDocModalMsg').textContent = '첨부할 파일을 선택해주세요.';
+        btn.disabled = false;
+        return;
+      }
+      if (file.size > 8 * 1024 * 1024) {
+        $('contractDocModalMsg').textContent = '파일이 너무 큽니다 (8MB 이하로 올려주세요).';
+        btn.disabled = false;
+        return;
+      }
+      const base64 = await readFileAsBase64(file);
+      payload.file_base64 = base64;
+      payload.file_name = file.name;
+      payload.content_type = file.type || 'application/octet-stream';
+
+      const res = await fetch(`${apiBase()}/api/contract_docs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.error || 'save failed');
+    }
+    closeContractDocModal();
+    loadContractDocs();
+  } catch (e) {
+    $('contractDocModalMsg').textContent = '저장 중 오류가 발생했습니다: ' + (e.message || '');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteContractDoc(id, name) {
+  if (!confirm(`"${name}" 서류를 삭제하시겠습니까? 첨부된 파일도 함께 삭제됩니다.`)) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs?id=${id}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('delete failed');
+    loadContractDocs();
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
   }
