@@ -3,241 +3,135 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>기업손익분석 | 창현 Dashboard</title>
+  <title>대시보드 | 창현 Dashboard</title>
   <link rel="stylesheet" href="assets/styles.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <link rel="stylesheet" href="assets/hr.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#c82828">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <style>
+    .sch-banner { border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 14px; font-size: 13px; }
+    .sch-banner.warn { background: #fff4e5; border: 0.5px solid #f0b429; color: #8a5b00; }
+    .sch-banner.danger { background: #fdecea; border: 0.5px solid var(--red); color: var(--red); }
+    .sch-banner h3 { font-size: 13px; margin-bottom: 8px; }
+    .sch-banner-row { display:flex; justify-content:space-between; align-items:center; padding:3px 0; gap:8px; }
+    .sch-banner-row a { color: inherit; text-decoration: none; }
+    .sch-banner-row a:hover { text-decoration: underline; }
+    .sch-dday { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; min-width:56px; text-align:center; }
+    .sch-dday.overdue { background:#fdecea; color:var(--red); }
+    .sch-dday.soon { background:#fff4e5; color:#8a5b00; }
+    .dash-empty { font-size:13px; color:var(--text-muted); padding:16px; text-align:center; }
+    .dash-card-link { display:block; font-size:12px; color:var(--accent); margin-top:8px; }
+
+    .todo-header { display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:14px; }
+    .todo-nav-btn { background:var(--bg); border:0.5px solid var(--border-strong); border-radius:var(--radius-sm); width:30px; height:30px; cursor:pointer; font-size:14px; color:var(--text-secondary); }
+    .todo-nav-btn:hover { background:var(--surface); }
+    .todo-date-label { font-size:15px; font-weight:600; min-width:180px; text-align:center; }
+    .todo-add-row { display:flex; gap:8px; margin-bottom:14px; }
+    .todo-list { display:flex; flex-direction:column; gap:2px; }
+    .todo-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:var(--radius-sm); }
+    .todo-item:hover { background:var(--bg); }
+    .todo-item input[type="checkbox"] { width:16px; height:16px; flex-shrink:0; cursor:pointer; }
+    .todo-item .todo-text { flex:1; font-size:13px; }
+    .todo-item.done .todo-text { text-decoration:line-through; color:var(--text-muted); }
+    .todo-item .todo-del { font-size:12px; color:var(--text-muted); cursor:pointer; flex-shrink:0; }
+    .todo-item .todo-del:hover { color:var(--red); }
+  </style>
 </head>
 <body>
 <div class="layout">
 
-  <!-- 사이드바 -->
   <aside class="sidebar">
     <div class="brand">창현 Dashboard</div>
     <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
     <nav class="nav">
-      <a href="index.html">대시보드</a>
-      <a class="active" href="corporate-profit.html">기업손익분석</a>
-      <a href="hr.html">인사/급여관리</a>
-      <a href="#">계약/증빙관리</a>
+      <a class="active" href="index.html">대시보드</a>
+      <a href="hr.html#home">인사/급여관리</a>
+      <div class="nav-sub">
+        <a href="hr.html#payroll">급여관리</a>
+        <a href="hr.html#pension">퇴직급여관리</a>
+      </div>
+      <a href="schedule.html">업무 일정관리</a>
+      <a href="hr.html#contacts">거래처 연락처</a>
+      <a href="hr.html#credentials">사이트 계정관리</a>
+      <a href="hr.html#contractdocs">계약/증빙관리</a>
       <a href="#">월간 보고서</a>
       <a href="#">설정</a>
     </nav>
   </aside>
 
-  <!-- 메인 -->
   <main class="main">
     <header class="topbar">
       <div>
-        <h1>기업손익분석</h1>
-        <p>iCUBE 자료를 업로드하여 전사/지사별 손익 및 보고서를 생성합니다.</p>
+        <h1>대시보드</h1>
+        <p>각 메뉴의 알림과 오늘 할 일을 한곳에서 확인합니다.</p>
       </div>
       <div class="pill">Vercel 배포</div>
     </header>
 
     <div class="content">
 
-      <!-- ① 업로드 패널 -->
-      <section class="panel">
-        <h2>자료 업로드</h2>
-
-        <div class="upload-grid">
-          <label class="upload-card">
-            <strong>ACA0090 <span style="color:var(--red)">*</span></strong>
-            <span>계정별(사용처별) 원장</span>
-            <span class="file-name"></span>
-            <input id="glFile" type="file" accept=".xls,.xlsx">
-          </label>
-          <label class="upload-card">
-            <strong>ACB0021 <span style="color:var(--red)">*</span></strong>
-            <span>합계잔액시산표</span>
-            <span class="file-name"></span>
-            <input id="tbFile" type="file" accept=".xls,.xlsx">
-          </label>
-          <label class="upload-card">
-            <strong>부서코드표</strong>
-            <span>부서-지사 매핑 (선택)</span>
-            <span class="file-name"></span>
-            <input id="deptFile" type="file" accept=".xls,.xlsx">
-          </label>
-          <label class="upload-card">
-            <strong>급여/4대보험</strong>
-            <span>배부자료 (선택)</span>
-            <span class="file-name"></span>
-            <input id="extraFile" type="file" accept=".xls,.xlsx">
-          </label>
-        </div>
-        <div class="actions">
-          <button class="primary" id="analyzeBtn" onclick="runAnalyze()">분석 실행</button>
-        </div>
-        <div id="status" class="status">필수 파일을 선택한 뒤 분석 실행을 눌러주세요.</div>
-      </section>
-
-      <!-- ② 결과 패널 (분석 전 숨김) -->
-      <section id="result" class="hidden">
-
-        <!-- 요약 카드 4개 -->
-        <div class="cards" style="margin-bottom:0">
-          <div class="card accent-blue">
-            <span>전사 매출액</span>
-            <strong id="kSales">-</strong>
-            <small>수출/특판 포함</small>
-          </div>
-          <div class="card accent-green">
-            <span>전사 영업이익</span>
-            <strong id="kOp">-</strong>
-            <small>손익계산서 기준</small>
-          </div>
-          <div class="card accent-purple">
-            <span>영업이익률</span>
-            <strong id="kMargin">-</strong>
-            <small>매출액 대비</small>
-          </div>
-          <div class="card accent-red">
-            <span>비용률</span>
-            <strong id="kCost">-</strong>
-            <small>매출액 대비 비용</small>
-          </div>
-        </div>
-
-        <!-- 탭 패널 -->
-        <div class="panel" style="padding-bottom:24px">
-          <!-- 탭 헤더 -->
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0">
-            <div class="tabs" style="margin-bottom:0; border-bottom:none; gap:0">
-              <button class="tab-btn active" data-tab="summary"    onclick="switchTab('summary')">요약</button>
-              <button class="tab-btn"        data-tab="income"     onclick="switchTab('income')">전사손익</button>
-              <button class="tab-btn"        data-tab="balance"    onclick="switchTab('balance')">재무상태표</button>
-              <button class="tab-btn"        data-tab="branch"     onclick="switchTab('branch')">지사별 손익</button>
-              <button class="tab-btn"        data-tab="cost"       onclick="switchTab('cost')">비용률 분석</button>
-              <button class="tab-btn"        data-tab="trend"      onclick="switchTab('trend')">최근 2개월 변동</button>
-            </div>
-            <!-- 다운로드 버튼 -->
-            <div class="actions" style="flex-shrink:0; gap:6px; padding:0 0 2px">
-              <a id="downloadBtn" class="secondary disabled" href="#" download>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                엑셀
-              </a>
-              <button id="pdfBtn" class="secondary">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                PDF
-              </button>
-            </div>
-          </div>
-          <div class="divider" style="margin-bottom:16px"></div>
-
-          <!-- 요약 탭 -->
-          <div id="tab-summary" class="tab-content active">
-            <div class="chart-row">
-              <div class="chart-box">
-                <h3>지사별 매출 · 영업이익</h3>
-                <canvas id="branchChart" height="180"></canvas>
-              </div>
-              <div class="chart-box">
-                <h3>비용 구조</h3>
-                <canvas id="costChart" height="180"></canvas>
-              </div>
-            </div>
-          </div>
-
-          <!-- 전사손익 탭 -->
-          <div id="tab-income" class="tab-content">
-            <div class="table-wrap">
-              <table class="table" id="incomeTable">
-                <thead>
-                  <tr>
-                    <th style="width:50%">구분</th>
-                    <th class="num">금액 (원)</th>
-                    <th class="num">매출 대비</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- 재무상태표 탭 -->
-          <div id="tab-balance" class="tab-content">
-            <div class="table-wrap">
-              <table class="table" id="bsTable">
-                <thead>
-                  <tr>
-                    <th style="width:60%">구분</th>
-                    <th class="num">금액 (원)</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- 지사별 손익 탭 -->
-          <div id="tab-branch" class="tab-content">
-            <div class="table-wrap" style="margin-bottom:16px">
-              <table class="table" id="branchTable">
-                <thead>
-                  <tr>
-                    <th>지사</th>
-                    <th class="num">매출액</th>
-                    <th class="num">비용</th>
-                    <th class="num">영업이익</th>
-                    <th class="num">영업이익률</th>
-                  </tr>
-                </thead>
-                <tbody></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- 비용률 분석 탭 -->
-          <div id="tab-cost" class="tab-content">
-            <div style="margin-bottom:16px">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px">
-                <span style="font-size:13px; color:var(--text-secondary)">전사 비용률</span>
-                <span id="costPct" style="font-size:16px; font-weight:600">-</span>
-              </div>
-              <div class="prog-bar" style="height:10px">
-                <div id="costFill" class="fill" style="width:0%"></div>
-              </div>
-              <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:4px">
-                <span>0%</span><span style="color:var(--green)">양호 &lt;65%</span><span style="color:var(--amber)">주의 &lt;80%</span><span style="color:var(--red)">경고 ≥80%</span><span>100%</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 최근 2개월 변동 탭 -->
-          <div id="tab-trend" class="tab-content">
-            <div style="display:flex; gap:10px; font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; padding: 0 0 6px; border-bottom: 0.5px solid var(--border);">
-              <span style="flex:1">항목</span>
-              <span style="width:110px; text-align:right">전월</span>
-              <span style="width:110px; text-align:right">당월</span>
-              <span style="width:90px; text-align:right">증감</span>
-            </div>
-            <div id="trendRows"></div>
-            <div class="chart-box" style="margin-top:16px">
-              <h3>전월 vs 당월 비교</h3>
-              <canvas id="trendChart" height="160"></canvas>
-            </div>
-          </div>
-
-        </div><!-- end tab panel -->
-      </section>
-
-      <!-- ③ 분석 이력 패널 -->
-      <section class="panel">
-        <div class="panel-header">
-          <h2>분석 이력</h2>
-          <button class="secondary" style="font-size:11px; padding:4px 10px" onclick="renderHistory()">새로고침</button>
-        </div>
-        <div id="historyList" class="history-list">
-          <div class="empty">분석 이력이 없습니다.<br>파일을 업로드하고 분석 실행을 눌러주세요.</div>
+      <!-- 로그인 게이트 -->
+      <section id="loginPanel" class="panel" style="max-width:360px;">
+        <h2>담당자 로그인</h2>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <input id="pwInput" type="password" placeholder="비밀번호" class="hr-input" autocomplete="current-password">
+          <button class="primary" onclick="dashLogin()">로그인</button>
+          <div id="loginMsg" class="hr-msg"></div>
         </div>
       </section>
 
-    </div><!-- end content -->
+      <div id="dashMain" style="display:none; flex-direction:column; gap:20px;">
+
+        <!-- 알림 모음 -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>📅 업무 일정관리</h2>
+            </div>
+            <div id="scheduleAlertWrap"><div class="dash-empty">불러오는 중…</div></div>
+            <a class="dash-card-link" href="schedule.html">전체 일정 보러가기 →</a>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>📁 계약/증빙관리</h2>
+            </div>
+            <div id="contractAlertWrap"><div class="dash-empty">불러오는 중…</div></div>
+            <a class="dash-card-link" href="hr.html#contractdocs">전체 서류 보러가기 →</a>
+          </section>
+        </div>
+
+        <!-- 오늘 할 일 메모 -->
+        <section class="panel">
+          <h2 style="margin-bottom:14px;">📝 오늘 할 일</h2>
+          <div class="todo-header">
+            <button class="todo-nav-btn" onclick="todoPrevDay()">◀</button>
+            <span class="todo-date-label" id="todoDateLabel">-</span>
+            <button class="todo-nav-btn" onclick="todoNextDay()">▶</button>
+            <button class="secondary" onclick="todoGoToday()" style="margin-left:6px;">오늘</button>
+          </div>
+          <div class="todo-add-row">
+            <input id="todoInput" class="hr-input" placeholder="할 일을 입력하고 Enter 또는 추가 버튼" style="flex:1;">
+            <button class="primary" onclick="addTodo()">추가</button>
+          </div>
+          <div id="todoCount" style="font-size:12px; color:var(--text-muted); margin-bottom:8px;"></div>
+          <div class="todo-list" id="todoList"></div>
+        </section>
+
+      </div>
+    </div>
   </main>
 </div>
-<script src="assets/profit.js"></script>
+
+<script src="assets/dashboard.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
 </body>
 </html>

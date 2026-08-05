@@ -67,6 +67,11 @@
       "config": { "maxLambdaSize": "50mb" }
     },
     {
+      "src": "api/daily_todos.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "50mb" }
+    },
+    {
       "src": "**/*.html",
       "use": "@vercel/static"
     },
@@ -89,6 +94,7 @@
     { "src": "/api/contacts", "dest": "api/contacts.py" },
     { "src": "/api/credentials", "dest": "api/credentials.py" },
     { "src": "/api/contract_docs", "dest": "api/contract_docs.py" },
+    { "src": "/api/daily_todos", "dest": "api/daily_todos.py" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
