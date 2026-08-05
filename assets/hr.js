@@ -2902,14 +2902,14 @@ function renderContacts() {
     list = list.filter(c =>
       (c.company_name || '').toLowerCase().includes(search) ||
       (c.contact_name || '').toLowerCase().includes(search) ||
-      (c.phone || '').toLowerCase().includes(search)
+      (c.phones || []).some(p => (p || '').toLowerCase().includes(search))
     );
   }
 
   $('contactCount').textContent = `총 ${list.length}건`;
   const tbody = $('contactTbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 거래처가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 거래처가 없습니다.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(c => `
@@ -2917,7 +2917,8 @@ function renderContacts() {
       <td>${esc(c.company_name)}</td>
       <td>${esc(c.category || '-')}</td>
       <td>${esc(c.contact_name || '-')}</td>
-      <td>${esc(c.phone || '-')}</td>
+      <td>${(c.phones && c.phones.length > 0) ? c.phones.map(p => esc(p)).join('<br>') : '-'}</td>
+      <td>${esc(c.fax || '-')}</td>
       <td>${esc(c.email || '-')}</td>
       <td>${esc(c.address || '-')}</td>
       <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
@@ -2929,10 +2930,27 @@ function renderContacts() {
   `).join('');
 }
 
+function addContactPhoneField(value) {
+  const wrap = $('ct_phones_list');
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex; gap:6px;';
+  row.innerHTML = `
+    <input class="hr-input ct-phone-input" value="${esc(value || '')}" placeholder="예: 02-1234-5678" style="flex:1;">
+    <button type="button" class="secondary" onclick="this.parentElement.remove()" style="padding:0 12px;">삭제</button>
+  `;
+  wrap.appendChild(row);
+}
+
+function getContactPhonesFromModal() {
+  return Array.from(document.querySelectorAll('.ct-phone-input')).map(i => i.value.trim()).filter(Boolean);
+}
+
 function openContactModal() {
   editingContactId = null;
   $('contactModalTitle').textContent = '거래처 추가';
-  ['company_name', 'category', 'contact_name', 'phone', 'email', 'address', 'note'].forEach(f => $('ct_' + f).value = '');
+  ['company_name', 'category', 'contact_name', 'fax', 'email', 'address', 'note'].forEach(f => $('ct_' + f).value = '');
+  $('ct_phones_list').innerHTML = '';
+  addContactPhoneField();
   $('contactModalMsg').textContent = '';
   $('contactSaveBtn').disabled = false;
   $('contactModal').style.display = 'flex';
@@ -2946,10 +2964,16 @@ function editContact(id) {
   $('ct_company_name').value = c.company_name || '';
   $('ct_category').value = c.category || '';
   $('ct_contact_name').value = c.contact_name || '';
-  $('ct_phone').value = c.phone || '';
+  $('ct_fax').value = c.fax || '';
   $('ct_email').value = c.email || '';
   $('ct_address').value = c.address || '';
   $('ct_note').value = c.note || '';
+  $('ct_phones_list').innerHTML = '';
+  if (c.phones && c.phones.length > 0) {
+    c.phones.forEach(p => addContactPhoneField(p));
+  } else {
+    addContactPhoneField();
+  }
   $('contactModalMsg').textContent = '';
   $('contactSaveBtn').disabled = false;
   $('contactModal').style.display = 'flex';
@@ -2968,7 +2992,8 @@ async function saveContact() {
     company_name: $('ct_company_name').value.trim(),
     category: $('ct_category').value.trim() || null,
     contact_name: $('ct_contact_name').value.trim() || null,
-    phone: $('ct_phone').value.trim() || null,
+    phones: getContactPhonesFromModal(),
+    fax: $('ct_fax').value.trim() || null,
     email: $('ct_email').value.trim() || null,
     address: $('ct_address').value.trim() || null,
     note: $('ct_note').value.trim() || null,
@@ -3309,14 +3334,28 @@ function populateContractDocTypeFilter() {
   sel.value = current;
 }
 
+function contractDocStatus(c) {
+  if (!c.contract_end_date) return 'active'; // 만료일 미지정 = 계약유지중(기간 무관)으로 취급
+  const today = new Date().toISOString().slice(0, 10);
+  return c.contract_end_date < today ? 'expired' : 'active';
+}
+
+function contractDocStatusBadge(status) {
+  return status === 'expired'
+    ? `<span class="hr-badge retired">계약만료</span>`
+    : `<span class="hr-badge active">계약유지중</span>`;
+}
+
 function renderContractDocs() {
   const typeFilter = $('cdTypeFilter').value;
+  const statusFilter = $('cdStatusFilter').value;
   const search = $('cdSearch').value.trim().toLowerCase();
   const expiringOnly = $('cdExpiringOnly').checked;
   const today = new Date().toISOString().slice(0, 10);
 
   let list = contractDocCache;
   if (typeFilter) list = list.filter(c => (c.doc_type || '') === typeFilter);
+  if (statusFilter) list = list.filter(c => contractDocStatus(c) === statusFilter);
   if (search) {
     list = list.filter(c =>
       (c.vendor_name || '').toLowerCase().includes(search) ||
@@ -3334,7 +3373,7 @@ function renderContractDocs() {
   $('contractDocCount').textContent = `총 ${list.length}건`;
   const tbody = $('contractDocTbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 서류가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 서류가 없습니다.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(c => `
@@ -3343,6 +3382,7 @@ function renderContractDocs() {
       <td>${esc(c.vendor_name || '-')}</td>
       <td>${esc(c.contract_title || '-')}</td>
       <td style="font-size:12px;">${esc(c.contract_start_date || '-')} ~ ${esc(c.contract_end_date || '-')}</td>
+      <td>${contractDocStatusBadge(contractDocStatus(c))}</td>
       <td>${c.contract_end_date ? cdDDayBadge(c.contract_end_date) : '-'}</td>
       <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
       <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
