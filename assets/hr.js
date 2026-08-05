@@ -3398,12 +3398,20 @@ function renderContractDocs() {
       <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
       <td style="font-size:12px; color:var(--text-secondary);">${noteText}</td>
       <td>
-        <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
-        ${status === 'terminated'
-          ? ` · <a class="hr-edit-link" onclick="reactivateContractDoc('${c.id}')">해지취소</a>`
-          : ` · <a class="hr-edit-link" onclick="openRenewModal('${c.id}')">연장처리</a> · <a class="hr-edit-link" onclick="openTerminateModal('${c.id}')">해지처리</a>`}
-        · <a class="hr-edit-link" onclick="openRenewHistoryModal('${c.id}', '${esc(c.contract_title || c.vendor_name || '서류')}')">이력</a>
-        · <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || c.vendor_name || '서류')}')">삭제</a>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap;">
+          <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
+          <span style="color:var(--border-strong);">|</span>
+          <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || c.vendor_name || '서류')}')">삭제</a>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap; margin-top:4px;">
+          ${status === 'terminated'
+            ? `<a class="hr-edit-link" onclick="reactivateContractDoc('${c.id}')">해지취소</a>`
+            : `<a class="hr-edit-link" onclick="openRenewModal('${c.id}')">연장</a>
+               <span style="color:var(--border-strong);">|</span>
+               <a class="hr-edit-link" onclick="openTerminateModal('${c.id}')">해지</a>`}
+          <span style="color:var(--border-strong);">|</span>
+          <a class="hr-edit-link" onclick="openRenewHistoryModal('${c.id}', '${esc(c.contract_title || c.vendor_name || '서류')}')">이력</a>
+        </div>
       </td>
     </tr>
   `;
