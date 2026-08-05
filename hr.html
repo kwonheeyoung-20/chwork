@@ -1099,10 +1099,12 @@
   <div class="hr-modal" style="width:520px;">
     <h2 id="contractDocModalTitle">서류 업로드</h2>
     <div class="hr-form-grid" style="grid-template-columns:1fr 1fr;">
-      <label>서류구분 <input id="cd_doc_type" class="hr-input" list="contractDocTypeList" placeholder="예: 계약서, 견적서">
-        <datalist id="contractDocTypeList">
-          <option value="계약서"><option value="견적서"><option value="사업자등록증"><option value="통장사본"><option value="세금계산서"><option value="기타">
-        </datalist>
+      <label>서류구분
+        <select id="cd_doc_type" class="hr-input">
+          <option value="계약서[일반]">계약서[일반]</option>
+          <option value="계약서[건물]">계약서[건물]</option>
+          <option value="계약서[기타]">계약서[기타]</option>
+        </select>
       </label>
       <label>거래처명 <input id="cd_vendor_name" class="hr-input"></label>
       <label class="hr-span2">계약서명 <input id="cd_contract_title" class="hr-input"></label>
