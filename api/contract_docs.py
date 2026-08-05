@@ -165,11 +165,21 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
 
+            if qs.get("history", ["0"])[0] == "1":
+                doc_id = qs.get("id", [None])[0]
+                if not doc_id:
+                    return self._send(400, {"error": "id는 필수입니다"})
+                rows = rest_request(
+                    "GET", f"contract_renewals?document_id=eq.{doc_id}&select=*&order=created_at.desc"
+                )
+                return self._send(200, {"renewals": rows})
+
             if qs.get("upcoming", ["0"])[0] == "1":
                 today = datetime.date.today()
                 rows = rest_request(
                     "GET",
-                    "contract_documents?alert_dismissed=eq.false&contract_end_date=not.is.null&select=*&order=contract_end_date.asc",
+                    "contract_documents?alert_dismissed=eq.false&contract_end_date=not.is.null"
+                    "&terminated_date=is.null&select=*&order=contract_end_date.asc",
                 ) or []
                 result = []
                 for r in rows:
@@ -214,6 +224,47 @@ class handler(BaseHTTPRequestHandler):
                 rest_request("PATCH", f"contract_documents?id=eq.{doc_id}", body={"alert_dismissed": True})
                 return self._send(200, {"ok": True})
 
+            if payload.get("type") == "terminate":
+                doc_id = payload.get("id")
+                if not doc_id:
+                    return self._send(400, {"error": "id는 필수입니다"})
+                terminated_date = payload.get("terminated_date") or datetime.date.today().isoformat()
+                rest_request("PATCH", f"contract_documents?id=eq.{doc_id}", body={
+                    "terminated_date": terminated_date,
+                    "termination_note": payload.get("note"),
+                })
+                return self._send(200, {"ok": True})
+
+            if payload.get("type") == "reactivate":
+                doc_id = payload.get("id")
+                if not doc_id:
+                    return self._send(400, {"error": "id는 필수입니다"})
+                rest_request("PATCH", f"contract_documents?id=eq.{doc_id}", body={
+                    "terminated_date": None,
+                    "termination_note": None,
+                })
+                return self._send(200, {"ok": True})
+
+            if payload.get("type") == "renew":
+                doc_id = payload.get("id")
+                new_end_date = payload.get("new_end_date")
+                if not doc_id or not new_end_date:
+                    return self._send(400, {"error": "id, new_end_date는 필수입니다"})
+                existing = rest_request("GET", f"contract_documents?id=eq.{doc_id}&select=contract_end_date")
+                previous_end_date = existing[0]["contract_end_date"] if existing else None
+
+                rest_request("POST", "contract_renewals", body={
+                    "document_id": doc_id,
+                    "previous_end_date": previous_end_date,
+                    "new_end_date": new_end_date,
+                    "note": payload.get("note"),
+                })
+                rest_request("PATCH", f"contract_documents?id=eq.{doc_id}", body={
+                    "contract_end_date": new_end_date,
+                    "alert_dismissed": False,
+                })
+                return self._send(200, {"ok": True})
+
             file_b64 = payload.get("file_base64")
             file_name = payload.get("file_name")
             if not file_b64 or not file_name:
@@ -237,6 +288,7 @@ class handler(BaseHTTPRequestHandler):
                 "contract_start_date": payload.get("contract_start_date") or None,
                 "contract_end_date": payload.get("contract_end_date") or None,
                 "reminder_days_before": int(payload.get("reminder_days_before") or 14),
+                "auto_renew": bool(payload.get("auto_renew", False)),
                 "file_name": file_name,
                 "storage_path": storage_path,
                 "file_size": len(file_bytes),
@@ -265,7 +317,7 @@ class handler(BaseHTTPRequestHandler):
 
             update_fields = {}
             for key in ("doc_type", "vendor_name", "contract_title", "contract_start_date",
-                        "contract_end_date", "reminder_days_before", "note", "alert_dismissed"):
+                        "contract_end_date", "reminder_days_before", "note", "alert_dismissed", "auto_renew"):
                 if key in payload:
                     update_fields[key] = payload[key]
             if not update_fields:
