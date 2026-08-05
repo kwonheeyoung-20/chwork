@@ -39,15 +39,15 @@
     <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
     <nav class="nav">
       <a href="index.html">대시보드</a>
-      <a id="navHrHome" class="active" href="hr.html" onclick="switchMenuGroup('home'); return false;">인사/급여관리</a>
+      <a id="navHrHome" class="active" href="hr.html#home" onclick="switchMenuGroup('home'); return false;">인사/급여관리</a>
       <div class="nav-sub">
-        <a onclick="switchMenuGroup('payroll')">급여관리</a>
-        <a onclick="switchMenuGroup('pension')">퇴직급여관리</a>
+        <a href="hr.html#payroll" onclick="switchMenuGroup('payroll'); return false;">급여관리</a>
+        <a href="hr.html#pension" onclick="switchMenuGroup('pension'); return false;">퇴직급여관리</a>
       </div>
       <a href="schedule.html">업무 일정관리</a>
-      <a id="navContacts" onclick="switchMenuGroup('contacts'); return false;">거래처 연락처</a>
-      <a id="navCredentials" onclick="switchMenuGroup('credentials'); return false;">사이트 계정관리</a>
-      <a id="navContractDocs" onclick="switchMenuGroup('contractdocs'); return false;">계약/증빙관리</a>
+      <a id="navContacts" href="hr.html#contacts" onclick="switchMenuGroup('contacts'); return false;">거래처 연락처</a>
+      <a id="navCredentials" href="hr.html#credentials" onclick="switchMenuGroup('credentials'); return false;">사이트 계정관리</a>
+      <a id="navContractDocs" href="hr.html#contractdocs" onclick="switchMenuGroup('contractdocs'); return false;">계약/증빙관리</a>
       <a href="#">월간 보고서</a>
       <a href="#">설정</a>
     </nav>
