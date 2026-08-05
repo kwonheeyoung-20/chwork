@@ -12,6 +12,17 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+  <style>
+    .sch-banner { border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; font-size: 13px; }
+    .sch-banner.warn { background: #fff4e5; border: 0.5px solid #f0b429; color: #8a5b00; }
+    .sch-banner.danger { background: #fdecea; border: 0.5px solid var(--red); color: var(--red); }
+    .sch-banner h3 { font-size: 13px; margin-bottom: 8px; }
+    .sch-banner-row { display:flex; justify-content:space-between; align-items:center; padding:3px 0; }
+    .sch-dday { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; min-width:56px; text-align:center; }
+    .sch-dday.overdue { background:#fdecea; color:var(--red); }
+    .sch-dday.soon { background:#fff4e5; color:#8a5b00; }
+    .sch-dday.normal { background:var(--bg); color:var(--text-muted); }
+  </style>
 </head>
 <body>
 <div id="installBanner" style="display:none; position:sticky; top:0; z-index:200; background:#c82828; color:white; padding:10px 16px; align-items:center; justify-content:space-between; gap:12px; font-size:13px;">
@@ -35,7 +46,8 @@
       </div>
       <a href="schedule.html">업무 일정관리</a>
       <a id="navContacts" onclick="switchMenuGroup('contacts'); return false;">거래처 연락처</a>
-      <a href="#">계약/증빙관리</a>
+      <a id="navCredentials" onclick="switchMenuGroup('credentials'); return false;">사이트 계정관리</a>
+      <a id="navContractDocs" onclick="switchMenuGroup('contractdocs'); return false;">계약/증빙관리</a>
       <a href="#">월간 보고서</a>
       <a href="#">설정</a>
     </nav>
@@ -612,6 +624,78 @@
           </div>
         </section>
 
+        <section class="panel" id="tab-credentials" style="display:none;">
+          <div class="panel-header">
+            <h2>사이트 계정관리 <span id="credCount" class="hr-count"></span></h2>
+            <button class="primary" onclick="openCredentialModal()">+ 계정 추가</button>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            업무에 쓰는 사이트(홈택스, 위택스, 은행, 4대보험 등)의 아이디·비밀번호·공인인증서 종류를 모아둡니다.
+            비밀번호는 서버에 암호화되어 저장되고, 로그인된 상태에서만 화면에 표시됩니다.
+          </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">분류:</label>
+            <select id="credCategoryFilter" class="hr-input" style="width:150px;" onchange="renderCredentials()">
+              <option value="">전체</option>
+            </select>
+            <label style="font-size:13px; color:var(--text-secondary);">검색:</label>
+            <input id="credSearch" class="hr-input" style="width:220px;" placeholder="사이트명·아이디" oninput="renderCredentials()">
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="credTable">
+              <thead>
+                <tr>
+                  <th>사이트명</th><th>분류</th><th>아이디</th><th>비밀번호</th><th>공인인증서</th><th>비고</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="credTbody">
+                <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" id="tab-contractdocs" style="display:none;">
+          <div id="contractDocsBannerWrap"></div>
+
+          <div class="panel-header">
+            <h2>계약/증빙관리 <span id="contractDocCount" class="hr-count"></span></h2>
+            <button class="primary" onclick="openContractDocModal()">+ 서류 업로드</button>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            계약서·견적서·사업자등록증 등 증빙서류를 업로드해서 보관합니다. 계약만료일이 다가오면 위에 알림이 표시됩니다.
+            업로드 용량은 파일당 8MB 이하를 권장합니다.
+          </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">서류구분:</label>
+            <select id="cdTypeFilter" class="hr-input" style="width:150px;" onchange="renderContractDocs()">
+              <option value="">전체</option>
+            </select>
+            <label style="font-size:13px; color:var(--text-secondary);">검색:</label>
+            <input id="cdSearch" class="hr-input" style="width:220px;" placeholder="거래처명·계약서명" oninput="renderContractDocs()">
+            <label class="hr-checkbox">
+              <input type="checkbox" id="cdExpiringOnly" onchange="renderContractDocs()">
+              만료임박/경과만 보기
+            </label>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="contractDocTable">
+              <thead>
+                <tr>
+                  <th>서류구분</th><th>거래처명</th><th>계약서명</th><th>계약기간</th><th>계약만료일</th><th>첨부파일</th><th>비고</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="contractDocTbody">
+                <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
       </div>
 
     </div>
@@ -960,6 +1044,76 @@
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
       <button class="secondary" onclick="closeContactModal()">취소</button>
       <button class="primary" id="contactSaveBtn" onclick="saveContact()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 사이트 계정 추가/수정 모달 -->
+<div id="credentialModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:480px;">
+    <h2 id="credentialModalTitle">계정 추가</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>사이트명 <input id="cr_site_name" class="hr-input" placeholder="예: 홈택스, 위택스, 국민은행"></label>
+      <label>URL <input id="cr_url" class="hr-input" placeholder="https://..."></label>
+      <label>분류 <input id="cr_category" class="hr-input" list="credCategoryList" placeholder="예: 세무, 금융, 보험, 정부기관">
+        <datalist id="credCategoryList">
+          <option value="세무"><option value="금융"><option value="보험"><option value="정부기관"><option value="기타">
+        </datalist>
+      </label>
+      <label>아이디 <input id="cr_username" class="hr-input"></label>
+      <label>비밀번호
+        <div style="display:flex; gap:6px;">
+          <input id="cr_password" class="hr-input" type="password" style="flex:1;">
+          <button type="button" class="secondary" onclick="toggleCredentialPasswordVisibility()" style="white-space:nowrap;">표시</button>
+        </div>
+      </label>
+      <label>공인인증서 종류 <input id="cr_cert_type" class="hr-input" list="credCertTypeList" placeholder="예: 범용, 은행보험용, 없음">
+        <datalist id="credCertTypeList">
+          <option value="범용"><option value="은행/보험용"><option value="세무용"><option value="전자세금계산서용"><option value="없음">
+        </datalist>
+      </label>
+      <label>비고 <input id="cr_note" class="hr-input" placeholder="예: 보안카드 위치, 변경 주기 등"></label>
+    </div>
+    <div id="credentialModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeCredentialModal()">취소</button>
+      <button class="primary" id="credentialSaveBtn" onclick="saveCredential()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 계약/증빙 서류 업로드/수정 모달 -->
+<div id="contractDocModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:520px;">
+    <h2 id="contractDocModalTitle">서류 업로드</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr 1fr;">
+      <label>서류구분 <input id="cd_doc_type" class="hr-input" list="contractDocTypeList" placeholder="예: 계약서, 견적서">
+        <datalist id="contractDocTypeList">
+          <option value="계약서"><option value="견적서"><option value="사업자등록증"><option value="통장사본"><option value="세금계산서"><option value="기타">
+        </datalist>
+      </label>
+      <label>거래처명 <input id="cd_vendor_name" class="hr-input"></label>
+      <label class="hr-span2">계약서명 <input id="cd_contract_title" class="hr-input"></label>
+      <label>계약 시작일 <input id="cd_start_date" type="date" class="hr-input"></label>
+      <label>계약 만료일 <input id="cd_end_date" type="date" class="hr-input"></label>
+      <label class="hr-span2">사전 알림(며칠 전부터 배너에 표시) <input id="cd_reminder_days" type="number" class="hr-input" value="14" min="0"></label>
+      <label class="hr-span2">비고 <input id="cd_note" class="hr-input"></label>
+    </div>
+
+    <div id="cdFileUploadWrap" style="margin-top:14px; padding-top:14px; border-top:0.5px solid var(--border);">
+      <label style="font-size:12px; color:var(--text-secondary);">첨부파일 (8MB 이하)
+        <input id="cd_file" type="file" class="hr-input" style="padding:6px;">
+      </label>
+    </div>
+    <div id="cdExistingFileWrap" style="display:none; margin-top:10px; font-size:12px; color:var(--text-secondary);">
+      현재 첨부파일: <a id="cdExistingFileLink" href="#" target="_blank" rel="noopener" class="hr-edit-link"></a>
+      <div style="color:var(--text-muted); margin-top:2px;">파일 자체를 바꾸려면 이 서류를 삭제하고 새로 업로드해주세요.</div>
+    </div>
+
+    <div id="contractDocModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeContractDocModal()">취소</button>
+      <button class="primary" id="contractDocSaveBtn" onclick="saveContractDoc()">저장</button>
     </div>
   </div>
 </div>
