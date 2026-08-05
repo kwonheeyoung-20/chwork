@@ -3335,15 +3335,16 @@ function populateContractDocTypeFilter() {
 }
 
 function contractDocStatus(c) {
-  if (!c.contract_end_date) return 'active'; // 만료일 미지정 = 계약유지중(기간 무관)으로 취급
+  if (c.terminated_date) return 'terminated';
+  if (!c.contract_end_date) return 'active';
   const today = new Date().toISOString().slice(0, 10);
   return c.contract_end_date < today ? 'expired' : 'active';
 }
 
 function contractDocStatusBadge(status) {
-  return status === 'expired'
-    ? `<span class="hr-badge retired">계약만료</span>`
-    : `<span class="hr-badge active">계약유지중</span>`;
+  if (status === 'terminated') return `<span class="hr-badge retired">계약종료</span>`;
+  if (status === 'expired') return `<span class="hr-badge no">계약만료</span>`;
+  return `<span class="hr-badge active">계약유지중</span>`;
 }
 
 function renderContractDocs() {
@@ -3376,22 +3377,32 @@ function renderContractDocs() {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 서류가 없습니다.</td></tr>`;
     return;
   }
-  tbody.innerHTML = list.map(c => `
+  tbody.innerHTML = list.map(c => {
+    const status = contractDocStatus(c);
+    const noteText = status === 'terminated'
+      ? `해지일 ${esc(c.terminated_date)}${c.termination_note ? ' — ' + esc(c.termination_note) : ''}`
+      : esc(c.note || '-');
+    return `
     <tr>
       <td>${esc(c.doc_type || '-')}</td>
       <td>${esc(c.vendor_name || '-')}</td>
       <td>${esc(c.contract_title || '-')}</td>
-      <td style="font-size:12px;">${esc(c.contract_start_date || '-')} ~ ${esc(c.contract_end_date || '-')}</td>
-      <td>${contractDocStatusBadge(contractDocStatus(c))}</td>
-      <td>${c.contract_end_date ? cdDDayBadge(c.contract_end_date) : '-'}</td>
+      <td style="font-size:12px;">${esc(c.contract_start_date || '-')} ~ ${esc(c.contract_end_date || '-')}${c.auto_renew ? ' <span style="color:var(--text-muted);">(자동연장 조항)</span>' : ''}</td>
+      <td>${contractDocStatusBadge(status)}</td>
+      <td>${(c.contract_end_date && status !== 'terminated') ? cdDDayBadge(c.contract_end_date) : '-'}</td>
       <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
-      <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
+      <td style="font-size:12px; color:var(--text-secondary);">${noteText}</td>
       <td>
         <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
+        ${status === 'terminated'
+          ? ` · <a class="hr-edit-link" onclick="reactivateContractDoc('${c.id}')">해지취소</a>`
+          : ` · <a class="hr-edit-link" onclick="openRenewModal('${c.id}')">연장처리</a> · <a class="hr-edit-link" onclick="openTerminateModal('${c.id}')">해지처리</a>`}
+        · <a class="hr-edit-link" onclick="openRenewHistoryModal('${c.id}', '${esc(c.contract_title || c.vendor_name || '서류')}')">이력</a>
         · <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || c.vendor_name || '서류')}')">삭제</a>
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function openContractDocModal() {
@@ -3399,6 +3410,7 @@ function openContractDocModal() {
   $('contractDocModalTitle').textContent = '서류 업로드';
   ['doc_type', 'vendor_name', 'contract_title', 'start_date', 'end_date', 'note'].forEach(f => $('cd_' + f).value = '');
   $('cd_reminder_days').value = '14';
+  $('cd_auto_renew').checked = false;
   $('cd_file').value = '';
   $('cdFileUploadWrap').style.display = 'block';
   $('cdExistingFileWrap').style.display = 'none';
@@ -3418,6 +3430,7 @@ function editContractDoc(id) {
   $('cd_start_date').value = c.contract_start_date || '';
   $('cd_end_date').value = c.contract_end_date || '';
   $('cd_reminder_days').value = c.reminder_days_before != null ? c.reminder_days_before : 14;
+  $('cd_auto_renew').checked = !!c.auto_renew;
   $('cd_note').value = c.note || '';
   $('cdFileUploadWrap').style.display = 'none';
   if (c.file_name) {
@@ -3461,6 +3474,7 @@ async function saveContractDoc() {
     contract_start_date: $('cd_start_date').value || null,
     contract_end_date: $('cd_end_date').value || null,
     reminder_days_before: Number($('cd_reminder_days').value) || 0,
+    auto_renew: $('cd_auto_renew').checked,
     note: $('cd_note').value.trim() || null,
   };
 
@@ -3518,4 +3532,131 @@ async function deleteContractDoc(id, name) {
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
   }
+}
+
+/* ── 계약 해지 처리 ── */
+let pendingTerminateDocId = null;
+
+function openTerminateModal(id) {
+  pendingTerminateDocId = id;
+  const today = new Date();
+  $('term_date').value = today.toISOString().slice(0, 10);
+  $('term_note').value = '';
+  $('terminateModalMsg').textContent = '';
+  $('terminateModal').style.display = 'flex';
+}
+
+function closeTerminateModal() {
+  $('terminateModal').style.display = 'none';
+}
+
+async function confirmTerminate() {
+  const date = $('term_date').value;
+  if (!date) {
+    $('terminateModalMsg').textContent = '해지일은 필수입니다.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({
+        type: 'terminate',
+        id: pendingTerminateDocId,
+        terminated_date: date,
+        note: $('term_note').value.trim() || null,
+      }),
+    });
+    if (!res.ok) throw new Error('failed');
+    closeTerminateModal();
+    loadContractDocs();
+  } catch (e) {
+    $('terminateModalMsg').textContent = '처리 중 오류가 발생했습니다.';
+  }
+}
+
+async function reactivateContractDoc(id) {
+  if (!confirm('이 계약의 해지 처리를 취소하고 "계약유지중"으로 되돌리시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'reactivate', id }),
+    });
+    if (!res.ok) throw new Error('failed');
+    loadContractDocs();
+  } catch (e) {
+    alert('처리 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 계약 연장 처리 / 이력 ── */
+let pendingRenewDocId = null;
+
+function openRenewModal(id) {
+  pendingRenewDocId = id;
+  $('renew_end_date').value = '';
+  $('renew_note').value = '';
+  $('renewModalMsg').textContent = '';
+  $('renewModal').style.display = 'flex';
+}
+
+function closeRenewModal() {
+  $('renewModal').style.display = 'none';
+}
+
+async function confirmRenew() {
+  const newEndDate = $('renew_end_date').value;
+  if (!newEndDate) {
+    $('renewModalMsg').textContent = '새 계약만료일은 필수입니다.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({
+        type: 'renew',
+        id: pendingRenewDocId,
+        new_end_date: newEndDate,
+        note: $('renew_note').value.trim() || null,
+      }),
+    });
+    if (!res.ok) throw new Error('failed');
+    closeRenewModal();
+    loadContractDocs();
+  } catch (e) {
+    $('renewModalMsg').textContent = '처리 중 오류가 발생했습니다.';
+  }
+}
+
+async function openRenewHistoryModal(id, title) {
+  $('renewHistoryModalTitle').textContent = `연장 이력 — ${title}`;
+  $('renewHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
+  $('renewHistoryModal').style.display = 'flex';
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs?history=1&id=${id}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.renewals || [];
+    if (list.length === 0) {
+      $('renewHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">연장 이력이 없습니다.</td></tr>`;
+      return;
+    }
+    $('renewHistoryTbody').innerHTML = list.map(r => `
+      <tr>
+        <td>${esc((r.created_at || '').slice(0, 10))}</td>
+        <td>${esc(r.previous_end_date || '-')}</td>
+        <td>${esc(r.new_end_date)}</td>
+        <td style="font-size:12px; color:var(--text-secondary);">${esc(r.note || '-')}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    $('renewHistoryTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function closeRenewHistoryModal() {
+  $('renewHistoryModal').style.display = 'none';
 }
