@@ -120,7 +120,8 @@ class handler(BaseHTTPRequestHandler):
                 "company_name": company_name,
                 "category": payload.get("category"),
                 "contact_name": payload.get("contact_name"),
-                "phone": payload.get("phone"),
+                "phones": payload.get("phones") or [],
+                "fax": payload.get("fax"),
                 "email": payload.get("email"),
                 "address": payload.get("address"),
                 "note": payload.get("note"),
@@ -145,7 +146,7 @@ class handler(BaseHTTPRequestHandler):
             payload = json.loads(raw or b"{}")
 
             update_fields = {}
-            for key in ("company_name", "category", "contact_name", "phone", "email", "address", "note"):
+            for key in ("company_name", "category", "contact_name", "phones", "fax", "email", "address", "note"):
                 if key in payload:
                     update_fields[key] = payload[key]
             if not update_fields:
