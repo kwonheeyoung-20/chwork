@@ -47,27 +47,7 @@
       "config": { "maxLambdaSize": "50mb" }
     },
     {
-      "src": "api/schedule.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "50mb" }
-    },
-    {
-      "src": "api/contacts.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "50mb" }
-    },
-    {
-      "src": "api/credentials.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "50mb" }
-    },
-    {
-      "src": "api/contract_docs.py",
-      "use": "@vercel/python",
-      "config": { "maxLambdaSize": "50mb" }
-    },
-    {
-      "src": "api/daily_todos.py",
+      "src": "api/workspace.py",
       "use": "@vercel/python",
       "config": { "maxLambdaSize": "50mb" }
     },
@@ -90,11 +70,10 @@
     { "src": "/api/hr_payroll", "dest": "api/hr_payroll.py" },
     { "src": "/api/hr_other_payments", "dest": "api/hr_other_payments.py" },
     { "src": "/api/hr_backup", "dest": "api/hr_backup.py" },
-    { "src": "/api/schedule", "dest": "api/schedule.py" },
-    { "src": "/api/contacts", "dest": "api/contacts.py" },
-    { "src": "/api/credentials", "dest": "api/credentials.py" },
-    { "src": "/api/contract_docs", "dest": "api/contract_docs.py" },
-    { "src": "/api/daily_todos", "dest": "api/daily_todos.py" },
+    { "src": "/api/schedule", "dest": "api/workspace.py?resource=schedule" },
+    { "src": "/api/contacts", "dest": "api/workspace.py?resource=contacts" },
+    { "src": "/api/contract_docs", "dest": "api/workspace.py?resource=contractdocs" },
+    { "src": "/api/daily_todos", "dest": "api/workspace.py?resource=todos" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
