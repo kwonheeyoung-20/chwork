@@ -614,11 +614,11 @@
             <table class="table" id="contactTable">
               <thead>
                 <tr>
-                  <th>업체명</th><th>유형</th><th>담당자</th><th>전화번호</th><th>이메일</th><th>주소</th><th>비고</th><th></th>
+                  <th>업체명</th><th>유형</th><th>담당자</th><th>전화번호</th><th>팩스</th><th>이메일</th><th>주소</th><th>비고</th><th></th>
                 </tr>
               </thead>
               <tbody id="contactTbody">
-                <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+                <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
               </tbody>
             </table>
           </div>
@@ -670,6 +670,12 @@
           </p>
 
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">계약상태:</label>
+            <select id="cdStatusFilter" class="hr-input" style="width:130px;" onchange="renderContractDocs()">
+              <option value="">전체</option>
+              <option value="active">계약유지중</option>
+              <option value="expired">계약만료</option>
+            </select>
             <label style="font-size:13px; color:var(--text-secondary);">서류구분:</label>
             <select id="cdTypeFilter" class="hr-input" style="width:150px;" onchange="renderContractDocs()">
               <option value="">전체</option>
@@ -686,11 +692,11 @@
             <table class="table" id="contractDocTable">
               <thead>
                 <tr>
-                  <th>서류구분</th><th>거래처명</th><th>계약서명</th><th>계약기간</th><th>계약만료일</th><th>첨부파일</th><th>비고</th><th></th>
+                  <th>서류구분</th><th>거래처명</th><th>계약서명</th><th>계약기간</th><th>계약상태</th><th>계약만료일</th><th>첨부파일</th><th>비고</th><th></th>
                 </tr>
               </thead>
               <tbody id="contractDocTbody">
-                <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+                <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
               </tbody>
             </table>
           </div>
@@ -1035,7 +1041,12 @@
         </datalist>
       </label>
       <label>담당자명 <input id="ct_contact_name" class="hr-input"></label>
-      <label>전화번호 <input id="ct_phone" class="hr-input" placeholder="예: 02-1234-5678"></label>
+      <div>
+        <label style="font-size:12px; color:var(--text-secondary); font-weight:500;">전화번호</label>
+        <div id="ct_phones_list" style="display:flex; flex-direction:column; gap:6px; margin-top:4px;"></div>
+        <button type="button" class="secondary" onclick="addContactPhoneField()" style="margin-top:6px; font-size:12px; padding:4px 10px;">+ 전화번호 추가</button>
+      </div>
+      <label>팩스번호 <input id="ct_fax" class="hr-input" placeholder="예: 02-1234-5679"></label>
       <label>이메일 <input id="ct_email" class="hr-input" type="email"></label>
       <label>주소 <input id="ct_address" class="hr-input"></label>
       <label>비고 <input id="ct_note" class="hr-input"></label>
