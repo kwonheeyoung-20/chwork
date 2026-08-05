@@ -144,6 +144,7 @@ async function loadContractAlerts() {
 
 /* ── 오늘 할 일 메모 ── */
 let todoDate; // Date 객체
+let todoItemsCache = [];
 
 function localISO(d) {
   const y = d.getFullYear();
@@ -193,6 +194,7 @@ async function loadTodos() {
 }
 
 function renderTodos(items) {
+  todoItemsCache = items;
   const list = $('todoList');
   const doneCount = items.filter(t => t.done).length;
   $('todoCount').textContent = items.length > 0 ? `총 ${items.length}개 · ${doneCount}개 완료` : '';
@@ -204,6 +206,7 @@ function renderTodos(items) {
     <div class="todo-item ${t.done ? 'done' : ''}">
       <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTodo('${t.id}', this.checked)">
       <span class="todo-text">${esc(t.content)}</span>
+      ${!t.done ? `<span class="todo-del" onclick="carryOverTodo('${t.id}')">다음날로 이월</span>` : ''}
       <span class="todo-del" onclick="deleteTodo('${t.id}')">삭제</span>
     </div>
   `).join('');
@@ -251,5 +254,32 @@ async function deleteTodo(id) {
     loadTodos();
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+async function carryOverTodo(id) {
+  const item = (todoItemsCache || []).find(t => t.id === id);
+  if (!item) return;
+  const nextDay = new Date(todoDate);
+  nextDay.setDate(nextDay.getDate() + 1);
+  const nextDayStr = localISO(nextDay);
+  if (!confirm(`이 할 일을 ${nextDayStr}(다음날)로 이월하시겠습니까?\n오늘 목록에서는 사라지고, 다음날 목록에 그대로 추가됩니다.`)) return;
+  try {
+    const createRes = await fetch(`${apiBase()}/api/daily_todos`, {
+      method: 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify({ todo_date: nextDayStr, content: item.content }),
+    });
+    if (!createRes.ok) throw new Error('create failed');
+
+    const deleteRes = await fetch(`${apiBase()}/api/daily_todos?id=${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    if (!deleteRes.ok) throw new Error('delete failed');
+
+    loadTodos();
+  } catch (e) {
+    alert('이월 처리 중 오류가 발생했습니다.');
   }
 }
