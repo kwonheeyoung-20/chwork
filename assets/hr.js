@@ -79,7 +79,9 @@ async function hrLogin() {
 function showMain() {
   $('loginPanel').style.display = 'none';
   $('hrMain').style.display = 'flex';
-  switchMenuGroup('home');
+  const validGroups = ['home', 'payroll', 'pension', 'contacts', 'credentials', 'contractdocs'];
+  const hashGroup = (window.location.hash || '').replace('#', '');
+  switchMenuGroup(validGroups.includes(hashGroup) ? hashGroup : 'home');
   loadEmployees();
 }
 
@@ -112,6 +114,9 @@ let currentMenuGroup = 'home';
 function switchMenuGroup(group) {
   currentMenuGroup = group;
   const g = MENU_GROUPS[group];
+  if (window.location.hash !== `#${group}`) {
+    history.replaceState(null, '', `#${group}`);
+  }
 
   // 사이드바 활성 표시
   document.querySelectorAll('.nav-sub a').forEach(a => a.classList.toggle('active', a.textContent === g.label));
