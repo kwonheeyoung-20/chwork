@@ -3110,6 +3110,7 @@ async function deleteContact(id, name) {
 
 /* ── 계약/증빙관리 ── */
 let contractDocCache = [];
+let referenceDocCache = [];
 let editingContractDocId = null;
 
 function cdDDayBadge(dueDateStr) {
@@ -3179,7 +3180,7 @@ async function dismissContractAlert(id) {
 
 async function loadContractDocs() {
   const tbody = $('contractDocTbody');
-  tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   loadContractDocsBanner();
   try {
     const res = await fetch(`${apiBase()}/api/contract_docs`, {
@@ -3193,14 +3194,17 @@ async function loadContractDocs() {
     }
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
       return;
     }
-    contractDocCache = data.documents || [];
+    const all = data.documents || [];
+    contractDocCache = all.filter(d => (d.doc_group || 'contract') === 'contract');
+    referenceDocCache = all.filter(d => d.doc_group === 'reference');
     populateContractDocTypeFilter();
     renderContractDocs();
+    renderReferenceDocs();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
@@ -3291,11 +3295,50 @@ function renderContractDocs() {
   }).join('');
 }
 
+function renderReferenceDocs() {
+  const categoryFilter = $('refCategoryFilter').value;
+  const search = $('refSearch').value.trim().toLowerCase();
+
+  let list = referenceDocCache;
+  if (categoryFilter) list = list.filter(c => (c.doc_type || '') === categoryFilter);
+  if (search) {
+    list = list.filter(c => (c.contract_title || '').toLowerCase().includes(search));
+  }
+
+  $('referenceDocCount').textContent = `총 ${list.length}건`;
+  const tbody = $('referenceDocTbody');
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 자료가 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(c => `
+    <tr>
+      <td>${esc(c.doc_type || '-')}</td>
+      <td>${esc(c.contract_title || '-')}</td>
+      <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" download="${esc(c.file_name || '')}" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
+      <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
+      <td>
+        <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
+        · <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || '서류')}')">삭제</a>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function toggleDocGroupFields() {
+  const isContract = $('cd_doc_group').value === 'contract';
+  $('cdContractFieldsWrap').style.display = isContract ? 'grid' : 'none';
+  $('cdReferenceFieldsWrap').style.display = isContract ? 'none' : 'grid';
+}
+
 function openContractDocModal() {
   editingContractDocId = null;
   $('contractDocModalTitle').textContent = '서류 업로드';
   ['vendor_name', 'contract_title', 'start_date', 'end_date', 'note'].forEach(f => $('cd_' + f).value = '');
+  $('cd_doc_group').value = 'contract';
   $('cd_doc_type').value = '계약서[일반]';
+  $('cd_ref_category').value = '인사';
+  $('cd_ref_title').value = '';
   $('cd_reminder_days').value = '14';
   $('cd_auto_renew').checked = false;
   $('cd_file').value = '';
@@ -3303,31 +3346,29 @@ function openContractDocModal() {
   $('cdExistingFileWrap').style.display = 'none';
   $('contractDocModalMsg').textContent = '';
   $('contractDocSaveBtn').disabled = false;
-  toggleContractDocTypeFields();
+  toggleDocGroupFields();
   $('contractDocModal').style.display = 'flex';
 }
 
-function isContractLikeDocType(docType) {
-  return (docType || '').startsWith('계약서') || docType === '지급보증서';
-}
-
-function toggleContractDocTypeFields() {
-  const isContract = isContractLikeDocType($('cd_doc_type').value);
-  $('cdContractDatesWrap').style.display = isContract ? 'grid' : 'none';
-}
-
 function editContractDoc(id) {
-  const c = contractDocCache.find(x => x.id === id);
+  const c = [...contractDocCache, ...referenceDocCache].find(x => x.id === id);
   if (!c) return;
   editingContractDocId = id;
+  const group = c.doc_group || 'contract';
   $('contractDocModalTitle').textContent = `서류 수정 — ${c.contract_title || c.vendor_name || ''}`;
-  $('cd_doc_type').value = c.doc_type || '';
-  $('cd_vendor_name').value = c.vendor_name || '';
-  $('cd_contract_title').value = c.contract_title || '';
-  $('cd_start_date').value = c.contract_start_date || '';
-  $('cd_end_date').value = c.contract_end_date || '';
-  $('cd_reminder_days').value = c.reminder_days_before != null ? c.reminder_days_before : 14;
-  $('cd_auto_renew').checked = !!c.auto_renew;
+  $('cd_doc_group').value = group;
+  if (group === 'contract') {
+    $('cd_doc_type').value = c.doc_type || '';
+    $('cd_vendor_name').value = c.vendor_name || '';
+    $('cd_contract_title').value = c.contract_title || '';
+    $('cd_start_date').value = c.contract_start_date || '';
+    $('cd_end_date').value = c.contract_end_date || '';
+    $('cd_reminder_days').value = c.reminder_days_before != null ? c.reminder_days_before : 14;
+    $('cd_auto_renew').checked = !!c.auto_renew;
+  } else {
+    $('cd_ref_category').value = c.doc_type || '인사';
+    $('cd_ref_title').value = c.contract_title || '';
+  }
   $('cd_note').value = c.note || '';
   $('cdFileUploadWrap').style.display = 'none';
   if (c.file_name) {
@@ -3339,7 +3380,7 @@ function editContractDoc(id) {
   }
   $('contractDocModalMsg').textContent = '';
   $('contractDocSaveBtn').disabled = false;
-  toggleContractDocTypeFields();
+  toggleDocGroupFields();
   $('contractDocModal').style.display = 'flex';
 }
 
@@ -3365,7 +3406,9 @@ async function saveContractDoc() {
   if (btn.disabled) return;
   btn.disabled = true;
 
-  const payload = {
+  const group = $('cd_doc_group').value;
+  const payload = group === 'contract' ? {
+    doc_group: 'contract',
     doc_type: $('cd_doc_type').value.trim() || null,
     vendor_name: $('cd_vendor_name').value.trim() || null,
     contract_title: $('cd_contract_title').value.trim() || null,
@@ -3374,7 +3417,18 @@ async function saveContractDoc() {
     reminder_days_before: Number($('cd_reminder_days').value) || 0,
     auto_renew: $('cd_auto_renew').checked,
     note: $('cd_note').value.trim() || null,
+  } : {
+    doc_group: 'reference',
+    doc_type: $('cd_ref_category').value,
+    contract_title: $('cd_ref_title').value.trim() || null,
+    note: $('cd_note').value.trim() || null,
   };
+
+  if (group === 'reference' && !payload.contract_title) {
+    $('contractDocModalMsg').textContent = '문서명은 필수입니다.';
+    btn.disabled = false;
+    return;
+  }
 
   try {
     if (editingContractDocId) {
