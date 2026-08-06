@@ -1188,15 +1188,19 @@
     <h2 id="contractDocModalTitle">서류 업로드</h2>
     <div class="hr-form-grid" style="grid-template-columns:1fr 1fr;">
       <label>서류구분
-        <select id="cd_doc_type" class="hr-input">
+        <select id="cd_doc_type" class="hr-input" onchange="toggleContractDocTypeFields()">
           <option value="계약서[일반]">계약서[일반]</option>
           <option value="계약서[건물]">계약서[건물]</option>
-          <option value="계약서[기타]">계약서[기타]</option>
           <option value="지급보증서">지급보증서</option>
+          <option value="증빙자료">증빙자료</option>
+          <option value="백데이터">백데이터</option>
         </select>
       </label>
       <label>거래처명 <input id="cd_vendor_name" class="hr-input"></label>
-      <label class="hr-span2">계약서명 <input id="cd_contract_title" class="hr-input"></label>
+      <label class="hr-span2">계약서명 <input id="cd_contract_title" class="hr-input" placeholder="증빙/백데이터인 경우 그냥 파일 제목으로 사용하시면 됩니다"></label>
+    </div>
+
+    <div id="cdContractDatesWrap" class="hr-form-grid" style="grid-template-columns:1fr 1fr; margin-top:10px;">
       <label>계약 시작일 <input id="cd_start_date" type="date" class="hr-input"></label>
       <label>계약 만료일 <input id="cd_end_date" type="date" class="hr-input"></label>
       <label class="hr-span2" style="flex-direction:row; align-items:center; gap:6px;">
@@ -1204,6 +1208,8 @@
         <span style="font-weight:400; font-size:12px;">계약서에 자동연장 조항이 있음 (참고 표시용 — 알림·만료 판정에는 영향을 주지 않으며, 계약만료일이 다가오면 이전과 동일하게 알림이 뜹니다. 검토 후 유지하기로 하면 아래 목록에서 "연장처리"를 눌러주세요)</span>
       </label>
       <label class="hr-span2">사전 알림(며칠 전부터 배너에 표시) <input id="cd_reminder_days" type="number" class="hr-input" value="14" min="0"></label>
+    </div>
+    <div class="hr-form-grid" style="grid-template-columns:1fr; margin-top:10px;">
       <label class="hr-span2">비고 <input id="cd_note" class="hr-input"></label>
     </div>
 
