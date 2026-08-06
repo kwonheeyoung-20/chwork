@@ -655,9 +655,9 @@ function renderPension(list, asOf) {
   const rowHtml = (p) => `
     <tr data-emp-id="${p.id}" data-emp-name="${esc(p.name)}" data-balance="${p.balance}" data-asofbalance="${asOf ? (p.as_of_balance ?? 0) : ''}">
       <td>${esc(p.name)}</td>
-      <td>${esc(positionOf(p.id))}</td>
       <td>${esc(p.branch || '-')}</td>
       <td>${esc(p.department || '-')}</td>
+      <td>${esc(positionOf(p.id))}</td>
       <td>${esc(p.pension_enrollment_date || p.hire_date || '-')}</td>
       <td class="num">${fmt(p.cumulative_estimate)}</td>
       <td class="num">${fmt(p.total_contributed)}</td>
@@ -956,7 +956,7 @@ function downloadSettlementExcel() {
 
 /* ── 퇴직연금 현황 엑셀 다운로드 ── */
 function downloadPensionExcel() {
-  const rows = [['이름', '직급', '지사', '부서', '가입일', '누적추계액(현재기준)', '실불입액 합계', '잔액', $('asOfCumHeader').textContent, $('periodAccrualHeader').textContent, $('asOfBalanceHeader').textContent]];
+  const rows = [['이름', '지사', '부서', '직급', '가입일', '누적추계액(현재기준)', '실불입액 합계', '잔액', $('asOfCumHeader').textContent, $('periodAccrualHeader').textContent, $('asOfBalanceHeader').textContent]];
   document.querySelectorAll('#pensionTbody tr').forEach(tr => {
     if (tr.classList.contains('hr-total-row')) {
       const tds = Array.from(tr.children).map(td => td.textContent.trim());
