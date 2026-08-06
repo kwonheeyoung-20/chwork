@@ -870,7 +870,7 @@ async function saveSettlement() {
 
 async function loadSettlementHistory() {
   const tbody = $('historyTbody');
-  tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_settlement?list=1`, {
       headers: { 'X-HR-Password': hrPassword() },
@@ -878,12 +878,13 @@ async function loadSettlementHistory() {
     const data = await res.json();
     const list = data.settlements || [];
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">확정된 정산 내역이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">확정된 정산 내역이 없습니다.</td></tr>`;
       return;
     }
     tbody.innerHTML = list.map(s => `
       <tr>
         <td>${esc(s.employees?.name || '-')}</td>
+        <td>${esc(s.employees?.position || '-')}</td>
         <td>${esc(s.employees?.branch || '-')}</td>
         <td>${esc(s.employees?.department || '-')}</td>
         <td>${esc(s.retire_date)}</td>
@@ -4092,7 +4093,7 @@ function renderPromotionMatrixInto(containerId, list) {
     return;
   }
 
-  const headerHtml = `<th>지사</th><th>부서</th><th>성명</th><th>입사일</th>` +
+  const headerHtml = `<th>지사</th><th>부서</th><th>성명</th><th>현재직급</th><th>입사일</th>` +
     columns.map(c => `<th style="text-align:center;">${esc(c)}</th>`).join('');
 
   const rowsHtml = list.map(e => {
@@ -4115,6 +4116,7 @@ function renderPromotionMatrixInto(containerId, list) {
         <td>${esc(e.branch || '-')}</td>
         <td>${esc(e.department || '-')}</td>
         <td>${esc(e.name)}</td>
+        <td style="font-weight:600;">${esc(e.position || '-')}</td>
         <td>${esc(e.hire_date || '-')}</td>
         ${cells}
       </tr>
@@ -4131,4 +4133,37 @@ function renderPromotionMatrixInto(containerId, list) {
       직급이력이 없는 칸은 "-"로 표시됩니다.
     </div>
   `;
+}
+
+/* ── 직급별 이력표 인쇄 ── */
+function printPromotionMatrix(containerId) {
+  const source = $(containerId);
+  if (!source || !source.querySelector('table')) {
+    alert('먼저 "직급별 이력표"를 조회해주세요.');
+    return;
+  }
+  const title = containerId === 'promoReportDetailMatrixWrap'
+    ? $('promoReportDetailTitle').textContent
+    : `인사기록 — 직급별 이력표 (기준일: ${$('promoAsOf').value || new Date().toISOString().slice(0, 10)})`;
+
+  $('promoMatrixPrintTitle').textContent = title;
+  $('promoMatrixPrintBody').innerHTML = source.innerHTML;
+  $('promoMatrixPrintArea').style.display = 'block';
+
+  const style = document.createElement('style');
+  style.id = 'promoMatrixPrintStyle';
+  style.textContent = `
+    @media print {
+      body * { visibility: hidden; }
+      #promoMatrixPrintArea, #promoMatrixPrintArea * { visibility: visible; }
+      #promoMatrixPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
+      @page { size: landscape; }
+    }
+  `;
+  document.head.appendChild(style);
+
+  window.print();
+
+  document.head.removeChild(style);
+  $('promoMatrixPrintArea').style.display = 'none';
 }
