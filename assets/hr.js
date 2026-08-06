@@ -3268,7 +3268,7 @@ function renderContractDocs() {
       <td style="font-size:12px;">${esc(c.contract_start_date || '-')} ~ ${esc(c.contract_end_date || '-')}${c.auto_renew ? ' <span style="color:var(--text-muted);">(자동연장 조항)</span>' : ''}</td>
       <td>${contractDocStatusBadge(status)}</td>
       <td>${(c.contract_end_date && status !== 'terminated') ? cdDDayBadge(c.contract_end_date) : '-'}</td>
-      <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
+      <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" download="${esc(c.file_name || '')}" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
       <td style="font-size:12px; color:var(--text-secondary);">${noteText}</td>
       <td>
         <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap;">
