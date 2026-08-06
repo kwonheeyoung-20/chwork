@@ -20,6 +20,7 @@ import re
 import json
 import uuid
 import base64
+import calendar
 import traceback
 import datetime
 import urllib.request
@@ -156,6 +157,35 @@ def safe_filename(name: str) -> str:
     return f"{uuid.uuid4()}_{base}"
 
 
+# ────────────────────────────────────────────────────────────
+# promotions 전용 유틸 — 근속년수(N년M월D일) 계산
+# ────────────────────────────────────────────────────────────
+def _calc_tenure(start, end):
+    if not start or not end or end < start:
+        return (0, 0, 0)
+    years = end.year - start.year
+    months = end.month - start.month
+    days = end.day - start.day
+    if days < 0:
+        months -= 1
+        prev_month = end.month - 1
+        prev_year = end.year
+        if prev_month == 0:
+            prev_month = 12
+            prev_year -= 1
+        days += calendar.monthrange(prev_year, prev_month)[1]
+    if months < 0:
+        years -= 1
+        months += 12
+    return (years, months, days)
+
+
+def _format_tenure(t):
+    if t is None:
+        return None
+    return f"{t[0]}년{t[1]}월{t[2]}일"
+
+
 # ════════════════════════════════════════════════════════════
 # 메인 핸들러
 # ════════════════════════════════════════════════════════════
@@ -204,6 +234,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._get_contractdocs(qs)
             if resource == "todos":
                 return self._get_todos(qs)
+            if resource == "promotions":
+                return self._get_promotions(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -318,6 +350,81 @@ class handler(BaseHTTPRequestHandler):
         )
         return self._send(200, {"todos": rows, "date": date_str})
 
+    def _compute_promotion_snapshot(self, as_of, prior_year_end, include_all=False):
+        emp_path = "employees?select=id,name,branch,department,position,hire_date,status&order=hire_date.asc"
+        if not include_all:
+            emp_path += "&status=eq.재직"
+        employees = rest_request("GET", emp_path) or []
+
+        hist_rows = rest_request("GET", "position_history?select=*&order=effective_date.asc") or []
+        hist_by_emp = {}
+        for h in hist_rows:
+            hist_by_emp.setdefault(h["employee_id"], []).append(h)
+
+        result = []
+        for e in employees:
+            hire = datetime.date.fromisoformat(e["hire_date"]) if e.get("hire_date") else None
+            hist = [
+                h for h in hist_by_emp.get(e["id"], [])
+                if datetime.date.fromisoformat(h["effective_date"]) <= as_of
+            ]
+            last = hist[-1] if hist else None
+            tenure_now = _calc_tenure(hire, as_of) if hire else None
+            tenure_prior = _calc_tenure(hire, prior_year_end) if hire and hire <= prior_year_end else None
+            result.append({
+                "employee_id": e["id"],
+                "name": e["name"],
+                "branch": e.get("branch"),
+                "department": e.get("department"),
+                "position": e.get("position"),
+                "status": e.get("status"),
+                "hire_date": e.get("hire_date"),
+                "last_promotion_date": last["effective_date"] if last else None,
+                "last_promotion_position": last["position"] if last else None,
+                "history": [{"date": h["effective_date"], "position": h["position"]} for h in hist],
+                "tenure_current": _format_tenure(tenure_now),
+                "tenure_prior_year_end": _format_tenure(tenure_prior),
+            })
+        return result
+
+    def _get_promotions(self, qs):
+        if qs.get("reports", ["0"])[0] == "1":
+            rows = rest_request(
+                "GET",
+                "promotion_reports?select=id,report_year,as_of_date,prior_year_end_date,note,generated_at"
+                "&order=report_year.desc,generated_at.desc",
+            )
+            return self._send(200, {"reports": rows})
+
+        report_id = qs.get("report_id", [None])[0]
+        if report_id:
+            rows = rest_request("GET", f"promotion_reports?id=eq.{report_id}&select=*")
+            if not rows:
+                return self._send(404, {"error": "not_found"})
+            return self._send(200, {"report": rows[0]})
+
+        if qs.get("history", ["0"])[0] == "1":
+            emp_id = qs.get("employee_id", [None])[0]
+            if not emp_id:
+                return self._send(400, {"error": "employee_id는 필수입니다"})
+            rows = rest_request(
+                "GET", f"position_history?employee_id=eq.{emp_id}&select=*&order=effective_date.asc"
+            )
+            return self._send(200, {"history": rows})
+
+        # 미리보기(라이브 계산, 저장 안 됨)
+        as_of_str = qs.get("asof", [None])[0] or datetime.date.today().isoformat()
+        as_of = datetime.date.fromisoformat(as_of_str)
+        prior_year_end = datetime.date(as_of.year - 1, 12, 31)
+        include_all = qs.get("all", ["0"])[0] == "1"
+
+        employees = self._compute_promotion_snapshot(as_of, prior_year_end, include_all)
+        return self._send(200, {
+            "employees": employees,
+            "as_of": as_of.isoformat(),
+            "prior_year_end": prior_year_end.isoformat(),
+        })
+
     # ────────────────────────────────────────────────────────
     # POST
     # ────────────────────────────────────────────────────────
@@ -337,6 +444,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._post_contractdocs(payload)
             if resource == "todos":
                 return self._post_todos(payload)
+            if resource == "promotions":
+                return self._post_promotions(payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -538,6 +647,43 @@ class handler(BaseHTTPRequestHandler):
         }, prefer="return=representation")
         return self._send(201, {"todo": created[0] if created else None})
 
+    def _post_promotions(self, payload):
+        action = payload.get("type")
+
+        if action == "save_report":
+            report_year = payload.get("report_year")
+            if not report_year:
+                return self._send(400, {"error": "report_year은 필수입니다"})
+            as_of_str = payload.get("as_of") or f"{report_year}-01-30"
+            as_of = datetime.date.fromisoformat(as_of_str)
+            prior_year_end = datetime.date(as_of.year - 1, 12, 31)
+            include_all = bool(payload.get("include_all", False))
+
+            snapshot = self._compute_promotion_snapshot(as_of, prior_year_end, include_all)
+
+            created = rest_request("POST", "promotion_reports", body={
+                "report_year": int(report_year),
+                "as_of_date": as_of.isoformat(),
+                "prior_year_end_date": prior_year_end.isoformat(),
+                "snapshot": snapshot,
+                "note": payload.get("note"),
+            }, prefer="return=representation")
+            return self._send(201, {"report": created[0] if created else None})
+
+        # 기본: 직급이력(승진기록) 추가
+        employee_id = payload.get("employee_id")
+        effective_date = payload.get("effective_date")
+        position = payload.get("position")
+        if not employee_id or not effective_date or not position:
+            return self._send(400, {"error": "employee_id, effective_date, position은 필수입니다"})
+        created = rest_request("POST", "position_history", body={
+            "employee_id": employee_id,
+            "effective_date": effective_date,
+            "position": position,
+            "note": payload.get("note"),
+        }, prefer="return=representation")
+        return self._send(201, {"history": created[0] if created else None})
+
     # ────────────────────────────────────────────────────────
     # PATCH
     # ────────────────────────────────────────────────────────
@@ -560,6 +706,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._patch_contractdocs(item_id, payload)
             if resource == "todos":
                 return self._patch_todos(item_id, payload)
+            if resource == "promotions":
+                return self._patch_promotions(item_id, payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -622,6 +770,16 @@ class handler(BaseHTTPRequestHandler):
         rest_request("PATCH", f"daily_todos?id=eq.{todo_id}", body=update_fields)
         return self._send(200, {"ok": True})
 
+    def _patch_promotions(self, item_id, payload):
+        update_fields = {}
+        for key in ("effective_date", "position", "note"):
+            if key in payload:
+                update_fields[key] = payload[key]
+        if not update_fields:
+            return self._send(400, {"error": "수정할 항목이 없습니다"})
+        rest_request("PATCH", f"position_history?id=eq.{item_id}", body=update_fields)
+        return self._send(200, {"ok": True})
+
     # ────────────────────────────────────────────────────────
     # DELETE
     # ────────────────────────────────────────────────────────
@@ -640,6 +798,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._delete_contractdocs(qs)
             if resource == "todos":
                 return self._delete_todos(qs)
+            if resource == "promotions":
+                return self._delete_promotions(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -681,6 +841,16 @@ class handler(BaseHTTPRequestHandler):
         if not todo_id:
             return self._send(400, {"error": "id는 필수입니다"})
         rest_request("DELETE", f"daily_todos?id=eq.{todo_id}")
+        return self._send(200, {"ok": True})
+
+    def _delete_promotions(self, qs):
+        item_id = qs.get("id", [None])[0]
+        if not item_id:
+            return self._send(400, {"error": "id는 필수입니다"})
+        if qs.get("type", [None])[0] == "report":
+            rest_request("DELETE", f"promotion_reports?id=eq.{item_id}")
+        else:
+            rest_request("DELETE", f"position_history?id=eq.{item_id}")
         return self._send(200, {"ok": True})
 
     def log_message(self, *args):
