@@ -762,14 +762,15 @@
           <div id="contractDocsBannerWrap"></div>
 
           <div class="panel-header">
-            <h2>계약/증빙관리 <span id="contractDocCount" class="hr-count"></span></h2>
+            <h2>계약/증빙관리</h2>
             <button class="primary" onclick="openContractDocModal()">+ 서류 업로드</button>
           </div>
-          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
-            계약서·견적서·사업자등록증 등 증빙서류를 업로드해서 보관합니다. 계약만료일이 다가오면 위에 알림이 표시됩니다.
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 20px;">
+            "계약/보증서"는 계약기간이 있어 만료가 다가오면 위에 알림이 뜨고, "증빙/백데이터"는 그냥 보관용 자료입니다.
             업로드 용량은 파일당 8MB 이하를 권장합니다.
           </p>
 
+          <h3 style="font-size:14px; margin-bottom:10px;">계약/보증서 <span id="contractDocCount" class="hr-count"></span></h3>
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
             <label style="font-size:13px; color:var(--text-secondary);">계약상태:</label>
             <select id="cdStatusFilter" class="hr-input" style="width:130px;" onchange="renderContractDocs()">
@@ -802,12 +803,40 @@
               </tbody>
             </table>
           </div>
+
+          <h3 style="font-size:14px; margin:32px 0 10px; padding-top:20px; border-top:0.5px solid var(--border);">증빙/백데이터 자료 <span id="referenceDocCount" class="hr-count"></span></h3>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">구분:</label>
+            <select id="refCategoryFilter" class="hr-input" style="width:130px;" onchange="renderReferenceDocs()">
+              <option value="">전체</option>
+              <option value="인사">인사</option>
+              <option value="총무">총무</option>
+              <option value="재무">재무</option>
+              <option value="기타">기타</option>
+            </select>
+            <label style="font-size:13px; color:var(--text-secondary);">검색:</label>
+            <input id="refSearch" class="hr-input" style="width:220px;" placeholder="문서명" oninput="renderReferenceDocs()">
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="referenceDocTable">
+              <thead>
+                <tr>
+                  <th>구분</th><th>문서명</th><th>첨부파일</th><th>비고</th><th></th>
+                </tr>
+              </thead>
+              <tbody id="referenceDocTbody">
+                <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
       </div>
 
     </div>
   </main>
+
 </div>
 
 <!-- 성과급/기타지급 추가 모달 -->
@@ -1186,21 +1215,27 @@
 <div id="contractDocModal" class="hr-modal-backdrop" style="display:none;">
   <div class="hr-modal" style="width:520px;">
     <h2 id="contractDocModalTitle">서류 업로드</h2>
-    <div class="hr-form-grid" style="grid-template-columns:1fr 1fr;">
+
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>구분
+        <select id="cd_doc_group" class="hr-input" onchange="toggleDocGroupFields()">
+          <option value="contract">계약/보증서 (계약기간·만료알림 있음)</option>
+          <option value="reference">증빙/백데이터 (그냥 보관용 자료)</option>
+        </select>
+      </label>
+    </div>
+
+    <!-- 계약/보증서 전용 입력 -->
+    <div id="cdContractFieldsWrap" class="hr-form-grid" style="grid-template-columns:1fr 1fr; margin-top:10px;">
       <label>서류구분
-        <select id="cd_doc_type" class="hr-input" onchange="toggleContractDocTypeFields()">
+        <select id="cd_doc_type" class="hr-input">
           <option value="계약서[일반]">계약서[일반]</option>
           <option value="계약서[건물]">계약서[건물]</option>
           <option value="지급보증서">지급보증서</option>
-          <option value="증빙자료">증빙자료</option>
-          <option value="백데이터">백데이터</option>
         </select>
       </label>
       <label>거래처명 <input id="cd_vendor_name" class="hr-input"></label>
-      <label class="hr-span2">계약서명 <input id="cd_contract_title" class="hr-input" placeholder="증빙/백데이터인 경우 그냥 파일 제목으로 사용하시면 됩니다"></label>
-    </div>
-
-    <div id="cdContractDatesWrap" class="hr-form-grid" style="grid-template-columns:1fr 1fr; margin-top:10px;">
+      <label class="hr-span2">계약서명 <input id="cd_contract_title" class="hr-input"></label>
       <label>계약 시작일 <input id="cd_start_date" type="date" class="hr-input"></label>
       <label>계약 만료일 <input id="cd_end_date" type="date" class="hr-input"></label>
       <label class="hr-span2" style="flex-direction:row; align-items:center; gap:6px;">
@@ -1209,6 +1244,20 @@
       </label>
       <label class="hr-span2">사전 알림(며칠 전부터 배너에 표시) <input id="cd_reminder_days" type="number" class="hr-input" value="14" min="0"></label>
     </div>
+
+    <!-- 증빙/백데이터 전용 입력 -->
+    <div id="cdReferenceFieldsWrap" class="hr-form-grid" style="grid-template-columns:1fr 1fr; margin-top:10px; display:none;">
+      <label>구분
+        <select id="cd_ref_category" class="hr-input">
+          <option value="인사">인사</option>
+          <option value="총무">총무</option>
+          <option value="재무">재무</option>
+          <option value="기타">기타</option>
+        </select>
+      </label>
+      <label>문서명 <input id="cd_ref_title" class="hr-input"></label>
+    </div>
+
     <div class="hr-form-grid" style="grid-template-columns:1fr; margin-top:10px;">
       <label class="hr-span2">비고 <input id="cd_note" class="hr-input"></label>
     </div>
