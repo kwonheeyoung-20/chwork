@@ -278,12 +278,12 @@
             <table class="table" id="historyTable">
               <thead>
                 <tr>
-                  <th>이름</th><th>지사</th><th>부서</th><th>퇴사일</th>
+                  <th>이름</th><th>직급</th><th>지사</th><th>부서</th><th>퇴사일</th>
                   <th class="num">추가불입액</th><th class="num">실지급액</th><th>처리일</th><th></th>
                 </tr>
               </thead>
               <tbody id="historyTbody">
-                <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+                <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
               </tbody>
             </table>
           </div>
@@ -624,6 +624,7 @@
             <div style="display:flex; gap:4px; margin-bottom:12px;">
               <button class="tab-btn active" data-promoview="list" onclick="switchPromoViewMode('list')">목록형</button>
               <button class="tab-btn" data-promoview="matrix" onclick="switchPromoViewMode('matrix')">직급별 이력표</button>
+              <button class="secondary" onclick="printPromotionMatrix('promoMatrixWrap')" style="margin-left:8px;">이력표 인쇄</button>
             </div>
             <div class="table-wrap" id="promoLiveTableWrap">
               <table class="table" id="promoLiveTable">
@@ -657,6 +658,7 @@
               <div style="display:flex; gap:4px; margin-bottom:12px;">
                 <button class="tab-btn active" data-promosavedview="list" onclick="switchPromoSavedViewMode('list')">목록형</button>
                 <button class="tab-btn" data-promosavedview="matrix" onclick="switchPromoSavedViewMode('matrix')">직급별 이력표</button>
+                <button class="secondary" onclick="printPromotionMatrix('promoReportDetailMatrixWrap')" style="margin-left:8px;">이력표 인쇄</button>
               </div>
               <div class="table-wrap" id="promoReportDetailTableWrap">
                 <table class="table" id="promoReportDetailTable">
@@ -1077,6 +1079,11 @@
       <button class="secondary" onclick="closeHistoryModal()">닫기</button>
     </div>
   </div>
+</div>
+
+<div id="promoMatrixPrintArea" style="display:none;">
+  <h2 id="promoMatrixPrintTitle" style="margin-bottom:16px;"></h2>
+  <div id="promoMatrixPrintBody"></div>
 </div>
 
 <div id="registerPrintArea" style="display:none;">
