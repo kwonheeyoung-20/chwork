@@ -852,11 +852,16 @@
     <div class="hr-form-grid">
       <label>이름 <input id="f_name" class="hr-input"></label>
       <label>직급 <input id="f_position" class="hr-input" list="positionList" onchange="applyPositionStandardToNewEmployee()"></label>
+      <label>급여직급 <input id="f_pay_position" class="hr-input" list="positionList"></label>
       <label>지사 <input id="f_branch" class="hr-input" list="branchList"></label>
       <label>부서 <input id="f_department" class="hr-input" list="departmentList"></label>
       <datalist id="positionList"></datalist>
       <datalist id="branchList"></datalist>
       <datalist id="departmentList"></datalist>
+      <div class="hr-span2" style="font-size:11px; color:var(--text-muted); margin-top:-6px;">
+        "직급"은 명함·계약서·인사기록보고서에 쓰이고, "급여직급"은 만근수당 등 급여기준표 조회에만 쓰입니다.
+        승진해도 급여직급은 자동으로 안 바뀌니, 급여도 같이 바꾸려면 "인사기록보고서 → 급여반영"에서 처리해주세요.
+      </div>
       <label>입사일 <input id="f_hire_date" type="date" class="hr-input"></label>
       <label>재직상태
         <select id="f_status" class="hr-input">
@@ -1281,6 +1286,7 @@
       직급이 바뀐 시점과 실제 급여 반영 시점이 다를 수 있어서(예: 다음 연봉재계약일에 반영), 반영월을 직접 지정합니다.
       급여기준표의 만근수당·고정연장시간·식대가 이 반영월부터 적용됩니다.
     </p>
+    <div id="asCurrentPayPositionHint" style="font-size:12px; color:var(--text-muted); margin-bottom:8px;"></div>
     <div class="hr-form-grid" style="grid-template-columns:1fr;">
       <label>급여 반영월 <input id="as_month" type="month" class="hr-input"></label>
       <label>적용할 직급 <input id="as_position" class="hr-input" placeholder="급여기준표에 등록된 직급명과 정확히 일치해야 합니다"></label>
