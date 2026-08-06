@@ -429,6 +429,7 @@ function openAddModal() {
   $('f_attendance_allowance').value = '0';
   $('f_meal_allowance').value = '0';
   $('newEmployeePayFields').style.display = 'grid';
+  populatePositionSelect('f_pay_position', '');
   toggleWorkTypeFields();
   $('modalMsg').textContent = '';
   $('salaryHistorySection').style.display = 'none';
@@ -467,7 +468,7 @@ function openEditModal(id) {
   $('modalTitle').textContent = `직원 수정 — ${emp.name}`;
   $('f_name').value = emp.name || '';
   $('f_position').value = emp.position || '';
-  $('f_pay_position').value = emp.pay_position || '';
+  populatePositionSelect('f_pay_position', emp.pay_position || '');
   $('f_branch').value = emp.branch || '';
   $('f_department').value = emp.department || '';
   $('f_hire_date').value = emp.hire_date || '';
@@ -3562,7 +3563,10 @@ function switchPromotionsSubTab(name) {
   $('promoHistoryView').style.display = name === 'history' ? 'block' : 'none';
   $('promoStandardsView').style.display = name === 'standards' ? 'block' : 'none';
   if (name === 'saved') loadPromotionReportList();
-  if (name === 'history') populatePromoHistoryEmployeeSelect();
+  if (name === 'history') {
+    populatePromoHistoryEmployeeSelect();
+    populatePositionSelect('ph_position', '');
+  }
   if (name === 'standards') loadPositionStandards();
 }
 
@@ -3882,6 +3886,32 @@ async function deletePositionHistory(id) {
 /* ── 급여기준표 관리 ── */
 let positionStandardsCache = [];
 
+async function ensurePositionStandardsLoaded() {
+  if (positionStandardsCache.length > 0) return positionStandardsCache;
+  try {
+    const res = await fetch(`${apiBase()}/api/promotions?standards=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    positionStandardsCache = data.standards || [];
+  } catch (e) {
+    positionStandardsCache = [];
+  }
+  return positionStandardsCache;
+}
+
+async function populatePositionSelect(selectId, selectedValue) {
+  const standards = await ensurePositionStandardsLoaded();
+  const sel = $(selectId);
+  if (standards.length === 0) {
+    sel.innerHTML = '<option value="">급여기준표가 비어있습니다 — 먼저 등록해주세요</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">-- 직급 선택 --</option>' +
+    standards.map(s => `<option value="${esc(s.position)}">${esc(s.position)}</option>`).join('');
+  if (selectedValue) sel.value = selectedValue;
+}
+
 async function loadPositionStandards() {
   const tbody = $('promoStandardsTbody');
   tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
@@ -3971,7 +4001,7 @@ let pendingApplyStandardEmployeeId = null;
 
 function openApplyStandardModal(employeeId, position) {
   pendingApplyStandardEmployeeId = employeeId;
-  $('as_position').value = position;
+  populatePositionSelect('as_position', position);
   $('as_month').value = '';
   $('as_note').value = '';
   $('applyStandardModalMsg').textContent = '';
@@ -4012,4 +4042,88 @@ async function confirmApplyStandard() {
   } catch (e) {
     $('applyStandardModalMsg').textContent = e.message || '반영 중 오류가 발생했습니다.';
   }
+}
+
+/* ── 직급별 이력표(피벗) ── */
+function switchPromoViewMode(mode) {
+  document.querySelectorAll('[data-promoview]').forEach(b => b.classList.toggle('active', b.dataset.promoview === mode));
+  $('promoLiveTableWrap').style.display = mode === 'list' ? 'block' : 'none';
+  $('promoMatrixWrap').style.display = mode === 'matrix' ? 'block' : 'none';
+  if (mode === 'matrix') {
+    ensurePositionStandardsLoaded().then(() => renderPromotionMatrixInto('promoMatrixWrap', promoLiveCache));
+  }
+}
+
+function switchPromoSavedViewMode(mode) {
+  document.querySelectorAll('[data-promosavedview]').forEach(b => b.classList.toggle('active', b.dataset.promosavedview === mode));
+  $('promoReportDetailTableWrap').style.display = mode === 'list' ? 'block' : 'none';
+  $('promoReportDetailMatrixWrap').style.display = mode === 'matrix' ? 'block' : 'none';
+  if (mode === 'matrix' && promoCurrentDetailReport) {
+    ensurePositionStandardsLoaded().then(() => renderPromotionMatrixInto('promoReportDetailMatrixWrap', promoCurrentDetailReport.snapshot || []));
+  }
+}
+
+function buildPromotionMatrixColumns(list) {
+  // 급여기준표 순서(만근수당 오름차순 = 사원→대표이사)를 기본 컬럼 순서로 쓰고,
+  // 기준표에 없는 직급명(과거 이력의 오타/이명 등)은 뒤에 별도로 붙임.
+  const standardOrder = positionStandardsCache.map(s => s.position);
+  const seen = new Set();
+  list.forEach(e => (e.history || []).forEach(h => seen.add(h.position)));
+
+  const ordered = standardOrder.filter(p => seen.has(p));
+  const extra = [...seen].filter(p => !standardOrder.includes(p)).sort();
+  return [...ordered, ...extra];
+}
+
+function renderPromotionMatrixInto(containerId, list) {
+  const container = $(containerId);
+  if (!list || list.length === 0) {
+    container.innerHTML = `<div style="text-align:center; color:var(--text-muted); padding:24px;">데이터가 없습니다.</div>`;
+    return;
+  }
+  const columns = buildPromotionMatrixColumns(list);
+  if (columns.length === 0) {
+    container.innerHTML = `<div style="text-align:center; color:var(--text-muted); padding:24px;">등록된 직급이력이 없습니다. "직급이력 관리"에서 먼저 등록해주세요.</div>`;
+    return;
+  }
+
+  const headerHtml = `<th>지사</th><th>부서</th><th>성명</th><th>입사일</th>` +
+    columns.map(c => `<th style="text-align:center;">${esc(c)}</th>`).join('');
+
+  const rowsHtml = list.map(e => {
+    // 직급별로 "가장 이른(최초로 그 직급을 단) 날짜"를 셀에 표시
+    const earliestByPosition = {};
+    (e.history || []).forEach(h => {
+      if (!earliestByPosition[h.position] || h.date < earliestByPosition[h.position]) {
+        earliestByPosition[h.position] = h.date;
+      }
+    });
+    const cells = columns.map(c => {
+      const date = earliestByPosition[c];
+      if (!date) return `<td style="text-align:center; color:var(--border-strong);">-</td>`;
+      const year = date.slice(0, 4);
+      const isCurrent = c === e.position;
+      return `<td style="text-align:center; ${isCurrent ? 'font-weight:700; background:var(--green-light); color:var(--green);' : ''}" title="${esc(date)}">${year}</td>`;
+    }).join('');
+    return `
+      <tr>
+        <td>${esc(e.branch || '-')}</td>
+        <td>${esc(e.department || '-')}</td>
+        <td>${esc(e.name)}</td>
+        <td>${esc(e.hire_date || '-')}</td>
+        ${cells}
+      </tr>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <table class="table">
+      <thead><tr>${headerHtml}</tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div style="font-size:11px; color:var(--text-muted); margin-top:8px; padding:0 4px;">
+      숫자는 그 직급을 처음 단 연도입니다 (마우스를 올리면 정확한 날짜가 보입니다). 초록색으로 표시된 칸이 현재 직급입니다.
+      직급이력이 없는 칸은 "-"로 표시됩니다.
+    </div>
+  `;
 }
