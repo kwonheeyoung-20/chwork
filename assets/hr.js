@@ -3851,14 +3851,17 @@ async function addPositionHistory() {
         note: $('ph_note').value.trim() || null,
       }),
     });
-    if (!res.ok) throw new Error('failed');
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || errData.error || `요청 실패 (상태코드 ${res.status})`);
+    }
     $('ph_date').value = ''; $('ph_position').value = ''; $('ph_note').value = '';
     $('promoHistoryMsg').className = 'hr-msg success';
     $('promoHistoryMsg').textContent = '직급이력에 추가되었습니다. (급여에는 자동 반영 안 됨 — 반영할 시점이 되면 목록에서 "급여반영"을 눌러주세요)';
     loadEmployeePositionHistory();
   } catch (e) {
     $('promoHistoryMsg').className = 'hr-msg';
-    $('promoHistoryMsg').textContent = '추가 중 오류가 발생했습니다.';
+    $('promoHistoryMsg').textContent = '추가 중 오류가 발생했습니다: ' + (e.message || '');
   }
 }
 
