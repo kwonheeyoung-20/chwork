@@ -353,7 +353,7 @@ class handler(BaseHTTPRequestHandler):
     def _compute_promotion_snapshot(self, as_of, prior_year_end, include_all=False):
         emp_path = "employees?select=id,name,branch,department,position,hire_date,status&order=hire_date.asc"
         if not include_all:
-            emp_path += "&status=eq.재직"
+            emp_path += f"&status=eq.{quote('재직')}"
         employees = rest_request("GET", emp_path) or []
 
         hist_rows = rest_request("GET", "position_history?select=*&order=effective_date.asc") or []
