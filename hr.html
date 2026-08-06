@@ -591,6 +591,102 @@
           <div id="contractsMsg" class="hr-msg"></div>
         </section>
 
+        <section class="panel" id="tab-promotions" style="display:none;">
+          <div class="panel-header">
+            <h2>인사기록보고서</h2>
+            <button class="primary" onclick="openSaveReportModal()">+ 이번 시점 보고서 생성</button>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            직원의 입사일·직급이력 데이터를 바탕으로 근속년수·최근승진일을 자동 계산합니다.
+            "보고서 생성"을 누르면 그 시점 데이터를 스냅샷으로 저장해서 매년 쌓아둘 수 있고,
+            나중에 직원정보가 바뀌어도 저장된 보고서 내용은 그대로 보존됩니다.
+          </p>
+
+          <div style="display:flex; gap:4px; border-bottom: 0.5px solid var(--border); margin-bottom:14px;">
+            <button class="tab-btn active" data-promosub="live" onclick="switchPromotionsSubTab('live')">현재 기준 미리보기</button>
+            <button class="tab-btn" data-promosub="saved" onclick="switchPromotionsSubTab('saved')">저장된 보고서</button>
+            <button class="tab-btn" data-promosub="history" onclick="switchPromotionsSubTab('history')">직급이력 관리</button>
+          </div>
+
+          <!-- 현재 기준 미리보기 -->
+          <div id="promoLiveView">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+              <label style="font-size:13px; color:var(--text-secondary);">기준일자:</label>
+              <input id="promoAsOf" type="date" class="hr-input" style="width:150px;">
+              <button class="secondary" onclick="loadPromotionsLive()">조회</button>
+              <button class="secondary" onclick="downloadPromotionsExcel()">엑셀 다운로드</button>
+              <label class="hr-checkbox" style="margin-left:8px;">
+                <input type="checkbox" id="promoIncludeRetired" onchange="loadPromotionsLive()">
+                퇴사자 포함
+              </label>
+            </div>
+            <div class="table-wrap">
+              <table class="table" id="promoLiveTable">
+                <thead>
+                  <tr>
+                    <th>지사</th><th>부서</th><th>성명</th><th>직급</th><th>입사일</th>
+                    <th class="num">근속(현재기준)</th><th class="num">근속(전년말기준)</th>
+                    <th>최근 승진일</th><th>최근 승진직급</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="promoLiveTbody">
+                  <tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">조회를 눌러주세요.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 저장된 보고서 -->
+          <div id="promoSavedView" style="display:none;">
+            <div class="table-wrap" style="margin-bottom:16px;">
+              <table class="table" id="promoReportListTable">
+                <thead><tr><th>연도</th><th>기준일</th><th>전년말 기준일</th><th>생성일시</th><th>비고</th><th></th></tr></thead>
+                <tbody id="promoReportListTbody">
+                  <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div id="promoReportDetailWrap" style="display:none;">
+              <h3 style="font-size:14px; margin-bottom:10px;" id="promoReportDetailTitle"></h3>
+              <div class="table-wrap">
+                <table class="table" id="promoReportDetailTable">
+                  <thead>
+                    <tr>
+                      <th>지사</th><th>부서</th><th>성명</th><th>직급</th><th>입사일</th>
+                      <th class="num">근속(기준일)</th><th class="num">근속(전년말)</th>
+                      <th>최근 승진일</th><th>최근 승진직급</th>
+                    </tr>
+                  </thead>
+                  <tbody id="promoReportDetailTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 직급이력 관리 -->
+          <div id="promoHistoryView" style="display:none;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+              <label style="font-size:13px; color:var(--text-secondary);">직원:</label>
+              <select id="promoHistoryEmployeeSelect" class="hr-input" style="width:160px;" onchange="loadEmployeePositionHistory()"></select>
+            </div>
+            <div class="hr-form-grid" style="grid-template-columns: 1fr 1fr 2fr auto; align-items:end; gap:8px; margin-bottom:16px;">
+              <label style="font-size:12px;">승진일 <input id="ph_date" type="date" class="hr-input"></label>
+              <label style="font-size:12px;">승진 후 직급 <input id="ph_position" class="hr-input" placeholder="예: 과장"></label>
+              <label style="font-size:12px;">비고 <input id="ph_note" class="hr-input"></label>
+              <button class="primary" onclick="addPositionHistory()" style="height:34px;">추가</button>
+            </div>
+            <div id="promoHistoryMsg" class="hr-msg"></div>
+            <div class="table-wrap">
+              <table class="table" id="promoHistoryTable">
+                <thead><tr><th>승진일</th><th>직급</th><th>비고</th><th></th></tr></thead>
+                <tbody id="promoHistoryTbody">
+                  <tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">직원을 먼저 선택해주세요.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section class="panel" id="tab-contacts" style="display:none;">
           <div class="panel-header">
             <h2>거래처 연락처 <span id="contactCount" class="hr-count"></span></h2>
@@ -1118,6 +1214,27 @@
     </div>
     <div style="display:flex; justify-content:flex-end; margin-top:16px;">
       <button class="secondary" onclick="closeRenewHistoryModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 인사기록보고서 생성 모달 -->
+<div id="saveReportModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:420px;">
+    <h2>보고서 생성</h2>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+      이 시점의 근속년수·승진이력을 스냅샷으로 저장합니다. 나중에 직원정보가 바뀌어도 이 보고서 내용은 그대로 보존돼요.
+    </p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>보고 연도 <input id="sr_year" type="number" class="hr-input" placeholder="예: 2026"></label>
+      <label>기준일자 <input id="sr_asof" type="date" class="hr-input"></label>
+      <label>비고 <input id="sr_note" class="hr-input" placeholder="예: 2026년 정기 승진 검토용"></label>
+      <label class="hr-checkbox"><input type="checkbox" id="sr_include_retired"> 퇴사자도 포함</label>
+    </div>
+    <div id="saveReportModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeSaveReportModal()">취소</button>
+      <button class="primary" id="saveReportBtn" onclick="confirmSaveReport()">생성</button>
     </div>
   </div>
 </div>

@@ -74,6 +74,7 @@
     { "src": "/api/contacts", "dest": "api/workspace.py?resource=contacts" },
     { "src": "/api/contract_docs", "dest": "api/workspace.py?resource=contractdocs" },
     { "src": "/api/daily_todos", "dest": "api/workspace.py?resource=todos" },
+    { "src": "/api/promotions", "dest": "api/workspace.py?resource=promotions" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
