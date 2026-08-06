@@ -325,7 +325,7 @@ class handler(BaseHTTPRequestHandler):
             rows = rest_request(
                 "GET",
                 "contract_documents?alert_dismissed=eq.false&contract_end_date=not.is.null"
-                "&terminated_date=is.null&select=*&order=contract_end_date.asc",
+                "&terminated_date=is.null&doc_group=eq.contract&select=*&order=contract_end_date.asc",
             ) or []
             result = []
             for r in rows:
@@ -629,6 +629,7 @@ class handler(BaseHTTPRequestHandler):
         storage_upload(storage_path, file_bytes, payload.get("content_type"))
 
         body = {
+            "doc_group": payload.get("doc_group") or "contract",
             "doc_type": payload.get("doc_type"),
             "vendor_name": payload.get("vendor_name"),
             "contract_title": payload.get("contract_title"),
@@ -822,7 +823,7 @@ class handler(BaseHTTPRequestHandler):
 
     def _patch_contractdocs(self, doc_id, payload):
         update_fields = {}
-        for key in ("doc_type", "vendor_name", "contract_title", "contract_start_date",
+        for key in ("doc_group", "doc_type", "vendor_name", "contract_title", "contract_start_date",
                     "contract_end_date", "reminder_days_before", "note", "alert_dismissed", "auto_renew"):
             if key in payload:
                 update_fields[key] = payload[key]
