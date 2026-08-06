@@ -425,6 +425,10 @@ function openAddModal() {
   $('f_contract_rate').value = '100';
   $('f_contract_fixed_amount').value = '';
   $('f_contract_proration_mode').value = 'daily';
+  $('f_fixed_overtime_hours').value = '0';
+  $('f_attendance_allowance').value = '0';
+  $('f_meal_allowance').value = '0';
+  $('newEmployeePayFields').style.display = 'grid';
   toggleWorkTypeFields();
   $('modalMsg').textContent = '';
   $('salaryHistorySection').style.display = 'none';
@@ -432,10 +436,31 @@ function openAddModal() {
   $('empModal').style.display = 'flex';
 }
 
+async function applyPositionStandardToNewEmployee() {
+  if (editingId !== null) return; // 신규입사 모달에서만 자동채움
+  const position = $('f_position').value.trim();
+  if (!position) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/promotions?standards=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const match = (data.standards || []).find(s => s.position === position);
+    if (match) {
+      $('f_fixed_overtime_hours').value = match.fixed_overtime_hours;
+      $('f_attendance_allowance').value = match.attendance_allowance;
+      $('f_meal_allowance').value = match.meal_allowance;
+    }
+  } catch (e) {
+    // 자동채움 실패해도 수동 입력은 계속 가능하므로 조용히 무시
+  }
+}
+
 function openEditModal(id) {
   const emp = employeesCache.find(e => e.id === id);
   if (!emp) return;
   editingId = id;
+  $('newEmployeePayFields').style.display = 'none';
   $('modalTitle').textContent = `직원 수정 — ${emp.name}`;
   $('f_name').value = emp.name || '';
   $('f_position').value = emp.position || '';
@@ -510,6 +535,9 @@ async function saveEmployee() {
         payload.annual_salary_thousand = Number(salaryVal);
         payload.effective_month = $('f_salary_month').value || payload.hire_date;
       }
+      payload.fixed_overtime_hours = Number($('f_fixed_overtime_hours').value) || 0;
+      payload.attendance_allowance = Number($('f_attendance_allowance').value) || 0;
+      payload.meal_allowance = Number($('f_meal_allowance').value) || 0;
       payload.work_type = $('f_employment_type').value;
       if (payload.work_type === '수습') {
         payload.probation_months = Number($('f_probation_months').value);
@@ -3527,8 +3555,10 @@ function switchPromotionsSubTab(name) {
   $('promoLiveView').style.display = name === 'live' ? 'block' : 'none';
   $('promoSavedView').style.display = name === 'saved' ? 'block' : 'none';
   $('promoHistoryView').style.display = name === 'history' ? 'block' : 'none';
+  $('promoStandardsView').style.display = name === 'standards' ? 'block' : 'none';
   if (name === 'saved') loadPromotionReportList();
   if (name === 'history') populatePromoHistoryEmployeeSelect();
+  if (name === 'standards') loadPositionStandards();
 }
 
 async function loadPromotionsLive() {
@@ -3764,10 +3794,10 @@ async function loadEmployeePositionHistory() {
   promoHistoryEmployeeId = employeeId || null;
   const tbody = $('promoHistoryTbody');
   if (!employeeId) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">직원을 먼저 선택해주세요.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">직원을 먼저 선택해주세요.</td></tr>`;
     return;
   }
-  tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/promotions?history=1&employee_id=${employeeId}`, {
       headers: { 'X-HR-Password': hrPassword() },
@@ -3775,7 +3805,7 @@ async function loadEmployeePositionHistory() {
     const data = await res.json();
     const list = data.history || [];
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 직급이력이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 직급이력이 없습니다.</td></tr>`;
       return;
     }
     tbody.innerHTML = list.map(h => `
@@ -3783,11 +3813,14 @@ async function loadEmployeePositionHistory() {
         <td>${esc(h.effective_date)}</td>
         <td>${esc(h.position)}</td>
         <td style="font-size:12px; color:var(--text-secondary);">${esc(h.note || '-')}</td>
-        <td><a class="hr-edit-link" onclick="deletePositionHistory('${h.id}')">삭제</a></td>
+        <td>
+          <a class="hr-edit-link" onclick="openApplyStandardModal('${employeeId}', '${esc(h.position)}')">급여반영</a>
+          · <a class="hr-edit-link" onclick="deletePositionHistory('${h.id}')">삭제</a>
+        </td>
       </tr>
     `).join('');
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
   }
 }
 
@@ -3816,7 +3849,7 @@ async function addPositionHistory() {
     if (!res.ok) throw new Error('failed');
     $('ph_date').value = ''; $('ph_position').value = ''; $('ph_note').value = '';
     $('promoHistoryMsg').className = 'hr-msg success';
-    $('promoHistoryMsg').textContent = '추가되었습니다.';
+    $('promoHistoryMsg').textContent = '직급이력에 추가되었습니다. (급여에는 자동 반영 안 됨 — 반영할 시점이 되면 목록에서 "급여반영"을 눌러주세요)';
     loadEmployeePositionHistory();
   } catch (e) {
     $('promoHistoryMsg').className = 'hr-msg';
@@ -3835,5 +3868,136 @@ async function deletePositionHistory(id) {
     loadEmployeePositionHistory();
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 급여기준표 관리 ── */
+let positionStandardsCache = [];
+
+async function loadPositionStandards() {
+  const tbody = $('promoStandardsTbody');
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/promotions?standards=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    positionStandardsCache = data.standards || [];
+    if (positionStandardsCache.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 기준이 없습니다.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = positionStandardsCache.map(s => `
+      <tr>
+        <td>${esc(s.position)}</td>
+        <td class="num">${fmt(s.fixed_overtime_hours)}</td>
+        <td class="num">${fmt(s.attendance_allowance)}</td>
+        <td class="num">${fmt(s.meal_allowance)}</td>
+        <td style="font-size:12px; color:var(--text-secondary);">${esc(s.note || '-')}</td>
+        <td>
+          <a class="hr-edit-link" onclick="editPositionStandard('${esc(s.position)}')">수정</a>
+          · <a class="hr-edit-link" onclick="deletePositionStandard('${s.id}')">삭제</a>
+        </td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function editPositionStandard(position) {
+  const s = positionStandardsCache.find(x => x.position === position);
+  if (!s) return;
+  $('ps_position').value = s.position;
+  $('ps_fixed_overtime_hours').value = s.fixed_overtime_hours;
+  $('ps_attendance_allowance').value = s.attendance_allowance;
+  $('ps_meal_allowance').value = s.meal_allowance;
+}
+
+async function savePositionStandard() {
+  const position = $('ps_position').value.trim();
+  if (!position) {
+    $('promoStandardsMsg').textContent = '직급명은 필수입니다.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/promotions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({
+        type: 'save_standard',
+        position,
+        fixed_overtime_hours: Number($('ps_fixed_overtime_hours').value) || 0,
+        attendance_allowance: Number($('ps_attendance_allowance').value) || 0,
+        meal_allowance: Number($('ps_meal_allowance').value) || 0,
+      }),
+    });
+    if (!res.ok) throw new Error('failed');
+    $('ps_position').value = ''; $('ps_fixed_overtime_hours').value = '';
+    $('ps_attendance_allowance').value = ''; $('ps_meal_allowance').value = '';
+    $('promoStandardsMsg').className = 'hr-msg success';
+    $('promoStandardsMsg').textContent = '저장되었습니다.';
+    loadPositionStandards();
+  } catch (e) {
+    $('promoStandardsMsg').className = 'hr-msg';
+    $('promoStandardsMsg').textContent = '저장 중 오류가 발생했습니다.';
+  }
+}
+
+async function deletePositionStandard(id) {
+  if (!confirm('이 직급 기준을 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/promotions?id=${id}&type=standard`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('failed');
+    loadPositionStandards();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 급여기준 반영 (직급이력과 별개 시점 지정) ── */
+let pendingApplyStandardEmployeeId = null;
+
+function openApplyStandardModal(employeeId, position) {
+  pendingApplyStandardEmployeeId = employeeId;
+  $('as_position').value = position;
+  $('as_month').value = '';
+  $('as_note').value = '';
+  $('applyStandardModalMsg').textContent = '';
+  $('applyStandardModal').style.display = 'flex';
+}
+
+function closeApplyStandardModal() {
+  $('applyStandardModal').style.display = 'none';
+}
+
+async function confirmApplyStandard() {
+  const month = $('as_month').value;
+  const position = $('as_position').value.trim();
+  if (!month || !position) {
+    $('applyStandardModalMsg').textContent = '반영월과 직급은 필수입니다.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/promotions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({
+        type: 'apply_standard',
+        employee_id: pendingApplyStandardEmployeeId,
+        effective_month: `${month}-01`,
+        position,
+        note: $('as_note').value.trim() || null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'failed');
+    closeApplyStandardModal();
+    alert('급여설정에 반영되었습니다.');
+  } catch (e) {
+    $('applyStandardModalMsg').textContent = e.message || '반영 중 오류가 발생했습니다.';
   }
 }
