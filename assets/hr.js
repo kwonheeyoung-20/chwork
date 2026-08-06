@@ -643,14 +643,19 @@ function renderPension(list, asOf) {
   $('periodAccrualHeader').textContent = asOf ? `${asOf.slice(0,4)}년 1월~${asOf.slice(5)} 발생액` : '해당연도 1월~지정일 발생액';
   const tbody = $('pensionTbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
     return;
   }
 
   const sum = (arr, key) => arr.reduce((s, p) => s + (Number(p[key]) || 0), 0);
+  const positionOf = (id) => {
+    const emp = employeesCache.find(e => e.id === id);
+    return emp ? (emp.position || '-') : '-';
+  };
   const rowHtml = (p) => `
     <tr data-emp-id="${p.id}" data-emp-name="${esc(p.name)}" data-balance="${p.balance}" data-asofbalance="${asOf ? (p.as_of_balance ?? 0) : ''}">
       <td>${esc(p.name)}</td>
+      <td>${esc(positionOf(p.id))}</td>
       <td>${esc(p.branch || '-')}</td>
       <td>${esc(p.department || '-')}</td>
       <td>${esc(p.pension_enrollment_date || p.hire_date || '-')}</td>
@@ -666,7 +671,7 @@ function renderPension(list, asOf) {
   `;
   const subtotalHtml = (branch, arr) => `
     <tr class="hr-total-row" style="background:var(--surface);">
-      <td colspan="4">${esc(branch)} 소계 (${arr.length}명)</td>
+      <td colspan="5">${esc(branch)} 소계 (${arr.length}명)</td>
       <td class="num">${fmt(sum(arr,'cumulative_estimate'))}</td>
       <td class="num">${fmt(sum(arr,'total_contributed'))}</td>
       <td class="num">${fmt(sum(arr,'balance'))}</td>
@@ -693,7 +698,7 @@ function renderPension(list, asOf) {
   });
   html += `
     <tr class="hr-total-row">
-      <td colspan="4">전체 합계 (${list.length}명)</td>
+      <td colspan="5">전체 합계 (${list.length}명)</td>
       <td class="num">${fmt(sum(list,'cumulative_estimate'))}</td>
       <td class="num">${fmt(sum(list,'total_contributed'))}</td>
       <td class="num">${fmt(sum(list,'balance'))}</td>
@@ -950,15 +955,15 @@ function downloadSettlementExcel() {
 
 /* ── 퇴직연금 현황 엑셀 다운로드 ── */
 function downloadPensionExcel() {
-  const rows = [['이름', '지사', '부서', '가입일', '누적추계액(현재기준)', '실불입액 합계', '잔액', $('asOfCumHeader').textContent, $('periodAccrualHeader').textContent, $('asOfBalanceHeader').textContent]];
+  const rows = [['이름', '직급', '지사', '부서', '가입일', '누적추계액(현재기준)', '실불입액 합계', '잔액', $('asOfCumHeader').textContent, $('periodAccrualHeader').textContent, $('asOfBalanceHeader').textContent]];
   document.querySelectorAll('#pensionTbody tr').forEach(tr => {
     if (tr.classList.contains('hr-total-row')) {
       const tds = Array.from(tr.children).map(td => td.textContent.trim());
-      rows.push([tds[0], '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5], tds[6]]);
+      rows.push([tds[0], '', '', '', '', tds[1], tds[2], tds[3], tds[4], tds[5], tds[6]]);
       return;
     }
-    const cells = Array.from(tr.children).slice(0, 10).map(td => td.textContent.trim());
-    if (cells.length === 10) rows.push(cells);
+    const cells = Array.from(tr.children).slice(0, 11).map(td => td.textContent.trim());
+    if (cells.length === 11) rows.push(cells);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
