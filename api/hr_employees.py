@@ -97,6 +97,17 @@ def _cors_headers():
     }
 
 
+def _lookup_position_standard(position):
+    """직급별 급여기준표(position_pay_standards)에서 해당 직급 기준값을 찾아 반환.
+    없으면 None (호출측에서 fallback 처리)."""
+    if not position:
+        return None
+    rows = rest_request(
+        "GET", f"position_pay_standards?position=eq.{quote(position)}&select=*"
+    )
+    return rows[0] if rows else None
+
+
 class handler(BaseHTTPRequestHandler):
     def _authorized(self):
         pw = self.headers.get("X-HR-Password", "")
@@ -203,6 +214,7 @@ class handler(BaseHTTPRequestHandler):
                 effective_month = payload.get("effective_month")
                 if not emp_id or not effective_month:
                     return self._send(400, {"error": "employee_id, effective_month은 필수입니다"})
+
                 existing = rest_request(
                     "GET", f"payroll_settings_history?employee_id=eq.{emp_id}&select=*&order=effective_month.desc&limit=1"
                 )
@@ -210,25 +222,46 @@ class handler(BaseHTTPRequestHandler):
                     "standard_hours": 209, "fixed_overtime_hours": 0,
                     "attendance_allowance": 0, "meal_allowance": 0,
                 }
+
+                # 직급별 급여기준표에서 이 직원의 현재 직급 기준값을 찾아서 우선 적용.
+                # 기준표에 없는 직급이면 기존 계약직 설정값을 그대로 이어감(fallback).
+                emp_rows = rest_request("GET", f"employees?id=eq.{emp_id}&select=position")
+                position = emp_rows[0].get("position") if emp_rows else None
+                standard = _lookup_position_standard(position)
+
+                if standard:
+                    attendance_allowance = standard["attendance_allowance"]
+                    fixed_overtime_hours = standard["fixed_overtime_hours"]
+                    meal_allowance = standard["meal_allowance"]
+                    note = f"계약 종료 후 정규직 전환 — 직급기준표({position}) 자동 적용"
+                    rest_request("PATCH", f"employees?id=eq.{emp_id}", body={"pay_position": position})
+                else:
+                    attendance_allowance = base.get("attendance_allowance", 0)
+                    fixed_overtime_hours = base.get("fixed_overtime_hours", 0)
+                    meal_allowance = base.get("meal_allowance", 0)
+                    note = f"계약 종료 후 정규직 전환 — 직급기준표에 '{position}' 없어 기존 계약직 설정값 유지(확인 필요)"
+
                 rest_request("POST", "payroll_settings_history", body={
                     "employee_id": emp_id,
                     "effective_month": effective_month,
                     "standard_hours": base.get("standard_hours", 209),
-                    "fixed_overtime_hours": base.get("fixed_overtime_hours", 0),
-                    "attendance_allowance": base.get("attendance_allowance", 0),
-                    "meal_allowance": base.get("meal_allowance", 0),
+                    "fixed_overtime_hours": fixed_overtime_hours,
+                    "attendance_allowance": attendance_allowance,
+                    "meal_allowance": meal_allowance,
                     "employment_type": "정규직",
                     "pay_rate": 1.0,
-                    "note": "계약 종료 후 정규직 전환",
+                    "note": note,
                 })
-                return self._send(200, {"ok": True})
+                return self._send(200, {"ok": True, "applied_standard": bool(standard)})
 
             emp_fields = {k: payload.get(k) for k in (
-                "name", "position", "branch", "department", "hire_date", "retire_date",
+                "name", "position", "pay_position", "branch", "department", "hire_date", "retire_date",
                 "status", "employment_type", "contract_fixed_salary", "unused_leave_days",
                 "pension_enrolled", "pension_enrollment_date", "note"
             ) if payload.get(k) is not None}
             emp_fields.setdefault("status", "재직")
+            if "pay_position" not in emp_fields and emp_fields.get("position"):
+                emp_fields["pay_position"] = emp_fields["position"]  # 신규입사 시 기본값: 직급=급여직급 동일
 
             created = rest_request("POST", "employees", body=emp_fields, prefer="return=representation")
             new_emp = created[0]
@@ -240,7 +273,9 @@ class handler(BaseHTTPRequestHandler):
                     "reason": "신규입사",
                 })
 
-            # 급여 설정(payroll_settings_history) — 정규직도 이 설정이 있어야 급여계산이 되므로 항상 생성
+            # 급여 설정(payroll_settings_history) — 정규직도 이 설정이 있어야 급여계산이 되므로 항상 생성.
+            # 화면에서 만근수당/고정연장시간/식대를 직급기준표로 자동 채워서 보내주면 그 값을 쓰고,
+            # 안 보내면(수습/계약직 등 예외) 0 또는 직접 입력값을 사용.
             work_type = payload.get("work_type") or "정규직"  # '정규직' | '수습' | '계약직'
             hire_date = payload.get("hire_date")
             base_settings = {

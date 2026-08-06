@@ -747,6 +747,8 @@ class handler(BaseHTTPRequestHandler):
             "contract_end_date": prev.get("contract_end_date"),
             "note": payload.get("note") or f"급여기준 반영({position}) — 직급기준표 적용",
         })
+        # 이 시점부터는 이 직급이 "급여직급"이 되므로 직원마스터에도 반영
+        rest_request("PATCH", f"employees?id=eq.{employee_id}", body={"pay_position": position})
         return self._send(201, {"ok": True})
 
     # ────────────────────────────────────────────────────────
