@@ -388,6 +388,10 @@ class handler(BaseHTTPRequestHandler):
         return result
 
     def _get_promotions(self, qs):
+        if qs.get("standards", ["0"])[0] == "1":
+            rows = rest_request("GET", "position_pay_standards?select=*&order=attendance_allowance.desc")
+            return self._send(200, {"standards": rows})
+
         if qs.get("reports", ["0"])[0] == "1":
             rows = rest_request(
                 "GET",
@@ -650,6 +654,26 @@ class handler(BaseHTTPRequestHandler):
     def _post_promotions(self, payload):
         action = payload.get("type")
 
+        if action == "apply_standard":
+            return self._post_apply_standard(payload)
+
+        if action == "save_standard":
+            position = payload.get("position")
+            if not position:
+                return self._send(400, {"error": "position은 필수입니다"})
+            body = {
+                "position": position,
+                "attendance_allowance": payload.get("attendance_allowance") or 0,
+                "fixed_overtime_hours": payload.get("fixed_overtime_hours") or 0,
+                "meal_allowance": payload.get("meal_allowance") or 0,
+                "note": payload.get("note"),
+                "updated_at": datetime.datetime.utcnow().isoformat(),
+            }
+            rest_request(
+                "POST", "position_pay_standards", body=body, prefer="resolution=merge-duplicates"
+            )
+            return self._send(200, {"ok": True})
+
         if action == "save_report":
             report_year = payload.get("report_year")
             if not report_year:
@@ -671,6 +695,10 @@ class handler(BaseHTTPRequestHandler):
             return self._send(201, {"report": created[0] if created else None})
 
         # 기본: 직급이력(승진기록) 추가
+        # 기본: 직급이력(승진기록) 추가 — 이건 "직급이 바뀐 사실"만 기록합니다.
+        # 실제 급여(만근수당 등) 반영은 자동으로 하지 않고, 아래 "apply_standard"를
+        # 별도로 호출해야 반영됩니다. 승진일과 급여 반영일이 다른 경우(예: 직급은
+        # 즉시 바뀌지만 급여는 다음 연봉재계약 시점에 반영)를 구분하기 위함입니다.
         employee_id = payload.get("employee_id")
         effective_date = payload.get("effective_date")
         position = payload.get("position")
@@ -683,6 +711,43 @@ class handler(BaseHTTPRequestHandler):
             "note": payload.get("note"),
         }, prefer="return=representation")
         return self._send(201, {"history": created[0] if created else None})
+
+    def _post_apply_standard(self, payload):
+        """급여기준 반영 — 직급이력과 별개로, 실제 급여(만근수당 등)를
+        반영할 시점을 직접 지정해서 payroll_settings_history에 적용."""
+        employee_id = payload.get("employee_id")
+        effective_month = payload.get("effective_month")
+        position = payload.get("position")
+        if not employee_id or not effective_month or not position:
+            return self._send(400, {"error": "employee_id, effective_month, position은 필수입니다"})
+
+        standard_rows = rest_request(
+            "GET", f"position_pay_standards?position=eq.{quote(position)}&select=*"
+        )
+        if not standard_rows:
+            return self._send(404, {"error": f"급여기준표에 '{position}' 직급이 없습니다. 먼저 급여기준표에 추가해주세요."})
+        standard = standard_rows[0]
+
+        prev_rows = rest_request(
+            "GET",
+            f"payroll_settings_history?employee_id=eq.{employee_id}&select=*"
+            f"&order=effective_month.desc&limit=1",
+        )
+        prev = prev_rows[0] if prev_rows else {}
+
+        rest_request("POST", "payroll_settings_history", body={
+            "employee_id": employee_id,
+            "effective_month": effective_month,
+            "standard_hours": prev.get("standard_hours", 209),
+            "fixed_overtime_hours": standard["fixed_overtime_hours"],
+            "attendance_allowance": standard["attendance_allowance"],
+            "meal_allowance": standard["meal_allowance"],
+            "employment_type": prev.get("employment_type", "정규직"),
+            "pay_rate": prev.get("pay_rate", 1.0),
+            "contract_end_date": prev.get("contract_end_date"),
+            "note": payload.get("note") or f"급여기준 반영({position}) — 직급기준표 적용",
+        })
+        return self._send(201, {"ok": True})
 
     # ────────────────────────────────────────────────────────
     # PATCH
@@ -847,8 +912,11 @@ class handler(BaseHTTPRequestHandler):
         item_id = qs.get("id", [None])[0]
         if not item_id:
             return self._send(400, {"error": "id는 필수입니다"})
-        if qs.get("type", [None])[0] == "report":
+        item_type = qs.get("type", [None])[0]
+        if item_type == "report":
             rest_request("DELETE", f"promotion_reports?id=eq.{item_id}")
+        elif item_type == "standard":
+            rest_request("DELETE", f"position_pay_standards?id=eq.{item_id}")
         else:
             rest_request("DELETE", f"position_history?id=eq.{item_id}")
         return self._send(200, {"ok": True})
