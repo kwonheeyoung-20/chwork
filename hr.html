@@ -606,6 +606,7 @@
             <button class="tab-btn active" data-promosub="live" onclick="switchPromotionsSubTab('live')">현재 기준 미리보기</button>
             <button class="tab-btn" data-promosub="saved" onclick="switchPromotionsSubTab('saved')">저장된 보고서</button>
             <button class="tab-btn" data-promosub="history" onclick="switchPromotionsSubTab('history')">직급이력 관리</button>
+            <button class="tab-btn" data-promosub="standards" onclick="switchPromotionsSubTab('standards')">급여기준표</button>
           </div>
 
           <!-- 현재 기준 미리보기 -->
@@ -680,7 +681,31 @@
               <table class="table" id="promoHistoryTable">
                 <thead><tr><th>승진일</th><th>직급</th><th>비고</th><th></th></tr></thead>
                 <tbody id="promoHistoryTbody">
-                  <tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">직원을 먼저 선택해주세요.</td></tr>
+                  <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">직원을 먼저 선택해주세요.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 급여기준표 -->
+          <div id="promoStandardsView" style="display:none;">
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              직급별 만근수당·고정연장시간·식대 기준입니다. 신규입사 시 직급 입력하면 자동으로 채워지고,
+              "직급이력 관리"에서 승진 기록을 추가하면 그 시점부터 여기 기준으로 급여설정도 같이 갱신됩니다.
+            </p>
+            <div class="hr-form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr auto; align-items:end; gap:8px; margin-bottom:16px;">
+              <label style="font-size:12px;">직급 <input id="ps_position" class="hr-input" placeholder="예: 부장"></label>
+              <label style="font-size:12px;">고정연장시간(1.5배적용) <input id="ps_fixed_overtime_hours" type="number" class="hr-input"></label>
+              <label style="font-size:12px;">만근수당 <input id="ps_attendance_allowance" type="number" class="hr-input"></label>
+              <label style="font-size:12px;">식대 <input id="ps_meal_allowance" type="number" class="hr-input"></label>
+              <button class="primary" onclick="savePositionStandard()" style="height:34px;">저장</button>
+            </div>
+            <div id="promoStandardsMsg" class="hr-msg"></div>
+            <div class="table-wrap">
+              <table class="table" id="promoStandardsTable">
+                <thead><tr><th>직급</th><th class="num">고정연장시간</th><th class="num">만근수당</th><th class="num">식대</th><th>비고</th><th></th></tr></thead>
+                <tbody id="promoStandardsTbody">
+                  <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>
                 </tbody>
               </table>
             </div>
@@ -826,7 +851,7 @@
     <h2 id="modalTitle">직원 추가</h2>
     <div class="hr-form-grid">
       <label>이름 <input id="f_name" class="hr-input"></label>
-      <label>직급 <input id="f_position" class="hr-input" list="positionList"></label>
+      <label>직급 <input id="f_position" class="hr-input" list="positionList" onchange="applyPositionStandardToNewEmployee()"></label>
       <label>지사 <input id="f_branch" class="hr-input" list="branchList"></label>
       <label>부서 <input id="f_department" class="hr-input" list="departmentList"></label>
       <datalist id="positionList"></datalist>
@@ -890,6 +915,15 @@
       <label>연봉(천원) <input id="f_salary" type="number" class="hr-input"></label>
       <label>적용 시작월 <input id="f_salary_month" type="date" class="hr-input"></label>
       <label class="hr-span2">변경 사유 <input id="f_salary_reason" class="hr-input" placeholder="예: 신규입사, 2026년 연봉재협상"></label>
+    </div>
+
+    <div id="newEmployeePayFields" class="hr-form-grid" style="margin-top:14px; border-top: 0.5px solid var(--border); padding-top:14px;">
+      <div class="hr-span2" style="font-size:11px; color:var(--text-muted); margin-bottom:-4px;">
+        직급을 입력하면 급여기준표에서 자동으로 채워집니다 (필요시 직접 수정 가능). 수습/계약직 정액지급이면 0으로 두셔도 됩니다.
+      </div>
+      <label>고정연장시간(1.5배적용) <input id="f_fixed_overtime_hours" type="number" class="hr-input" value="0"></label>
+      <label>만근수당 <input id="f_attendance_allowance" type="number" class="hr-input" value="0"></label>
+      <label>식대 <input id="f_meal_allowance" type="number" class="hr-input" value="0"></label>
     </div>
 
     <div id="salaryHistorySection" style="display:none; margin-top:16px; padding-top:12px; border-top:0.5px solid var(--border);">
@@ -1235,6 +1269,27 @@
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
       <button class="secondary" onclick="closeSaveReportModal()">취소</button>
       <button class="primary" id="saveReportBtn" onclick="confirmSaveReport()">생성</button>
+    </div>
+  </div>
+</div>
+
+<!-- 급여기준 반영 모달 -->
+<div id="applyStandardModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:420px;">
+    <h2>급여기준 반영</h2>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+      직급이 바뀐 시점과 실제 급여 반영 시점이 다를 수 있어서(예: 다음 연봉재계약일에 반영), 반영월을 직접 지정합니다.
+      급여기준표의 만근수당·고정연장시간·식대가 이 반영월부터 적용됩니다.
+    </p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>급여 반영월 <input id="as_month" type="month" class="hr-input"></label>
+      <label>적용할 직급 <input id="as_position" class="hr-input" placeholder="급여기준표에 등록된 직급명과 정확히 일치해야 합니다"></label>
+      <label>비고 <input id="as_note" class="hr-input" placeholder="예: 2027년 연봉재계약과 함께 반영"></label>
+    </div>
+    <div id="applyStandardModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeApplyStandardModal()">취소</button>
+      <button class="primary" onclick="confirmApplyStandard()">반영</button>
     </div>
   </div>
 </div>
