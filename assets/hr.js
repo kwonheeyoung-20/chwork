@@ -3303,7 +3303,17 @@ function openContractDocModal() {
   $('cdExistingFileWrap').style.display = 'none';
   $('contractDocModalMsg').textContent = '';
   $('contractDocSaveBtn').disabled = false;
+  toggleContractDocTypeFields();
   $('contractDocModal').style.display = 'flex';
+}
+
+function isContractLikeDocType(docType) {
+  return (docType || '').startsWith('계약서') || docType === '지급보증서';
+}
+
+function toggleContractDocTypeFields() {
+  const isContract = isContractLikeDocType($('cd_doc_type').value);
+  $('cdContractDatesWrap').style.display = isContract ? 'grid' : 'none';
 }
 
 function editContractDoc(id) {
@@ -3329,6 +3339,7 @@ function editContractDoc(id) {
   }
   $('contractDocModalMsg').textContent = '';
   $('contractDocSaveBtn').disabled = false;
+  toggleContractDocTypeFields();
   $('contractDocModal').style.display = 'flex';
 }
 
