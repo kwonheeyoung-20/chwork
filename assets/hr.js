@@ -3728,7 +3728,7 @@ async function viewPromotionReport(id) {
     const data = await res.json();
     if (!res.ok) throw new Error('failed');
     promoCurrentDetailReport = data.report;
-    $('promoReportDetailTitle').textContent = `${data.report.report_year}년 보고서 (기준일: ${data.report.as_of_date})`;
+    $('promoReportDetailTitle').textContent = `${data.report.report_year}년 진급자 보고서(기준일: ${data.report.as_of_date})`;
     const tbody = $('promoReportDetailTbody');
     const list = data.report.snapshot || [];
     if (list.length === 0) {
@@ -4153,9 +4153,10 @@ function printPromotionMatrix(containerId) {
     alert('먼저 "직급별 이력표"를 조회해주세요.');
     return;
   }
+  const asOfDate = $('promoAsOf').value || new Date().toISOString().slice(0, 10);
   const title = containerId === 'promoReportDetailMatrixWrap'
     ? $('promoReportDetailTitle').textContent
-    : `인사기록 — 직급별 이력표 (기준일: ${$('promoAsOf').value || new Date().toISOString().slice(0, 10)})`;
+    : `${asOfDate.slice(0, 4)}년 진급자 보고서(기준일: ${asOfDate})`;
 
   $('promoMatrixPrintTitle').textContent = title;
   $('promoMatrixPrintBody').innerHTML = source.innerHTML;
