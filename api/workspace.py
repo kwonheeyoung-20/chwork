@@ -152,9 +152,16 @@ def storage_sign_url(path, expires_in=3600):
 
 
 def safe_filename(name: str) -> str:
+    """저장소 경로(키)용 이름 생성. Supabase Storage는 키에 한글 등 비-ASCII
+    문자가 들어가면 'InvalidKey' 오류를 내므로, 경로는 순수 영문/숫자
+    조합(UUID+확장자)만 쓰고, 원래 파일명(한글 포함)은 DB의 file_name
+    컬럼에 별도로 저장해서 화면 표시·다운로드에 사용합니다."""
     name = name or "file"
-    base = re.sub(r"[^\w\.\-가-힣]", "_", name)
-    return f"{uuid.uuid4()}_{base}"
+    ext = ""
+    if "." in name:
+        raw_ext = name.rsplit(".", 1)[-1]
+        ext = "." + re.sub(r"[^A-Za-z0-9]", "", raw_ext)[:10]
+    return f"{uuid.uuid4()}{ext}"
 
 
 # ────────────────────────────────────────────────────────────
