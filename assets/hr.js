@@ -413,7 +413,7 @@ function toggleWorkTypeFields() {
 function openAddModal() {
   editingId = null;
   $('modalTitle').textContent = '직원 추가';
-  ['name','position','branch','department','hire_date','retire_date','note',
+  ['name','position','pay_position','branch','department','hire_date','retire_date','note',
    'pension_enrollment_date','salary','salary_month','salary_reason'].forEach(f => $('f_' + f).value = '');
   $('f_status').value = '재직';
   $('f_pension_enrolled').value = 'true';
@@ -440,6 +440,9 @@ async function applyPositionStandardToNewEmployee() {
   if (editingId !== null) return; // 신규입사 모달에서만 자동채움
   const position = $('f_position').value.trim();
   if (!position) return;
+  if (!$('f_pay_position').value.trim()) {
+    $('f_pay_position').value = position; // 신규입사는 기본적으로 직급=급여직급
+  }
   try {
     const res = await fetch(`${apiBase()}/api/promotions?standards=1`, {
       headers: { 'X-HR-Password': hrPassword() },
@@ -464,6 +467,7 @@ function openEditModal(id) {
   $('modalTitle').textContent = `직원 수정 — ${emp.name}`;
   $('f_name').value = emp.name || '';
   $('f_position').value = emp.position || '';
+  $('f_pay_position').value = emp.pay_position || '';
   $('f_branch').value = emp.branch || '';
   $('f_department').value = emp.department || '';
   $('f_hire_date').value = emp.hire_date || '';
@@ -508,6 +512,7 @@ async function saveEmployee() {
   const payload = {
     name: $('f_name').value.trim(),
     position: $('f_position').value.trim(),
+    pay_position: $('f_pay_position').value.trim() || null,
     branch: $('f_branch').value.trim(),
     department: $('f_department').value.trim(),
     hire_date: $('f_hire_date').value || null,
@@ -3967,6 +3972,10 @@ function openApplyStandardModal(employeeId, position) {
   $('as_month').value = '';
   $('as_note').value = '';
   $('applyStandardModalMsg').textContent = '';
+  const emp = employeesCache.find(e => e.id === employeeId);
+  $('asCurrentPayPositionHint').textContent = emp
+    ? `현재 급여직급: ${emp.pay_position || '(미설정)'}`
+    : '';
   $('applyStandardModal').style.display = 'flex';
 }
 
