@@ -361,6 +361,7 @@ class handler(BaseHTTPRequestHandler):
 
     def _get_annualleave(self, qs):
         """연차수당 자동계산용 — 기준일 시점 (기본급+식대)/209 통상시급을 직원별로 계산.
+        기본급은 payroll_settings_history에 저장된 실제 값(연봉÷12가 아님)을 그대로 씁니다.
         연차수당 = 잔여일수 × 통상시급 × 8시간, 백원단위 올림은 화면(hr.js)에서 처리."""
         as_of_str = qs.get("asof", [None])[0] or datetime.date.today().isoformat()
         include_all = qs.get("all", ["0"])[0] == "1"
@@ -370,35 +371,25 @@ class handler(BaseHTTPRequestHandler):
             emp_path += f"&status=eq.{quote('재직')}"
         employees = rest_request("GET", emp_path) or []
 
-        salary_rows = rest_request(
-            "GET",
-            f"salary_history?effective_month=lte.{as_of_str}&select=employee_id,effective_month,annual_salary_thousand"
-            "&order=employee_id.asc,effective_month.desc",
-        ) or []
-        latest_salary = {}
-        for r in salary_rows:
-            eid = r["employee_id"]
-            if eid not in latest_salary:
-                latest_salary[eid] = r["annual_salary_thousand"]
-
         settings_rows = rest_request(
             "GET",
-            f"payroll_settings_history?effective_month=lte.{as_of_str}&select=employee_id,effective_month,meal_allowance"
+            f"payroll_settings_history?effective_month=lte.{as_of_str}"
+            "&select=employee_id,effective_month,base_pay,meal_allowance"
             "&order=employee_id.asc,effective_month.desc",
         ) or []
-        latest_meal = {}
+        latest_settings = {}
         for r in settings_rows:
             eid = r["employee_id"]
-            if eid not in latest_meal:
-                latest_meal[eid] = r.get("meal_allowance") or 0
+            if eid not in latest_settings:
+                latest_settings[eid] = r
 
         result = []
         for e in employees:
-            salary_thousand = latest_salary.get(e["id"])
-            if salary_thousand is None:
+            settings = latest_settings.get(e["id"])
+            if not settings or settings.get("base_pay") is None:
                 continue
-            base_pay_monthly = salary_thousand * 1000 / 12
-            meal = latest_meal.get(e["id"], 0) or 0
+            base_pay_monthly = settings["base_pay"]
+            meal = settings.get("meal_allowance") or 0
             hourly_wage = (base_pay_monthly + meal) / 209
             daily_wage = hourly_wage * 8
             result.append({
