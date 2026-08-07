@@ -243,6 +243,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._get_todos(qs)
             if resource == "promotions":
                 return self._get_promotions(qs)
+            if resource == "annualleave":
+                return self._get_annualleave(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -325,7 +327,7 @@ class handler(BaseHTTPRequestHandler):
             rows = rest_request(
                 "GET",
                 "contract_documents?alert_dismissed=eq.false&contract_end_date=not.is.null"
-                "&terminated_date=is.null&doc_group=eq.contract&select=*&order=contract_end_date.asc",
+                "&terminated_date=is.null&doc_group=neq.reference&select=*&order=contract_end_date.asc",
             ) or []
             result = []
             for r in rows:
@@ -356,6 +358,60 @@ class handler(BaseHTTPRequestHandler):
             "GET", f"daily_todos?todo_date=eq.{date_str}&select=*&order=created_at.asc"
         )
         return self._send(200, {"todos": rows, "date": date_str})
+
+    def _get_annualleave(self, qs):
+        """연차수당 자동계산용 — 기준일 시점 (기본급+식대)/209 통상시급을 직원별로 계산.
+        연차수당 = 잔여일수 × 통상시급 × 8시간, 백원단위 올림은 화면(hr.js)에서 처리."""
+        as_of_str = qs.get("asof", [None])[0] or datetime.date.today().isoformat()
+        include_all = qs.get("all", ["0"])[0] == "1"
+
+        emp_path = "employees?select=id,name,branch,department&order=hire_date.asc"
+        if not include_all:
+            emp_path += f"&status=eq.{quote('재직')}"
+        employees = rest_request("GET", emp_path) or []
+
+        salary_rows = rest_request(
+            "GET",
+            f"salary_history?effective_month=lte.{as_of_str}&select=employee_id,effective_month,annual_salary_thousand"
+            "&order=employee_id.asc,effective_month.desc",
+        ) or []
+        latest_salary = {}
+        for r in salary_rows:
+            eid = r["employee_id"]
+            if eid not in latest_salary:
+                latest_salary[eid] = r["annual_salary_thousand"]
+
+        settings_rows = rest_request(
+            "GET",
+            f"payroll_settings_history?effective_month=lte.{as_of_str}&select=employee_id,effective_month,meal_allowance"
+            "&order=employee_id.asc,effective_month.desc",
+        ) or []
+        latest_meal = {}
+        for r in settings_rows:
+            eid = r["employee_id"]
+            if eid not in latest_meal:
+                latest_meal[eid] = r.get("meal_allowance") or 0
+
+        result = []
+        for e in employees:
+            salary_thousand = latest_salary.get(e["id"])
+            if salary_thousand is None:
+                continue
+            base_pay_monthly = salary_thousand * 1000 / 12
+            meal = latest_meal.get(e["id"], 0) or 0
+            hourly_wage = (base_pay_monthly + meal) / 209
+            daily_wage = hourly_wage * 8
+            result.append({
+                "employee_id": e["id"],
+                "name": e["name"],
+                "branch": e.get("branch"),
+                "department": e.get("department"),
+                "base_pay_monthly": round(base_pay_monthly),
+                "meal_allowance": meal,
+                "hourly_wage": round(hourly_wage, 2),
+                "daily_wage": round(daily_wage, 2),
+            })
+        return self._send(200, {"employees": result, "as_of": as_of_str})
 
     def _compute_promotion_snapshot(self, as_of, prior_year_end, include_all=False):
         emp_path = "employees?select=id,name,branch,department,position,hire_date,status&order=hire_date.asc"
@@ -637,6 +693,9 @@ class handler(BaseHTTPRequestHandler):
             "contract_end_date": payload.get("contract_end_date") or None,
             "reminder_days_before": int(payload.get("reminder_days_before") or 14),
             "auto_renew": bool(payload.get("auto_renew", False)),
+            "account_number": payload.get("account_number"),
+            "investment_amount": payload.get("investment_amount"),
+            "return_rate": payload.get("return_rate"),
             "file_name": file_name,
             "storage_path": storage_path,
             "file_size": len(file_bytes),
@@ -824,7 +883,8 @@ class handler(BaseHTTPRequestHandler):
     def _patch_contractdocs(self, doc_id, payload):
         update_fields = {}
         for key in ("doc_group", "doc_type", "vendor_name", "contract_title", "contract_start_date",
-                    "contract_end_date", "reminder_days_before", "note", "alert_dismissed", "auto_renew"):
+                    "contract_end_date", "reminder_days_before", "note", "alert_dismissed", "auto_renew",
+                    "account_number", "investment_amount", "return_rate"):
             if key in payload:
                 update_fields[key] = payload[key]
         if not update_fields:
