@@ -3326,6 +3326,15 @@ function populateContractDocTypeFilter() {
   sel.value = current;
 }
 
+function renderDocFileLinks(files) {
+  if (!files || files.length === 0) return '-';
+  return files.map(f =>
+    f.view_url
+      ? `<a href="${esc(f.view_url)}" target="_blank" rel="noopener" download="${esc(f.file_name || '')}" class="hr-edit-link">${esc(f.file_name || '보기')}</a>`
+      : `${esc(f.file_name || '')} (만료된 링크, 새로고침 필요)`
+  ).join('<br>');
+}
+
 function contractDocStatus(c) {
   if (c.terminated_date) return 'terminated';
   if (!c.contract_end_date) return 'active';
@@ -3382,7 +3391,7 @@ function renderContractDocs() {
       <td style="font-size:12px;">${esc(c.contract_start_date || '-')} ~ ${esc(c.contract_end_date || '-')}${c.auto_renew ? ' <span style="color:var(--text-muted);">(자동연장 조항)</span>' : ''}</td>
       <td>${contractDocStatusBadge(status)}</td>
       <td>${(c.contract_end_date && status !== 'terminated') ? cdDDayBadge(c.contract_end_date) : '-'}</td>
-      <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" download="${esc(c.file_name || '')}" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
+      <td>${renderDocFileLinks(c.files)}</td>
       <td style="font-size:12px; color:var(--text-secondary);">${noteText}</td>
       <td>
         <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap;">
@@ -3425,7 +3434,7 @@ function renderReferenceDocs() {
     <tr>
       <td>${esc(c.doc_type || '-')}</td>
       <td>${esc(c.contract_title || '-')}</td>
-      <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" download="${esc(c.file_name || '')}" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
+      <td>${renderDocFileLinks(c.files)}</td>
       <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
       <td>
         <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
@@ -3469,7 +3478,7 @@ function renderFinancialDocs() {
       <td style="font-size:12px;">${esc(c.contract_start_date || '-')} ~ ${esc(c.contract_end_date || '-')}</td>
       <td>${contractDocStatusBadge(status)}</td>
       <td>${(c.contract_end_date && status !== 'terminated') ? cdDDayBadge(c.contract_end_date) : '-'}</td>
-      <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" download="${esc(c.file_name || '')}" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
+      <td>${renderDocFileLinks(c.files)}</td>
       <td style="font-size:12px; color:var(--text-secondary);">${noteText}</td>
       <td>
         <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap;">
@@ -3512,12 +3521,49 @@ function openContractDocModal() {
   ['fin_institution', 'fin_product', 'fin_account', 'fin_amount', 'fin_rate', 'fin_start_date', 'fin_end_date'].forEach(f => $('cd_' + f).value = '');
   $('cd_fin_reminder_days').value = '14';
   $('cd_file').value = '';
-  $('cdFileUploadWrap').style.display = 'block';
-  $('cdExistingFileWrap').style.display = 'none';
+  $('cdFileInputLabel').textContent = '첨부파일 (여러 개 선택 가능, 각 8MB 이하, 최소 1개 필요)';
+  $('cdExistingFilesWrap').style.display = 'none';
+  $('cdExistingFilesList').innerHTML = '';
   $('contractDocModalMsg').textContent = '';
   $('contractDocSaveBtn').disabled = false;
   toggleDocGroupFields();
   $('contractDocModal').style.display = 'flex';
+}
+
+function renderExistingFilesList(docId, files) {
+  if (!files || files.length === 0) {
+    $('cdExistingFilesWrap').style.display = 'none';
+    $('cdExistingFilesList').innerHTML = '';
+    return;
+  }
+  $('cdExistingFilesWrap').style.display = 'block';
+  $('cdExistingFilesList').innerHTML = files.map(f => `
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 8px; background:var(--bg); border-radius:var(--radius-sm); font-size:12px;">
+      <a href="${esc(f.view_url || '#')}" target="_blank" rel="noopener" download="${esc(f.file_name || '')}" class="hr-edit-link">${esc(f.file_name || '파일')}</a>
+      <a class="hr-edit-link" onclick="deleteContractDocFile('${f.id}', '${docId}')" style="color:var(--red); flex-shrink:0;">삭제</a>
+    </div>
+  `).join('');
+}
+
+async function deleteContractDocFile(fileId, docId) {
+  if (!confirm('이 첨부파일을 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs?file_id=${fileId}`, {
+      method: 'DELETE',
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error('delete failed');
+    // 모달을 열어둔 채로 목록만 갱신 (다른 입력값은 그대로 유지)
+    const all = [...contractDocCache, ...referenceDocCache, ...financialDocCache];
+    const doc = all.find(x => x.id === docId);
+    if (doc) {
+      doc.files = (doc.files || []).filter(f => f.id !== fileId);
+      renderExistingFilesList(docId, doc.files);
+    }
+    loadContractDocs(); // 표 쪽 첨부파일 컬럼도 백그라운드로 갱신
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
 }
 
 function editContractDoc(id) {
@@ -3549,14 +3595,9 @@ function editContractDoc(id) {
     $('cd_ref_title').value = c.contract_title || '';
   }
   $('cd_note').value = c.note || '';
-  $('cdFileUploadWrap').style.display = 'none';
-  if (c.file_name) {
-    $('cdExistingFileWrap').style.display = 'block';
-    $('cdExistingFileLink').textContent = c.file_name;
-    $('cdExistingFileLink').href = c.view_url || '#';
-  } else {
-    $('cdExistingFileWrap').style.display = 'none';
-  }
+  $('cd_file').value = '';
+  $('cdFileInputLabel').textContent = '파일 추가 (선택, 여러 개 가능, 각 8MB 이하)';
+  renderExistingFilesList(id, c.files);
   $('contractDocModalMsg').textContent = '';
   $('contractDocSaveBtn').disabled = false;
   toggleDocGroupFields();
@@ -3634,29 +3675,37 @@ async function saveContractDoc() {
   }
 
   try {
+    // 선택된 파일들을 전부 base64로 변환 (여러 개 지원)
+    const selectedFiles = Array.from($('cd_file').files || []);
+    for (const f of selectedFiles) {
+      if (f.size > 8 * 1024 * 1024) {
+        $('contractDocModalMsg').textContent = `'${f.name}' 파일이 너무 큽니다 (8MB 이하로 올려주세요).`;
+        btn.disabled = false;
+        return;
+      }
+    }
+    const fileEntries = await Promise.all(selectedFiles.map(async f => ({
+      file_base64: await readFileAsBase64(f),
+      file_name: f.name,
+      content_type: f.type || 'application/octet-stream',
+    })));
+
     if (editingContractDocId) {
+      if (fileEntries.length > 0) payload.new_files = fileEntries;
       const res = await fetch(`${apiBase()}/api/contract_docs?id=${editingContractDocId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('save failed');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || data.error || 'save failed');
     } else {
-      const file = $('cd_file').files[0];
-      if (!file) {
-        $('contractDocModalMsg').textContent = '첨부할 파일을 선택해주세요.';
+      if (fileEntries.length === 0) {
+        $('contractDocModalMsg').textContent = '첨부할 파일을 최소 1개 선택해주세요.';
         btn.disabled = false;
         return;
       }
-      if (file.size > 8 * 1024 * 1024) {
-        $('contractDocModalMsg').textContent = '파일이 너무 큽니다 (8MB 이하로 올려주세요).';
-        btn.disabled = false;
-        return;
-      }
-      const base64 = await readFileAsBase64(file);
-      payload.file_base64 = base64;
-      payload.file_name = file.name;
-      payload.content_type = file.type || 'application/octet-stream';
+      payload.files = fileEntries;
 
       const res = await fetch(`${apiBase()}/api/contract_docs`, {
         method: 'POST',
