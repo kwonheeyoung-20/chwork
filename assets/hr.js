@@ -3218,6 +3218,7 @@ async function deleteContact(id, name) {
 /* ── 계약/증빙관리 ── */
 let contractDocCache = [];
 let referenceDocCache = [];
+let financialDocCache = [];
 let editingContractDocId = null;
 
 function cdDDayBadge(dueDateStr) {
@@ -3307,9 +3308,11 @@ async function loadContractDocs() {
     const all = data.documents || [];
     contractDocCache = all.filter(d => (d.doc_group || 'contract') === 'contract');
     referenceDocCache = all.filter(d => d.doc_group === 'reference');
+    financialDocCache = all.filter(d => d.doc_group === 'financial');
     populateContractDocTypeFilter();
     renderContractDocs();
     renderReferenceDocs();
+    renderFinancialDocs();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
@@ -3432,22 +3435,82 @@ function renderReferenceDocs() {
   `).join('');
 }
 
+function renderFinancialDocs() {
+  const statusFilter = $('finStatusFilter').value;
+  const search = $('finSearch').value.trim().toLowerCase();
+
+  let list = financialDocCache;
+  if (statusFilter) list = list.filter(c => contractDocStatus(c) === statusFilter);
+  if (search) {
+    list = list.filter(c =>
+      (c.vendor_name || '').toLowerCase().includes(search) ||
+      (c.contract_title || '').toLowerCase().includes(search)
+    );
+  }
+
+  $('financialDocCount').textContent = `총 ${list.length}건`;
+  const tbody = $('financialDocTbody');
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 금융상품이 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(c => {
+    const status = contractDocStatus(c);
+    const noteText = status === 'terminated'
+      ? [c.note ? esc(c.note) : null, `해지일 ${esc(c.terminated_date)}${c.termination_note ? ' — ' + esc(c.termination_note) : ''}`].filter(Boolean).join('<br>')
+      : esc(c.note || '-');
+    return `
+    <tr>
+      <td>${esc(c.vendor_name || '-')}</td>
+      <td>${esc(c.contract_title || '-')}</td>
+      <td>${esc(c.account_number || '-')}</td>
+      <td class="num">${c.investment_amount != null ? fmt(c.investment_amount) : '-'}</td>
+      <td class="num">${c.return_rate != null ? c.return_rate + '%' : '-'}</td>
+      <td style="font-size:12px;">${esc(c.contract_start_date || '-')} ~ ${esc(c.contract_end_date || '-')}</td>
+      <td>${contractDocStatusBadge(status)}</td>
+      <td>${(c.contract_end_date && status !== 'terminated') ? cdDDayBadge(c.contract_end_date) : '-'}</td>
+      <td>${c.view_url ? `<a href="${esc(c.view_url)}" target="_blank" rel="noopener" download="${esc(c.file_name || '')}" class="hr-edit-link">${esc(c.file_name || '보기')}</a>` : (c.file_name ? esc(c.file_name) + ' (만료된 링크, 새로고침 필요)' : '-')}</td>
+      <td style="font-size:12px; color:var(--text-secondary);">${noteText}</td>
+      <td>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap;">
+          <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
+          <span style="color:var(--border-strong);">|</span>
+          <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || c.vendor_name || '금융상품')}')">삭제</a>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap; margin-top:4px;">
+          ${status === 'terminated'
+            ? `<a class="hr-edit-link" onclick="reactivateContractDoc('${c.id}')">해지취소</a>`
+            : `<a class="hr-edit-link" onclick="openRenewModal('${c.id}')">연장</a>
+               <span style="color:var(--border-strong);">|</span>
+               <a class="hr-edit-link" onclick="openTerminateModal('${c.id}')">해지</a>`}
+          <span style="color:var(--border-strong);">|</span>
+          <a class="hr-edit-link" onclick="openRenewHistoryModal('${c.id}', '${esc(c.contract_title || c.vendor_name || '금융상품')}')">이력</a>
+        </div>
+      </td>
+    </tr>
+  `;
+  }).join('');
+}
+
 function toggleDocGroupFields() {
-  const isContract = $('cd_doc_group').value === 'contract';
-  $('cdContractFieldsWrap').style.display = isContract ? 'grid' : 'none';
-  $('cdReferenceFieldsWrap').style.display = isContract ? 'none' : 'grid';
+  const group = $('cd_doc_group').value;
+  $('cdFinancialFieldsWrap').style.display = group === 'financial' ? 'grid' : 'none';
+  $('cdContractFieldsWrap').style.display = group === 'contract' ? 'grid' : 'none';
+  $('cdReferenceFieldsWrap').style.display = group === 'reference' ? 'grid' : 'none';
 }
 
 function openContractDocModal() {
   editingContractDocId = null;
   $('contractDocModalTitle').textContent = '서류 업로드';
   ['vendor_name', 'contract_title', 'start_date', 'end_date', 'note'].forEach(f => $('cd_' + f).value = '');
-  $('cd_doc_group').value = 'contract';
+  $('cd_doc_group').value = 'financial';
   $('cd_doc_type').value = '계약서[일반]';
   $('cd_ref_category').value = '인사';
   $('cd_ref_title').value = '';
   $('cd_reminder_days').value = '14';
   $('cd_auto_renew').checked = false;
+  ['fin_institution', 'fin_product', 'fin_account', 'fin_amount', 'fin_rate', 'fin_start_date', 'fin_end_date'].forEach(f => $('cd_' + f).value = '');
+  $('cd_fin_reminder_days').value = '14';
   $('cd_file').value = '';
   $('cdFileUploadWrap').style.display = 'block';
   $('cdExistingFileWrap').style.display = 'none';
@@ -3458,7 +3521,7 @@ function openContractDocModal() {
 }
 
 function editContractDoc(id) {
-  const c = [...contractDocCache, ...referenceDocCache].find(x => x.id === id);
+  const c = [...contractDocCache, ...referenceDocCache, ...financialDocCache].find(x => x.id === id);
   if (!c) return;
   editingContractDocId = id;
   const group = c.doc_group || 'contract';
@@ -3472,6 +3535,15 @@ function editContractDoc(id) {
     $('cd_end_date').value = c.contract_end_date || '';
     $('cd_reminder_days').value = c.reminder_days_before != null ? c.reminder_days_before : 14;
     $('cd_auto_renew').checked = !!c.auto_renew;
+  } else if (group === 'financial') {
+    $('cd_fin_institution').value = c.vendor_name || '';
+    $('cd_fin_product').value = c.contract_title || '';
+    $('cd_fin_account').value = c.account_number || '';
+    $('cd_fin_amount').value = c.investment_amount != null ? c.investment_amount : '';
+    $('cd_fin_rate').value = c.return_rate != null ? c.return_rate : '';
+    $('cd_fin_start_date').value = c.contract_start_date || '';
+    $('cd_fin_end_date').value = c.contract_end_date || '';
+    $('cd_fin_reminder_days').value = c.reminder_days_before != null ? c.reminder_days_before : 14;
   } else {
     $('cd_ref_category').value = c.doc_type || '인사';
     $('cd_ref_title').value = c.contract_title || '';
@@ -3514,25 +3586,49 @@ async function saveContractDoc() {
   btn.disabled = true;
 
   const group = $('cd_doc_group').value;
-  const payload = group === 'contract' ? {
-    doc_group: 'contract',
-    doc_type: $('cd_doc_type').value.trim() || null,
-    vendor_name: $('cd_vendor_name').value.trim() || null,
-    contract_title: $('cd_contract_title').value.trim() || null,
-    contract_start_date: $('cd_start_date').value || null,
-    contract_end_date: $('cd_end_date').value || null,
-    reminder_days_before: Number($('cd_reminder_days').value) || 0,
-    auto_renew: $('cd_auto_renew').checked,
-    note: $('cd_note').value.trim() || null,
-  } : {
-    doc_group: 'reference',
-    doc_type: $('cd_ref_category').value,
-    contract_title: $('cd_ref_title').value.trim() || null,
-    note: $('cd_note').value.trim() || null,
-  };
+  let payload;
+  if (group === 'contract') {
+    payload = {
+      doc_group: 'contract',
+      doc_type: $('cd_doc_type').value.trim() || null,
+      vendor_name: $('cd_vendor_name').value.trim() || null,
+      contract_title: $('cd_contract_title').value.trim() || null,
+      contract_start_date: $('cd_start_date').value || null,
+      contract_end_date: $('cd_end_date').value || null,
+      reminder_days_before: Number($('cd_reminder_days').value) || 0,
+      auto_renew: $('cd_auto_renew').checked,
+      note: $('cd_note').value.trim() || null,
+    };
+  } else if (group === 'financial') {
+    payload = {
+      doc_group: 'financial',
+      doc_type: '금융상품',
+      vendor_name: $('cd_fin_institution').value.trim() || null,
+      contract_title: $('cd_fin_product').value.trim() || null,
+      account_number: $('cd_fin_account').value.trim() || null,
+      investment_amount: $('cd_fin_amount').value ? Number($('cd_fin_amount').value) : null,
+      return_rate: $('cd_fin_rate').value ? Number($('cd_fin_rate').value) : null,
+      contract_start_date: $('cd_fin_start_date').value || null,
+      contract_end_date: $('cd_fin_end_date').value || null,
+      reminder_days_before: Number($('cd_fin_reminder_days').value) || 0,
+      note: $('cd_note').value.trim() || null,
+    };
+  } else {
+    payload = {
+      doc_group: 'reference',
+      doc_type: $('cd_ref_category').value,
+      contract_title: $('cd_ref_title').value.trim() || null,
+      note: $('cd_note').value.trim() || null,
+    };
+  }
 
   if (group === 'reference' && !payload.contract_title) {
     $('contractDocModalMsg').textContent = '문서명은 필수입니다.';
+    btn.disabled = false;
+    return;
+  }
+  if (group === 'financial' && !payload.vendor_name) {
+    $('contractDocModalMsg').textContent = '금융기관명은 필수입니다.';
     btn.disabled = false;
     return;
   }
