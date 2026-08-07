@@ -366,7 +366,12 @@ class handler(BaseHTTPRequestHandler):
 
     def _get_annualleave(self, qs):
         """연차수당 자동계산용 — 기준일 시점 (기본급+식대)/209 통상시급을 직원별로 계산.
-        기본급은 payroll_settings_history에 저장된 실제 값(연봉÷12가 아님)을 그대로 씁니다.
+        기본급/식대는 매달 확정 저장되는 monthly_payroll의 실제 값을 그대로 씁니다
+        (설정 테이블이 아니라, 그 달 실제로 지급 확정된 급여명세 기준).
+        기준일 이전 중 가장 최근에 '생성/저장'된 달의 급여명세를 사용합니다.
+        단, 그 달이 육아기근로시간단축 등으로 기본급/식대가 일시적으로 줄어든 달이면
+        (base_pay_before/meal_allowance_before가 저장되어 있으면) 그 "조정 전 정상 금액"을
+        우선 사용합니다 — 연차수당은 정상 통상임금 기준이어야 하므로.
         연차수당 = 잔여일수 × 통상시급 × 8시간, 백원단위 올림은 화면(hr.js)에서 처리."""
         as_of_str = qs.get("asof", [None])[0] or datetime.date.today().isoformat()
         include_all = qs.get("all", ["0"])[0] == "1"
@@ -376,25 +381,26 @@ class handler(BaseHTTPRequestHandler):
             emp_path += f"&status=eq.{quote('재직')}"
         employees = rest_request("GET", emp_path) or []
 
-        settings_rows = rest_request(
+        payroll_rows = rest_request(
             "GET",
-            f"payroll_settings_history?effective_month=lte.{as_of_str}"
-            "&select=employee_id,effective_month,base_pay,meal_allowance"
-            "&order=employee_id.asc,effective_month.desc",
+            f"monthly_payroll?year_month=lte.{as_of_str}"
+            "&select=employee_id,year_month,base_pay,meal_allowance,base_pay_before,meal_allowance_before"
+            "&order=employee_id.asc,year_month.desc",
         ) or []
-        latest_settings = {}
-        for r in settings_rows:
+        latest_payroll = {}
+        for r in payroll_rows:
             eid = r["employee_id"]
-            if eid not in latest_settings:
-                latest_settings[eid] = r
+            if eid not in latest_payroll:
+                latest_payroll[eid] = r
 
         result = []
         for e in employees:
-            settings = latest_settings.get(e["id"])
-            if not settings or settings.get("base_pay") is None:
+            pr = latest_payroll.get(e["id"])
+            if not pr or pr.get("base_pay") is None:
                 continue
-            base_pay_monthly = settings["base_pay"]
-            meal = settings.get("meal_allowance") or 0
+            was_adjusted = pr.get("base_pay_before") is not None
+            base_pay_monthly = pr["base_pay_before"] if was_adjusted else pr["base_pay"]
+            meal = (pr.get("meal_allowance_before") if was_adjusted else pr.get("meal_allowance")) or 0
             hourly_wage = (base_pay_monthly + meal) / 209
             daily_wage = hourly_wage * 8
             result.append({
@@ -404,6 +410,8 @@ class handler(BaseHTTPRequestHandler):
                 "department": e.get("department"),
                 "base_pay_monthly": round(base_pay_monthly),
                 "meal_allowance": meal,
+                "source_month": pr.get("year_month"),
+                "adjusted_month": was_adjusted,
                 "hourly_wage": round(hourly_wage, 2),
                 "daily_wage": round(daily_wage, 2),
             })
