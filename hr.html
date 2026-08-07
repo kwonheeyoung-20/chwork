@@ -460,11 +460,15 @@
 
           <div class="table-wrap" id="bulkOpWrap" style="display:none; margin-bottom:20px;">
             <table class="table" id="bulkOpTable">
-              <thead>
+              <thead id="bulkOpThead">
                 <tr><th>이름</th><th>지사</th><th>부서</th><th class="num">지급 금액</th></tr>
               </thead>
               <tbody id="bulkOpTbody"></tbody>
             </table>
+          </div>
+          <div id="bulkOpLeaveNote" style="display:none; font-size:12px; color:var(--text-muted); margin:-14px 0 14px;">
+            연차수당 = 잔여일수 × 통상시급(=(기본급+식대)÷209) × 8시간, 백원단위 올림(뒤 3자리 000)으로 자동 계산됩니다.
+            기준일자는 <b id="bulkOpLeaveAsOf"></b>이며, 계산된 금액은 필요하면 직접 고쳐서 저장하실 수 있습니다.
           </div>
           <div id="bulkOpWrap2" style="display:none; margin-bottom:20px; text-align:right;">
             <button class="primary" onclick="saveBulkOtherPayments()">입력된 금액 일괄 저장</button>
