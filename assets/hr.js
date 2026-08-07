@@ -918,7 +918,20 @@ async function revertSettlement(id, name) {
 
 /* ── 정산내역서 출력/다운로드 ── */
 function printSettlement() {
+  const style = document.createElement('style');
+  style.id = 'settlementPrintStyle';
+  style.textContent = `
+    @page { size: portrait; margin: 12mm; }
+    @media print {
+      #printArea { font-size: 11px; }
+      #printArea h3 { font-size: 14px; margin-bottom: 8px; }
+      #printArea table { font-size: 10px; }
+      #printArea th, #printArea td { padding: 3px 5px; }
+    }
+  `;
+  document.head.appendChild(style);
   window.print();
+  document.head.removeChild(style);
 }
 
 function downloadSettlementExcel() {
@@ -2583,7 +2596,19 @@ function closePayslipModal() {
 
 function printPayslip() {
   $('registerPrintArea').style.display = 'none';
+  const style = document.createElement('style');
+  style.id = 'payslipPrintStyle';
+  style.textContent = `
+    @page { size: portrait; margin: 14mm; }
+    @media print {
+      #payslipPrintArea { font-size: 12px; }
+      #payslipPrintArea h3 { font-size: 15px; }
+      #payslipPrintArea table { font-size: 11px; }
+    }
+  `;
+  document.head.appendChild(style);
   window.print();
+  document.head.removeChild(style);
 }
 
 /* ── 전 직원 급여 대장 출력 ── */
@@ -2653,10 +2678,21 @@ function printPayrollRegister() {
 
   $('registerPrintArea').style.display = 'block';
 
-  // 대장 출력만 가로(landscape)로 인쇄 — 임시 스타일 삽입 후 인쇄 후 제거
+  // 대장 출력만 가로(landscape)로, 인원이 많아도 1~2장 안에 들어오도록
+  // 폰트·여백을 인쇄 전용으로 압축한 스타일을 임시 삽입 후 인쇄 후 제거
   const landscapeStyle = document.createElement('style');
   landscapeStyle.id = 'registerLandscapeStyle';
-  landscapeStyle.textContent = '@page { size: landscape; }';
+  landscapeStyle.textContent = `
+    @page { size: landscape; margin: 8mm; }
+    @media print {
+      #registerPrintArea h2 { font-size: 13px; margin-bottom: 2px; }
+      #registerPrintArea p { font-size: 10px; margin-bottom: 6px; }
+      #registerPrintArea table { font-size: 8.5px; border-collapse: collapse; width: 100%; }
+      #registerPrintArea th, #registerPrintArea td { padding: 2px 4px; line-height: 1.25; }
+      #reg_adjust_section { font-size: 9px; margin-top: 8px; }
+      #reg_adjust_section h3 { font-size: 10px; margin-bottom: 4px; }
+    }
+  `;
   document.head.appendChild(landscapeStyle);
 
   window.print();
@@ -3262,7 +3298,7 @@ function renderContractDocs() {
   tbody.innerHTML = list.map(c => {
     const status = contractDocStatus(c);
     const noteText = status === 'terminated'
-      ? `해지일 ${esc(c.terminated_date)}${c.termination_note ? ' — ' + esc(c.termination_note) : ''}`
+      ? [c.note ? esc(c.note) : null, `해지일 ${esc(c.terminated_date)}${c.termination_note ? ' — ' + esc(c.termination_note) : ''}`].filter(Boolean).join('<br>')
       : esc(c.note || '-');
     return `
     <tr>
@@ -4223,7 +4259,11 @@ function printPromotionMatrix(containerId) {
       body * { visibility: hidden; }
       #promoMatrixPrintArea, #promoMatrixPrintArea * { visibility: visible; }
       #promoMatrixPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
-      @page { size: landscape; }
+      @page { size: landscape; margin: 8mm; }
+      #promoMatrixPrintTitle { font-size: 14px; margin-bottom: 6px; }
+      #promoMatrixPrintBody table { font-size: 8.5px; border-collapse: collapse; width: 100%; }
+      #promoMatrixPrintBody th, #promoMatrixPrintBody td { padding: 2px 4px; line-height: 1.2; }
+      #promoMatrixPrintBody > div:last-child { font-size: 8px; }
     }
   `;
   document.head.appendChild(style);

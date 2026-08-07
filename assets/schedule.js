@@ -222,7 +222,7 @@ function renderOccurrences(list) {
       <td>${esc(task.title || '-')}</td>
       <td>${esc(task.category || '-')}</td>
       <td>${recurrenceLabel(task)}</td>
-      <td style="font-size:12px; color:var(--text-secondary);">${esc(o.completed_note || task.note || '-')}</td>
+      <td style="font-size:12px; color:var(--text-secondary);">${[task.note ? esc(task.note) : null, o.completed_note ? '완료메모: ' + esc(o.completed_note) : null].filter(Boolean).join('<br>') || '-'}</td>
       <td>${statusBadge(o.status)}</td>
       <td>
         ${o.status === 'pending' ? `<a class="hr-edit-link" onclick="skipOccurrence('${o.id}')">건너뛰기</a> · ` : ''}
