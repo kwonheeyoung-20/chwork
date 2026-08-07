@@ -398,7 +398,12 @@ class handler(BaseHTTPRequestHandler):
             pr = latest_payroll.get(e["id"])
             if not pr or pr.get("base_pay") is None:
                 continue
-            was_adjusted = pr.get("base_pay_before") is not None
+            # base_pay_before는 조정 없을 때도 base_pay와 같은 값으로 채워져 있을 수 있어서,
+            # "값이 있냐"가 아니라 "조정 전후 값이 실제로 다르냐"로 판단해야 정확함
+            was_adjusted = (
+                pr.get("base_pay_before") is not None
+                and pr["base_pay_before"] != pr["base_pay"]
+            )
             base_pay_monthly = pr["base_pay_before"] if was_adjusted else pr["base_pay"]
             meal = (pr.get("meal_allowance_before") if was_adjusted else pr.get("meal_allowance")) or 0
             hourly_wage = (base_pay_monthly + meal) / 209
