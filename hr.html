@@ -446,15 +446,22 @@
 
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
             <label style="font-size:13px; color:var(--text-secondary);">일괄 입력 — 지급유형:</label>
-            <select id="bulkOpType" class="hr-input" style="width:130px;">
+            <select id="bulkOpType" class="hr-input" style="width:130px;" onchange="toggleBulkLeaveAsOfField()">
               <option value="성과급1차">성과급1차</option>
               <option value="성과급2차">성과급2차</option>
               <option value="상여금">상여금</option>
               <option value="기타수당">기타수당</option>
               <option value="연차수당">연차수당</option>
             </select>
-            <label style="font-size:13px; color:var(--text-secondary);">지급월:</label>
-            <input id="bulkOpDate" type="month" class="hr-input" style="width:150px;">
+            <span id="bulkOpDateWrap" style="display:flex; align-items:center; gap:8px;">
+              <label style="font-size:13px; color:var(--text-secondary);">지급월:</label>
+              <input id="bulkOpDate" type="month" class="hr-input" style="width:150px;">
+            </span>
+            <span id="bulkLeaveAsOfWrap" style="display:none; align-items:center; gap:8px;">
+              <label style="font-size:13px; color:var(--text-secondary);">연차수당 귀속연도:</label>
+              <select id="bulkLeaveYear" class="hr-input" style="width:110px;"></select>
+              <span style="font-size:12px; color:var(--text-muted);">→ 12월 지급, 12월31일 기준 산정 (고정)</span>
+            </span>
             <button class="secondary" onclick="loadBulkOtherPayList()">직원 목록 불러오기</button>
           </div>
 
@@ -468,7 +475,7 @@
           </div>
           <div id="bulkOpLeaveNote" style="display:none; font-size:12px; color:var(--text-muted); margin:-14px 0 14px;">
             연차수당 = 잔여일수 × 통상시급(=(기본급+식대)÷209) × 8시간, 백원단위 올림(뒤 3자리 000)으로 자동 계산됩니다.
-            기준일자는 <b id="bulkOpLeaveAsOf"></b>이며, 계산된 금액은 필요하면 직접 고쳐서 저장하실 수 있습니다.
+            위에서 지정하신 산정 기준일의 급여조건으로 계산되며, 계산된 금액은 필요하면 직접 고쳐서 저장하실 수 있습니다.
           </div>
           <div id="bulkOpWrap2" style="display:none; margin-bottom:20px; text-align:right;">
             <button class="primary" onclick="saveBulkOtherPayments()">입력된 금액 일괄 저장</button>
