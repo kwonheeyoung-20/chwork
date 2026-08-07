@@ -1886,7 +1886,7 @@ async function loadBulkLeavePayList(year) {
     }
     $('bulkOpTbody').innerHTML = list.map(e => `
       <tr data-emp-id="${e.employee_id}" data-daily-wage="${e.daily_wage}">
-        <td>${esc(e.name)}</td>
+        <td>${esc(e.name)}${e.adjusted_month ? ' <span style="font-size:10px; color:var(--accent);" title="이 달은 급여조정(육아기단축 등)이 있어 조정 전 정상금액 기준으로 계산했습니다">*조정보정</span>' : ''}</td>
         <td>${esc(e.branch || '-')}</td>
         <td>${esc(e.department || '-')}</td>
         <td class="num"><input type="number" step="0.5" class="hr-input bulk-leave-days" style="width:90px; text-align:right;" placeholder="0" oninput="recalcLeavePayAmount(this)"></td>
