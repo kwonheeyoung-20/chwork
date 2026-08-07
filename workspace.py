@@ -327,7 +327,7 @@ class handler(BaseHTTPRequestHandler):
             rows = rest_request(
                 "GET",
                 "contract_documents?alert_dismissed=eq.false&contract_end_date=not.is.null"
-                "&terminated_date=is.null&doc_group=eq.contract&select=*&order=contract_end_date.asc",
+                "&terminated_date=is.null&doc_group=neq.reference&select=*&order=contract_end_date.asc",
             ) or []
             result = []
             for r in rows:
@@ -693,6 +693,9 @@ class handler(BaseHTTPRequestHandler):
             "contract_end_date": payload.get("contract_end_date") or None,
             "reminder_days_before": int(payload.get("reminder_days_before") or 14),
             "auto_renew": bool(payload.get("auto_renew", False)),
+            "account_number": payload.get("account_number"),
+            "investment_amount": payload.get("investment_amount"),
+            "return_rate": payload.get("return_rate"),
             "file_name": file_name,
             "storage_path": storage_path,
             "file_size": len(file_bytes),
@@ -880,7 +883,8 @@ class handler(BaseHTTPRequestHandler):
     def _patch_contractdocs(self, doc_id, payload):
         update_fields = {}
         for key in ("doc_group", "doc_type", "vendor_name", "contract_title", "contract_start_date",
-                    "contract_end_date", "reminder_days_before", "note", "alert_dismissed", "auto_renew"):
+                    "contract_end_date", "reminder_days_before", "note", "alert_dismissed", "auto_renew",
+                    "account_number", "investment_amount", "return_rate"):
             if key in payload:
                 update_fields[key] = payload[key]
         if not update_fields:
