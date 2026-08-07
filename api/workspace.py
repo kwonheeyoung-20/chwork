@@ -347,9 +347,14 @@ class handler(BaseHTTPRequestHandler):
                     })
             return self._send(200, {"upcoming": result})
 
-        rows = rest_request("GET", "contract_documents?select=*&order=contract_end_date.asc.nullslast") or []
+        rows = rest_request(
+            "GET", "contract_documents?select=*,contract_document_files(*)&order=contract_end_date.asc.nullslast"
+        ) or []
         for r in rows:
-            r["view_url"] = storage_sign_url(r.get("storage_path"))
+            files = r.get("contract_document_files") or []
+            for f in files:
+                f["view_url"] = storage_sign_url(f.get("storage_path"))
+            r["files"] = files
         return self._send(200, {"documents": rows})
 
     def _get_todos(self, qs):
@@ -659,21 +664,35 @@ class handler(BaseHTTPRequestHandler):
             })
             return self._send(200, {"ok": True})
 
-        file_b64 = payload.get("file_base64")
-        file_name = payload.get("file_name")
-        if not file_b64 or not file_name:
-            return self._send(400, {"error": "file_base64, file_name은 필수입니다"})
+        files_payload = payload.get("files") or []
+        if not files_payload and payload.get("file_base64") and payload.get("file_name"):
+            # 하위호환: 예전 방식(파일 1개)으로 온 요청도 지원
+            files_payload = [{
+                "file_base64": payload["file_base64"],
+                "file_name": payload["file_name"],
+                "content_type": payload.get("content_type"),
+            }]
+        if not files_payload:
+            return self._send(400, {"error": "최소 1개의 파일이 필요합니다"})
 
-        try:
-            file_bytes = base64.b64decode(file_b64)
-        except Exception:
-            return self._send(400, {"error": "파일 데이터를 해독할 수 없습니다"})
-
-        if len(file_bytes) > 8 * 1024 * 1024:
-            return self._send(413, {"error": "파일이 너무 큽니다 (8MB 이하로 올려주세요)"})
-
-        storage_path = safe_filename(file_name)
-        storage_upload(storage_path, file_bytes, payload.get("content_type"))
+        uploaded = []
+        for f in files_payload:
+            fb64 = f.get("file_base64")
+            fname = f.get("file_name")
+            if not fb64 or not fname:
+                continue
+            try:
+                fbytes = base64.b64decode(fb64)
+            except Exception:
+                return self._send(400, {"error": f"'{fname}' 파일 데이터를 해독할 수 없습니다"})
+            if len(fbytes) > 8 * 1024 * 1024:
+                return self._send(413, {"error": f"'{fname}' 파일이 너무 큽니다 (8MB 이하로 올려주세요)"})
+            spath = safe_filename(fname)
+            storage_upload(spath, fbytes, f.get("content_type"))
+            uploaded.append({
+                "file_name": fname, "storage_path": spath,
+                "file_size": len(fbytes), "content_type": f.get("content_type"),
+            })
 
         body = {
             "doc_group": payload.get("doc_group") or "contract",
@@ -687,14 +706,20 @@ class handler(BaseHTTPRequestHandler):
             "account_number": payload.get("account_number"),
             "investment_amount": payload.get("investment_amount"),
             "return_rate": payload.get("return_rate"),
-            "file_name": file_name,
-            "storage_path": storage_path,
-            "file_size": len(file_bytes),
-            "content_type": payload.get("content_type"),
             "note": payload.get("note"),
         }
         created = rest_request("POST", "contract_documents", body=body, prefer="return=representation")
-        return self._send(201, {"ok": True, "id": created[0]["id"] if created else None})
+        doc_id = created[0]["id"] if created else None
+        if doc_id:
+            for uf in uploaded:
+                rest_request("POST", "contract_document_files", body={
+                    "document_id": doc_id,
+                    "file_name": uf["file_name"],
+                    "storage_path": uf["storage_path"],
+                    "file_size": uf["file_size"],
+                    "content_type": uf["content_type"],
+                })
+        return self._send(201, {"ok": True, "id": doc_id})
 
     def _post_todos(self, payload):
         content = payload.get("content")
@@ -878,11 +903,36 @@ class handler(BaseHTTPRequestHandler):
                     "account_number", "investment_amount", "return_rate"):
             if key in payload:
                 update_fields[key] = payload[key]
-        if not update_fields:
-            return self._send(400, {"error": "수정할 항목이 없습니다"})
-        update_fields["updated_at"] = datetime.datetime.utcnow().isoformat()
 
-        rest_request("PATCH", f"contract_documents?id=eq.{doc_id}", body=update_fields)
+        new_files = payload.get("new_files") or []
+        if not update_fields and not new_files:
+            return self._send(400, {"error": "수정할 항목이 없습니다"})
+
+        if update_fields:
+            update_fields["updated_at"] = datetime.datetime.utcnow().isoformat()
+            rest_request("PATCH", f"contract_documents?id=eq.{doc_id}", body=update_fields)
+
+        for f in new_files:
+            fb64 = f.get("file_base64")
+            fname = f.get("file_name")
+            if not fb64 or not fname:
+                continue
+            try:
+                fbytes = base64.b64decode(fb64)
+            except Exception:
+                return self._send(400, {"error": f"'{fname}' 파일 데이터를 해독할 수 없습니다"})
+            if len(fbytes) > 8 * 1024 * 1024:
+                return self._send(413, {"error": f"'{fname}' 파일이 너무 큽니다 (8MB 이하로 올려주세요)"})
+            spath = safe_filename(fname)
+            storage_upload(spath, fbytes, f.get("content_type"))
+            rest_request("POST", "contract_document_files", body={
+                "document_id": doc_id,
+                "file_name": fname,
+                "storage_path": spath,
+                "file_size": len(fbytes),
+                "content_type": f.get("content_type"),
+            })
+
         return self._send(200, {"ok": True})
 
     def _patch_todos(self, todo_id, payload):
@@ -953,12 +1003,21 @@ class handler(BaseHTTPRequestHandler):
         return self._send(200, {"ok": True})
 
     def _delete_contractdocs(self, qs):
+        file_id = qs.get("file_id", [None])[0]
+        if file_id:
+            existing = rest_request("GET", f"contract_document_files?id=eq.{file_id}&select=storage_path")
+            if existing and existing[0].get("storage_path"):
+                storage_delete(existing[0]["storage_path"])
+            rest_request("DELETE", f"contract_document_files?id=eq.{file_id}")
+            return self._send(200, {"ok": True})
+
         doc_id = qs.get("id", [None])[0]
         if not doc_id:
             return self._send(400, {"error": "id는 필수입니다"})
-        existing = rest_request("GET", f"contract_documents?id=eq.{doc_id}&select=storage_path")
-        if existing and existing[0].get("storage_path"):
-            storage_delete(existing[0]["storage_path"])
+        files = rest_request("GET", f"contract_document_files?document_id=eq.{doc_id}&select=storage_path") or []
+        for f in files:
+            if f.get("storage_path"):
+                storage_delete(f["storage_path"])
         rest_request("DELETE", f"contract_documents?id=eq.{doc_id}")
         return self._send(200, {"ok": True})
 
