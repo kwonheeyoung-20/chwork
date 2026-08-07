@@ -23,7 +23,7 @@ async function schLogin() {
     const data = await res.json();
     if (data.ok) {
       sessionStorage.setItem('chwork_hr_pw', pw);
-      showMain();
+      window.location.href = 'index.html'; // 로그인 직후엔 대시보드(알림 모음)로 먼저 이동
     } else {
       $('loginMsg').textContent = '비밀번호가 올바르지 않습니다.';
     }
