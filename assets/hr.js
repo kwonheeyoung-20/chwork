@@ -1820,16 +1820,19 @@ function downloadOtherPaymentsExcel() {
 
 /* ── 성과급/기타지급 일괄 입력 ── */
 async function loadBulkOtherPayList() {
-  const month = $('bulkOpDate').value;
-  if (!month) { alert('먼저 지급월을 선택해주세요.'); return; }
   const opType = $('bulkOpType').value;
   $('bulkOpWrap').style.display = 'block';
   $('bulkOpWrap2').style.display = 'block';
   $('bulkOpTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
 
   if (opType === '연차수당') {
-    return loadBulkLeavePayList(month);
+    const year = $('bulkLeaveYear').value;
+    if (!year) { alert('귀속연도를 선택해주세요.'); return; }
+    return loadBulkLeavePayList(year);
   }
+
+  const month = $('bulkOpDate').value;
+  if (!month) { alert('먼저 지급월을 선택해주세요.'); return; }
   $('bulkOpLeaveNote').style.display = 'none';
   $('bulkOpThead').innerHTML = `<tr><th>이름</th><th>지사</th><th>부서</th><th class="num">지급 금액</th></tr>`;
   try {
@@ -1851,12 +1854,24 @@ async function loadBulkOtherPayList() {
   }
 }
 
-async function loadBulkLeavePayList(month) {
-  // "전년도 남은 연차를 전년도 연차수당에 반영" 관행에 맞춰,
-  // 지급월의 전년도 12월 31일 시점 급여조건을 기준으로 통상시급을 계산합니다.
-  const payYear = Number(month.slice(0, 4));
-  const asOf = `${payYear - 1}-12-31`;
-  $('bulkOpLeaveAsOf').textContent = asOf;
+function toggleBulkLeaveAsOfField() {
+  const isLeave = $('bulkOpType').value === '연차수당';
+  $('bulkOpDateWrap').style.display = isLeave ? 'none' : 'flex';
+  $('bulkLeaveAsOfWrap').style.display = isLeave ? 'flex' : 'none';
+  if (isLeave) {
+    const sel = $('bulkLeaveYear');
+    if (!sel.dataset.loaded) {
+      const thisYear = new Date().getFullYear();
+      let opts = '';
+      for (let y = thisYear; y >= thisYear - 4; y--) opts += `<option value="${y}">${y}년</option>`;
+      sel.innerHTML = opts;
+      sel.dataset.loaded = '1';
+    }
+  }
+}
+
+async function loadBulkLeavePayList(year) {
+  const asOf = `${year}-12-31`;
   $('bulkOpLeaveNote').style.display = 'block';
   $('bulkOpThead').innerHTML = `<tr><th>이름</th><th>지사</th><th>부서</th><th class="num">잔여일수</th><th class="num">지급 금액(자동계산)</th></tr>`;
   try {
@@ -1895,9 +1910,16 @@ function recalcLeavePayAmount(inputEl) {
 
 async function saveBulkOtherPayments() {
   const paymentType = $('bulkOpType').value;
-  const month = $('bulkOpDate').value;
-  if (!month) { alert('지급월을 선택해주세요.'); return; }
-  const date = `${month}-01`;
+  let date;
+  if (paymentType === '연차수당') {
+    const year = $('bulkLeaveYear').value;
+    if (!year) { alert('귀속연도를 선택해주세요.'); return; }
+    date = `${year}-12-01`;
+  } else {
+    const month = $('bulkOpDate').value;
+    if (!month) { alert('지급월을 선택해주세요.'); return; }
+    date = `${month}-01`;
+  }
 
   const items = [];
   document.querySelectorAll('#bulkOpTbody tr').forEach(tr => {
@@ -1912,7 +1934,7 @@ async function saveBulkOtherPayments() {
     $('otherPayBulkMsg').textContent = '입력된 금액이 없습니다.';
     return;
   }
-  if (!confirm(`${items.length}명에게 "${paymentType}" ${fmt(items.reduce((s,i)=>s+i.amount,0))}원을 ${month}월로 저장하시겠습니까?`)) return;
+  if (!confirm(`${items.length}명에게 "${paymentType}" ${fmt(items.reduce((s,i)=>s+i.amount,0))}원을 ${date.slice(0,7)}월로 저장하시겠습니까?`)) return;
 
   try {
     const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
