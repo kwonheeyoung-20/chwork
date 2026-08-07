@@ -1822,9 +1822,16 @@ function downloadOtherPaymentsExcel() {
 async function loadBulkOtherPayList() {
   const month = $('bulkOpDate').value;
   if (!month) { alert('먼저 지급월을 선택해주세요.'); return; }
+  const opType = $('bulkOpType').value;
   $('bulkOpWrap').style.display = 'block';
   $('bulkOpWrap2').style.display = 'block';
   $('bulkOpTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
+
+  if (opType === '연차수당') {
+    return loadBulkLeavePayList(month);
+  }
+  $('bulkOpLeaveNote').style.display = 'none';
+  $('bulkOpThead').innerHTML = `<tr><th>이름</th><th>지사</th><th>부서</th><th class="num">지급 금액</th></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_employees`, {
       headers: { 'X-HR-Password': hrPassword() },
@@ -1842,6 +1849,48 @@ async function loadBulkOtherPayList() {
   } catch (e) {
     $('bulkOpTbody').innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
   }
+}
+
+async function loadBulkLeavePayList(month) {
+  // "전년도 남은 연차를 전년도 연차수당에 반영" 관행에 맞춰,
+  // 지급월의 전년도 12월 31일 시점 급여조건을 기준으로 통상시급을 계산합니다.
+  const payYear = Number(month.slice(0, 4));
+  const asOf = `${payYear - 1}-12-31`;
+  $('bulkOpLeaveAsOf').textContent = asOf;
+  $('bulkOpLeaveNote').style.display = 'block';
+  $('bulkOpThead').innerHTML = `<tr><th>이름</th><th>지사</th><th>부서</th><th class="num">잔여일수</th><th class="num">지급 금액(자동계산)</th></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/annual_leave_calc?asof=${asOf}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const list = data.employees || [];
+    if (list.length === 0) {
+      $('bulkOpTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">${asOf} 기준으로 연봉 정보가 있는 재직자가 없습니다.</td></tr>`;
+      return;
+    }
+    $('bulkOpTbody').innerHTML = list.map(e => `
+      <tr data-emp-id="${e.employee_id}" data-daily-wage="${e.daily_wage}">
+        <td>${esc(e.name)}</td>
+        <td>${esc(e.branch || '-')}</td>
+        <td>${esc(e.department || '-')}</td>
+        <td class="num"><input type="number" step="0.5" class="hr-input bulk-leave-days" style="width:90px; text-align:right;" placeholder="0" oninput="recalcLeavePayAmount(this)"></td>
+        <td class="num"><input type="number" class="hr-input bulk-op-amount" style="width:130px; text-align:right;" placeholder="0"></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    $('bulkOpTbody').innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function recalcLeavePayAmount(inputEl) {
+  const tr = inputEl.closest('tr');
+  const dailyWage = Number(tr.dataset.dailyWage) || 0;
+  const days = Number(inputEl.value) || 0;
+  const raw = days * dailyWage;
+  const rounded = Math.ceil(raw / 1000) * 1000; // 백원단위 올림 → 끝자리 ,000
+  const amountInput = tr.querySelector('.bulk-op-amount');
+  amountInput.value = rounded || '';
 }
 
 async function saveBulkOtherPayments() {
