@@ -1314,13 +1314,14 @@
     </div>
 
     <div id="cdFileUploadWrap" style="margin-top:14px; padding-top:14px; border-top:0.5px solid var(--border);">
-      <label style="font-size:12px; color:var(--text-secondary);">첨부파일 (8MB 이하)
-        <input id="cd_file" type="file" class="hr-input" style="padding:6px;">
+      <div id="cdExistingFilesWrap" style="display:none; margin-bottom:12px;">
+        <label style="font-size:12px; color:var(--text-secondary); font-weight:500;">기존 첨부파일</label>
+        <div id="cdExistingFilesList" style="display:flex; flex-direction:column; gap:4px; margin-top:6px;"></div>
+      </div>
+      <label style="font-size:12px; color:var(--text-secondary);">
+        <span id="cdFileInputLabel">첨부파일 (여러 개 선택 가능, 각 8MB 이하)</span>
+        <input id="cd_file" type="file" multiple class="hr-input" style="padding:6px;">
       </label>
-    </div>
-    <div id="cdExistingFileWrap" style="display:none; margin-top:10px; font-size:12px; color:var(--text-secondary);">
-      현재 첨부파일: <a id="cdExistingFileLink" href="#" target="_blank" rel="noopener" class="hr-edit-link"></a>
-      <div style="color:var(--text-muted); margin-top:2px;">파일 자체를 바꾸려면 이 서류를 삭제하고 새로 업로드해주세요.</div>
     </div>
 
     <div id="contractDocModalMsg" class="hr-msg"></div>
