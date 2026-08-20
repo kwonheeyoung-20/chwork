@@ -133,7 +133,7 @@ async function loadContractAlerts() {
       html += `<div class="sch-banner warn"><h3>🔔 만료 임박 (${soon.length}건)</h3>`;
       html += soon.slice(0, 5).map(x => `
         <div class="sch-banner-row">
-          <a href="hr.html#contractdocs"><span class="sch-dday soon">D-${x.days_left}</span> ${esc(x.vendor_name || '-')} — ${esc(x.contract_title || x.doc_type || '')}</a>
+          <a href="hr.html#contractdocs"><span class="sch-dday soon">${x.days_left === 0 ? 'D-DAY' : 'D-' + x.days_left}</span> ${esc(x.vendor_name || '-')} — ${esc(x.contract_title || x.doc_type || '')}</a>
         </div>
       `).join('');
       html += `</div>`;

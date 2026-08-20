@@ -323,7 +323,7 @@ async function loadPersonalOccurrences() {
       const statusLabel = o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료');
       return `
         <tr>
-          <td>${esc(o.due_date)}</td>
+          <td>${esc(o.due_date)}${task.date_type === 'lunar' ? ' <span style="font-size:10px; color:var(--accent);">(음력)</span>' : ''}</td>
           <td><span class="member-chip" style="background:${color}; font-size:11px;">${esc(task.member_name || '-')}</span></td>
           <td>${esc(task.category || '-')}</td>
           <td>${esc(task.title || '-')}</td>
@@ -391,7 +391,21 @@ async function deletePersonalOccurrence(occId) {
 
 /* ── 일정 추가 ── */
 function togglePersonalRecurrenceFields() {
-  $('peIntervalWrap').style.display = $('pe_recurrence').value === 'weekly' ? 'inline' : 'none';
+  const isWeekly = $('pe_recurrence').value === 'weekly';
+  const isYearly = $('pe_recurrence').value === 'yearly';
+  $('peIntervalWrap').style.display = isWeekly ? 'inline' : 'none';
+  $('peLunarWrap').style.display = isYearly ? 'flex' : 'none';
+  if (!isYearly) $('pe_is_lunar').checked = false;
+  updateLunarPreview();
+}
+
+// 음력 변환은 서버(파이썬)에서 정확히 계산하지만, 화면에서도 간단한 안내 문구 정도는 보여줌
+function updateLunarPreview() {
+  const wrap = $('lunarPreview');
+  if (!$('pe_is_lunar').checked) { wrap.textContent = ''; return; }
+  const dateVal = $('pe_anchor_date').value;
+  if (!dateVal) { wrap.textContent = ''; return; }
+  wrap.textContent = `${dateVal}(양력)을 음력으로 환산해서 저장 → 저장 후 다음 목록에서 정확한 값을 확인해주세요.`;
 }
 
 function openPersonalEventModal() {
@@ -400,6 +414,7 @@ function openPersonalEventModal() {
   $('pe_recurrence').value = 'once';
   $('pe_anchor_date').value = toISO(new Date());
   $('pe_interval').value = '1';
+  $('pe_is_lunar').checked = false;
   $('pe_end_date').value = '';
   $('pe_reminder_days').value = '1';
   $('pe_note').value = '';
@@ -423,6 +438,7 @@ async function savePersonalEvent() {
   let interval_value = 1;
   if (uiRecurrence === 'yearly') { recurrence_type = 'monthly'; interval_value = 12; }
   else if (uiRecurrence === 'weekly') { interval_value = Number($('pe_interval').value) || 1; }
+  const isLunar = uiRecurrence === 'yearly' && $('pe_is_lunar').checked;
 
   try {
     const res = await fetch(`${apiBase()}/api/personal_schedule`, {
@@ -434,6 +450,7 @@ async function savePersonalEvent() {
         recurrence_type,
         interval_value,
         anchor_date: anchorDate,
+        date_type: isLunar ? 'lunar' : 'solar',
         end_date: $('pe_end_date').value || null,
         reminder_days_before: Number($('pe_reminder_days').value) || 0,
         note: $('pe_note').value.trim() || null,
