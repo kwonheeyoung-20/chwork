@@ -1155,13 +1155,17 @@ class handler(BaseHTTPRequestHandler):
             for r in rows:
                 due = datetime.date.fromisoformat(r["due_date"])
                 task = r.get("personal_schedule_tasks") or {}
+                category = task.get("category")
                 reminder_days = task.get("reminder_days_before") or 1
                 days_left = (due - today).days
+                # 결제일이 아니면 "지난 일정(확인 필요)"로 계속 남기지 않고, 다가올 때만 안내
+                if category != "결제일" and days_left < 0:
+                    continue
                 if days_left < 0 or days_left <= reminder_days:
                     result.append({
                         "occurrence_id": r["id"], "task_id": r["task_id"], "due_date": r["due_date"],
                         "days_left": days_left, "title": task.get("title"),
-                        "category": task.get("category"), "member_name": task.get("member_name"),
+                        "category": category, "member_name": task.get("member_name"),
                     })
             return self._send(200, {"upcoming": result})
 
