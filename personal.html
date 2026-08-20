@@ -48,9 +48,23 @@
     .tt-table { width:100%; border-collapse:collapse; }
     .tt-table th, .tt-table td { border:0.5px solid var(--border); padding:6px 8px; font-size:12px; text-align:center; vertical-align:top; }
     .tt-table th { background:var(--bg); font-weight:600; }
+    .tt-table td { position: relative; }
     .tt-cell-subject { font-weight:600; font-size:13px; }
     .tt-cell-teacher { font-size:10.5px; color:var(--text-secondary); margin-top:2px; }
-    .tt-cell-edit { font-size:10px; color:var(--accent); cursor:pointer; margin-top:4px; }
+    .tt-cell-edit {
+      position: absolute; top: 3px; right: 4px;
+      font-size: 13px; line-height: 1; color: var(--text-muted);
+      cursor: pointer; padding: 2px 4px; border-radius: 4px;
+    }
+    .tt-cell-edit:hover { background: var(--bg); color: var(--accent); }
+    .tt-cell-empty-add {
+      font-size: 11px; color: var(--text-muted); cursor: pointer;
+      display: block; padding: 10px 0;
+    }
+    .tt-cell-empty-add:hover { color: var(--accent); }
+    details.panel summary::-webkit-details-marker { display: none; }
+    details.panel[open] summary span { transform: rotate(90deg); display: inline-block; }
+    details.panel summary span { transition: transform 0.15s; }
     .nav-personal-divider { border-top: 0.5px solid var(--border); margin: 10px 20px 6px; }
     .nav-personal-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#8b5cf6; margin-right:7px; vertical-align:middle; }
   </style>
@@ -191,18 +205,6 @@
 
           <section class="panel">
             <div class="panel-header">
-              <h2>교시 목록</h2>
-            </div>
-            <div class="table-wrap">
-              <table class="table" id="periodListTable">
-                <thead><tr><th>교시명</th><th>시간</th><th>순서</th><th></th></tr></thead>
-                <tbody id="periodListTbody"></tbody>
-              </table>
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-header">
               <h2>선생님 연락처</h2>
               <button class="primary" onclick="openTeacherModal()">+ 선생님 등록</button>
             </div>
@@ -216,6 +218,20 @@
               </table>
             </div>
           </section>
+
+          <details class="panel" style="padding:0;">
+            <summary style="cursor:pointer; padding:20px 24px; font-weight:600; font-size:15px; list-style:none; display:flex; align-items:center; gap:6px;">
+              <span>▸</span> 교시 목록 펼쳐보기
+            </summary>
+            <div style="padding:0 24px 20px;">
+              <div class="table-wrap">
+                <table class="table" id="periodListTable">
+                  <thead><tr><th>교시명</th><th>시간</th><th>순서</th><th></th></tr></thead>
+                  <tbody id="periodListTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </details>
         </div>
 
       </div>
