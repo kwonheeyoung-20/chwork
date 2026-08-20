@@ -158,6 +158,17 @@
               <h2>일정 목록 <span id="perOccCount" class="hr-count"></span></h2>
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+              <label style="font-size:13px; color:var(--text-secondary);">기간:</label>
+              <select id="perRangeFilter" class="hr-input" style="width:130px;" onchange="handlePerRangeChange()">
+                <option value="month">달력 보는 달만</option>
+                <option value="all">전체보기(±1년)</option>
+                <option value="custom">기간 직접 지정</option>
+              </select>
+              <span id="perCustomRangeWrap" style="display:none; align-items:center; gap:4px;">
+                <input id="perRangeFrom" type="date" class="hr-input" style="width:140px;" onchange="loadPersonalOccurrences()">
+                <span style="color:var(--text-muted);">~</span>
+                <input id="perRangeTo" type="date" class="hr-input" style="width:140px;" onchange="loadPersonalOccurrences()">
+              </span>
               <label style="font-size:13px; color:var(--text-secondary);">구성원:</label>
               <select id="perMemberFilter" class="hr-input" style="width:120px;" onchange="loadPersonalOccurrences()">
                 <option value="">전체</option>
