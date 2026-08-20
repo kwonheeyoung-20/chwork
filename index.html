@@ -37,6 +37,8 @@
     .todo-item.done .todo-text { text-decoration:line-through; color:var(--text-muted); }
     .todo-item .todo-del { font-size:12px; color:var(--text-muted); cursor:pointer; flex-shrink:0; }
     .todo-item .todo-del:hover { color:var(--red); }
+    .nav-personal-divider { border-top: 0.5px solid var(--border); margin: 10px 20px 6px; }
+    .nav-personal-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#8b5cf6; margin-right:7px; vertical-align:middle; }
   </style>
 </head>
 <body>
@@ -53,10 +55,11 @@
         <a href="hr.html#pension">퇴직급여관리</a>
       </div>
       <a href="schedule.html">업무 일정관리</a>
-      <a href="personal.html">개인 스케줄</a>
       <a href="hr.html#contacts">거래처 연락처</a>
       <a href="hr.html#contractdocs">계약/증빙관리</a>
       <a href="#">월간 보고서</a>
+      <div class="nav-personal-divider"></div>
+      <a href="personal.html"><span class="nav-personal-dot"></span>개인 일정관리</a>
       <a href="#">설정</a>
     </nav>
   </aside>

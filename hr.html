@@ -22,6 +22,8 @@
     .sch-dday.overdue { background:#fdecea; color:var(--red); }
     .sch-dday.soon { background:#fff4e5; color:#8a5b00; }
     .sch-dday.normal { background:var(--bg); color:var(--text-muted); }
+    .nav-personal-divider { border-top: 0.5px solid var(--border); margin: 10px 20px 6px; }
+    .nav-personal-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#8b5cf6; margin-right:7px; vertical-align:middle; }
   </style>
 </head>
 <body>
@@ -45,10 +47,11 @@
         <a href="hr.html#pension" onclick="switchMenuGroup('pension'); return false;">퇴직급여관리</a>
       </div>
       <a href="schedule.html">업무 일정관리</a>
-      <a href="personal.html">개인 스케줄</a>
       <a id="navContacts" href="hr.html#contacts" onclick="switchMenuGroup('contacts'); return false;">거래처 연락처</a>
       <a id="navContractDocs" href="hr.html#contractdocs" onclick="switchMenuGroup('contractdocs'); return false;">계약/증빙관리</a>
       <a href="#">월간 보고서</a>
+      <div class="nav-personal-divider"></div>
+      <a href="personal.html"><span class="nav-personal-dot"></span>개인 일정관리</a>
       <a href="#">설정</a>
     </nav>
   </aside>

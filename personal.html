@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>개인 스케줄 | 창현 Dashboard</title>
+  <title>개인 일정관리 | 창현 Dashboard</title>
   <link rel="stylesheet" href="assets/styles.css">
   <link rel="stylesheet" href="assets/hr.css">
   <link rel="manifest" href="manifest.json">
@@ -49,6 +49,8 @@
     .tt-cell-subject { font-weight:600; font-size:13px; }
     .tt-cell-teacher { font-size:10.5px; color:var(--text-secondary); margin-top:2px; }
     .tt-cell-edit { font-size:10px; color:var(--accent); cursor:pointer; margin-top:4px; }
+    .nav-personal-divider { border-top: 0.5px solid var(--border); margin: 10px 20px 6px; }
+    .nav-personal-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#8b5cf6; margin-right:7px; vertical-align:middle; }
   </style>
 </head>
 <body>
@@ -65,10 +67,11 @@
         <a href="hr.html#pension">퇴직급여관리</a>
       </div>
       <a href="schedule.html">업무 일정관리</a>
-      <a class="active" href="personal.html">개인 스케줄</a>
       <a href="hr.html#contacts">거래처 연락처</a>
       <a href="hr.html#contractdocs">계약/증빙관리</a>
       <a href="#">월간 보고서</a>
+      <div class="nav-personal-divider"></div>
+      <a class="active" href="personal.html"><span class="nav-personal-dot"></span>개인 일정관리</a>
       <a href="#">설정</a>
     </nav>
   </aside>
@@ -76,7 +79,7 @@
   <main class="main">
     <header class="topbar">
       <div>
-        <h1>개인 스케줄</h1>
+        <h1>개인 일정관리</h1>
         <p>가족 일정과 아이 학교 시간표를 관리합니다.</p>
       </div>
       <div class="pill">Vercel 배포</div>
