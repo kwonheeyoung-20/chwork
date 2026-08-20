@@ -29,6 +29,10 @@
     .todo-nav-btn:hover { background:var(--surface); }
     .todo-date-label { font-size:15px; font-weight:600; min-width:180px; text-align:center; }
     .todo-add-row { display:flex; gap:8px; margin-bottom:14px; }
+    .todo-cat-toggle { display:flex; border:0.5px solid var(--border-strong); border-radius:var(--radius-sm); overflow:hidden; flex-shrink:0; }
+    .todo-cat-toggle button { border:none; background:var(--surface); color:var(--text-secondary); font-size:12px; padding:0 12px; cursor:pointer; }
+    .todo-cat-toggle button.active { background:var(--accent); color:#fff; }
+    .todo-cat-toggle button:first-child { border-right:0.5px solid var(--border-strong); }
     .todo-list { display:flex; flex-direction:column; gap:2px; }
     .todo-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:var(--radius-sm); }
     .todo-item:hover { background:var(--bg); }
@@ -126,11 +130,20 @@
             <button class="secondary" onclick="todoGoToday()" style="margin-left:6px;">오늘</button>
           </div>
           <div class="todo-add-row">
+            <div class="todo-cat-toggle" id="todoCatToggle">
+              <button type="button" class="active" data-cat="work" onclick="setTodoCategory('work')">업무</button>
+              <button type="button" data-cat="personal" onclick="setTodoCategory('personal')">개인</button>
+            </div>
             <input id="todoInput" class="hr-input" placeholder="할 일을 입력하고 Enter 또는 추가 버튼" style="flex:1;">
             <button class="primary" onclick="addTodo()">추가</button>
           </div>
           <div id="todoCount" style="font-size:12px; color:var(--text-muted); margin-bottom:8px;"></div>
-          <div class="todo-list" id="todoList"></div>
+          <div style="margin-bottom:6px;">
+            <div style="font-size:12px; font-weight:600; color:var(--text-secondary); margin:10px 0 4px;">💼 업무</div>
+            <div class="todo-list" id="todoListWork"></div>
+            <div style="font-size:12px; font-weight:600; color:var(--text-secondary); margin:14px 0 4px;">🏠 개인</div>
+            <div class="todo-list" id="todoListPersonal"></div>
+          </div>
         </section>
 
       </div>
