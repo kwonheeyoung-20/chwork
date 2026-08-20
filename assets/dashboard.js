@@ -161,7 +161,7 @@ async function loadPersonalAlerts() {
     const soon = list.filter(x => x.days_left >= 0);
     let html = '';
     if (overdue.length > 0) {
-      html += `<div class="sch-banner danger"><h3>⚠ 지난 일정 (${overdue.length}건)</h3>`;
+      html += `<div class="sch-banner personal-danger"><h3>⚠ 지난 일정 (${overdue.length}건)</h3>`;
       html += overdue.slice(0, 5).map(x => `
         <div class="sch-banner-row">
           <a href="personal.html"><span class="sch-dday overdue">D+${Math.abs(x.days_left)}</span> [${esc(x.member_name)}] ${esc(x.title)}</a>
@@ -170,10 +170,10 @@ async function loadPersonalAlerts() {
       html += `</div>`;
     }
     if (soon.length > 0) {
-      html += `<div class="sch-banner warn"><h3>🔔 다가오는 일정 (${soon.length}건)</h3>`;
+      html += `<div class="sch-banner personal-warn"><h3>🔔 다가오는 일정 (${soon.length}건)</h3>`;
       html += soon.slice(0, 5).map(x => `
         <div class="sch-banner-row">
-          <a href="personal.html"><span class="sch-dday soon">${x.days_left === 0 ? 'D-DAY' : 'D-' + x.days_left}</span> [${esc(x.member_name)}] ${esc(x.title)}</a>
+          <a href="personal.html"><span class="sch-dday personal-soon">${x.days_left === 0 ? 'D-DAY' : 'D-' + x.days_left}</span> [${esc(x.member_name)}] ${esc(x.title)}</a>
         </div>
       `).join('');
       html += `</div>`;
