@@ -223,28 +223,25 @@ function todoGoToday() {
 async function loadTodos() {
   $('todoDateLabel').textContent = todoDateLabel();
   const dateStr = localISO(todoDate);
-  const list = $('todoList');
-  list.innerHTML = `<div class="dash-empty">불러오는 중…</div>`;
+  $('todoListWork').innerHTML = `<div class="dash-empty">불러오는 중…</div>`;
+  $('todoListPersonal').innerHTML = '';
   try {
     const res = await fetch(`${apiBase()}/api/daily_todos?date=${dateStr}`, { headers: authHeaders() });
     if (handle401(res)) return;
     const data = await res.json();
     renderTodos(data.todos || []);
   } catch (e) {
-    list.innerHTML = `<div class="dash-empty">불러오기 실패</div>`;
+    $('todoListWork').innerHTML = `<div class="dash-empty">불러오기 실패</div>`;
   }
 }
 
-function renderTodos(items) {
-  todoItemsCache = items;
-  const list = $('todoList');
-  const doneCount = items.filter(t => t.done).length;
-  $('todoCount').textContent = items.length > 0 ? `총 ${items.length}개 · ${doneCount}개 완료` : '';
+function renderTodoGroup(containerId, items) {
+  const el = $(containerId);
   if (items.length === 0) {
-    list.innerHTML = `<div class="dash-empty">등록된 할 일이 없습니다. 위에서 추가해보세요.</div>`;
+    el.innerHTML = `<div class="dash-empty">없음</div>`;
     return;
   }
-  list.innerHTML = items.map(t => `
+  el.innerHTML = items.map(t => `
     <div class="todo-item ${t.done ? 'done' : ''}">
       <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTodo('${t.id}', this.checked)">
       <span class="todo-text">${esc(t.content)}</span>
@@ -252,6 +249,22 @@ function renderTodos(items) {
       <span class="todo-del" onclick="deleteTodo('${t.id}')">삭제</span>
     </div>
   `).join('');
+}
+
+function renderTodos(items) {
+  todoItemsCache = items;
+  const doneCount = items.filter(t => t.done).length;
+  $('todoCount').textContent = items.length > 0 ? `총 ${items.length}개 · ${doneCount}개 완료` : '';
+  const workItems = items.filter(t => (t.category || 'work') !== 'personal');
+  const personalItems = items.filter(t => t.category === 'personal');
+  renderTodoGroup('todoListWork', workItems);
+  renderTodoGroup('todoListPersonal', personalItems);
+}
+
+let currentTodoCategory = 'work';
+function setTodoCategory(cat) {
+  currentTodoCategory = cat;
+  document.querySelectorAll('#todoCatToggle button').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
 }
 
 async function addTodo() {
@@ -262,7 +275,7 @@ async function addTodo() {
     const res = await fetch(`${apiBase()}/api/daily_todos`, {
       method: 'POST',
       headers: authHeaders(true),
-      body: JSON.stringify({ todo_date: localISO(todoDate), content }),
+      body: JSON.stringify({ todo_date: localISO(todoDate), content, category: currentTodoCategory }),
     });
     if (!res.ok) throw new Error('failed');
     input.value = '';
@@ -310,7 +323,7 @@ async function carryOverTodo(id) {
     const createRes = await fetch(`${apiBase()}/api/daily_todos`, {
       method: 'POST',
       headers: authHeaders(true),
-      body: JSON.stringify({ todo_date: nextDayStr, content: item.content }),
+      body: JSON.stringify({ todo_date: nextDayStr, content: item.content, category: item.category || 'work' }),
     });
     if (!createRes.ok) throw new Error('create failed');
 
