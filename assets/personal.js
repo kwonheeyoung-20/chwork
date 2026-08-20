@@ -46,7 +46,7 @@ async function perLogin() {
     const data = await res.json();
     if (data.ok) {
       sessionStorage.setItem('chwork_hr_pw', pw);
-      window.location.href = 'index.html';
+      showMain(); // 이 페이지는 딥링크로 들어오는 경우가 많아서, 대시보드로 안 튕기고 여기 그대로 머뭅니다
     } else {
       $('loginMsg').textContent = '비밀번호가 올바르지 않습니다.';
     }
