@@ -27,6 +27,36 @@ import urllib.request
 import urllib.error
 from urllib.parse import urlparse, parse_qs, quote
 
+try:
+    from korean_lunar_calendar import KoreanLunarCalendar
+except ImportError:
+    KoreanLunarCalendar = None
+
+
+def solar_to_lunar(y, m, d):
+    """양력 날짜 -> (음력년, 음력월, 음력일, 윤달여부). 변환 실패 시 None."""
+    if KoreanLunarCalendar is None:
+        return None
+    try:
+        cal = KoreanLunarCalendar()
+        cal.setSolarDate(y, m, d)
+        return cal.lunarYear, cal.lunarMonth, cal.lunarDay, cal.isIntercalation
+    except Exception:
+        return None
+
+
+def lunar_to_solar(y, m, d, leap=False):
+    """(음력년, 음력월, 음력일) -> 양력 날짜 문자열(YYYY-MM-DD). 변환 실패 시 None."""
+    if KoreanLunarCalendar is None:
+        return None
+    try:
+        cal = KoreanLunarCalendar()
+        cal.setLunarDate(y, m, d, leap)
+        return f"{cal.solarYear:04d}-{cal.solarMonth:02d}-{cal.solarDay:02d}"
+    except Exception:
+        return None
+
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 HR_PASSWORD = os.environ.get("HR_PASSWORD", "")
@@ -1073,12 +1103,39 @@ class handler(BaseHTTPRequestHandler):
     # ────────────────────────────────────────────────────────
     # personal (개인 스케줄 - 가족 일정)
     # ────────────────────────────────────────────────────────
+    def _generate_lunar_occurrences(self):
+        """date_type='lunar'인 매년 반복 일정을, 매년 실제 양력 날짜로 환산해서 발생일자를 채워넣음."""
+        tasks = rest_request(
+            "GET", "personal_schedule_tasks?date_type=eq.lunar&active=eq.true&select=*"
+        ) or []
+        if not tasks:
+            return
+        today = datetime.date.today()
+        horizon_year = (today + datetime.timedelta(days=400)).year
+        for t in tasks:
+            if t.get("lunar_month") is None or t.get("lunar_day") is None:
+                continue
+            start_year = int(t["anchor_date"][:4])
+            end_year = int(t["end_date"][:4]) if t.get("end_date") else horizon_year
+            for y in range(start_year, min(horizon_year, end_year) + 1):
+                solar_date = lunar_to_solar(y, t["lunar_month"], t["lunar_day"], t.get("lunar_leap", False))
+                if not solar_date:
+                    continue
+                if t.get("end_date") and solar_date > t["end_date"]:
+                    continue
+                rest_request(
+                    "POST", "personal_schedule_occurrences",
+                    body={"task_id": t["id"], "due_date": solar_date},
+                    prefer="resolution=merge-duplicates",
+                )
+
     def _get_personal(self, qs):
         if qs.get("members", ["0"])[0] == "1":
             rows = rest_request("GET", "personal_schedule_members?select=*&order=sort_order.asc")
             return self._send(200, {"members": rows})
 
         rpc("generate_personal_schedule_occurrences", {})
+        self._generate_lunar_occurrences()
 
         if qs.get("tasks", ["0"])[0] == "1":
             rows = rest_request(
@@ -1118,7 +1175,7 @@ class handler(BaseHTTPRequestHandler):
 
         path = (
             "personal_schedule_occurrences?due_date=gte." + from_date + "&due_date=lte." + to_date
-            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,note)&order=due_date.asc"
+            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,note,date_type)&order=due_date.asc"
         )
         if status_filter and status_filter != "all":
             path += "&status=eq." + status_filter
@@ -1169,6 +1226,17 @@ class handler(BaseHTTPRequestHandler):
         if recurrence_type not in ("once", "weekly", "monthly"):
             return self._send(400, {"error": "recurrence_type이 올바르지 않습니다"})
 
+        # 음력 기준(예: 음력 생일) — 입력하신 기준일자(양력)를 음력으로 환산해서
+        # 음력 월/일을 저장해두고, 해마다 그 음력 월/일에 해당하는 양력 날짜로 발생시킴
+        is_lunar = payload.get("date_type") == "lunar"
+        lunar_month = lunar_day = None
+        if is_lunar:
+            solar_dt = datetime.date.fromisoformat(anchor_date)
+            converted = solar_to_lunar(solar_dt.year, solar_dt.month, solar_dt.day)
+            if not converted:
+                return self._send(400, {"error": "음력 변환에 실패했습니다. 날짜를 다시 확인해주세요."})
+            _, lunar_month, lunar_day, _ = converted
+
         body = {
             "member_name": member_name,
             "category": payload.get("category") or "일정",
@@ -1181,9 +1249,13 @@ class handler(BaseHTTPRequestHandler):
             "reminder_days_before": int(payload.get("reminder_days_before") or 1),
             "note": payload.get("note"),
             "active": True,
+            "date_type": "lunar" if is_lunar else "solar",
+            "lunar_month": lunar_month,
+            "lunar_day": lunar_day,
         }
         created = rest_request("POST", "personal_schedule_tasks", body=body, prefer="return=representation")
         rpc("generate_personal_schedule_occurrences", {})
+        self._generate_lunar_occurrences()
         return self._send(201, {"task": created[0] if created else None})
 
     def _patch_personal(self, task_id, payload):
@@ -1192,6 +1264,26 @@ class handler(BaseHTTPRequestHandler):
                     "anchor_date", "day_mode", "end_date", "reminder_days_before", "note", "active"):
             if key in payload:
                 update_fields[key] = payload[key]
+
+        if "date_type" in payload:
+            is_lunar = payload.get("date_type") == "lunar"
+            update_fields["date_type"] = "lunar" if is_lunar else "solar"
+            if is_lunar:
+                anchor = payload.get("anchor_date")
+                if not anchor:
+                    existing = rest_request("GET", f"personal_schedule_tasks?id=eq.{task_id}&select=anchor_date")
+                    anchor = existing[0]["anchor_date"] if existing else None
+                if anchor:
+                    solar_dt = datetime.date.fromisoformat(anchor)
+                    converted = solar_to_lunar(solar_dt.year, solar_dt.month, solar_dt.day)
+                    if converted:
+                        _, lm, ld, _ = converted
+                        update_fields["lunar_month"] = lm
+                        update_fields["lunar_day"] = ld
+            else:
+                update_fields["lunar_month"] = None
+                update_fields["lunar_day"] = None
+
         if not update_fields:
             return self._send(400, {"error": "수정할 항목이 없습니다"})
 
@@ -1202,6 +1294,7 @@ class handler(BaseHTTPRequestHandler):
             f"personal_schedule_occurrences?task_id=eq.{task_id}&status=eq.pending&due_date=gte.{today}",
         )
         rpc("generate_personal_schedule_occurrences", {})
+        self._generate_lunar_occurrences()
         return self._send(200, {"ok": True})
 
     def _delete_personal(self, qs):
