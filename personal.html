@@ -340,7 +340,7 @@
       </label>
       <label>순서(작을수록 위) <input id="pd_sort" type="number" class="hr-input" value="0"></label>
       <label>시작시간 <input id="pd_start" type="time" class="hr-input"></label>
-      <label>종료시간 <input id="pd_end" type="time" class="hr-input"></label>
+      <label>종료시간 <input id="pd_end" type="time" class="hr-input" onkeydown="if(event.key==='Enter'){event.preventDefault(); savePeriod();}"></label>
     </div>
     <div id="periodModalMsg" class="hr-msg"></div>
     <div style="display:flex; gap:8px; justify-content:space-between; margin-top:16px;">
@@ -359,7 +359,7 @@
     <h2 id="ttEntryModalTitle">과목 등록</h2>
     <p id="ttEntryModalSub" style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;"></p>
     <div class="hr-form-grid" style="grid-template-columns:1fr;">
-      <label>과목명 <input id="te_subject" class="hr-input" list="subjectNameList" placeholder="등록된 과목이면 선생님 정보가 자동으로 붙어요"></label>
+      <label>과목명 <input id="te_subject" class="hr-input" list="subjectNameList" placeholder="등록된 과목이면 선생님 정보가 자동으로 붙어요" onkeydown="if(event.key==='Enter'){event.preventDefault(); saveTimetableEntry();}"></label>
       <label>구분
         <select id="te_subject_type" class="hr-input">
           <option value="regular">정규수업 (과목별 다른 색)</option>
@@ -367,6 +367,7 @@
           <option value="academy">학원 (방과후와 별도 색)</option>
         </select>
       </label>
+      <label>비고 <input id="te_note" class="hr-input" placeholder="예: ~15:50까지, 격주 수업 등"></label>
       <datalist id="subjectNameList"></datalist>
     </div>
     <div id="ttEntryModalMsg" class="hr-msg"></div>
