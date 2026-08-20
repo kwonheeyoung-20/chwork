@@ -220,6 +220,38 @@ async function loadPerCalendar() {
   }
 }
 
+// 대한민국 공휴일 (업무 일정관리 달력과 동일한 목록)
+const KOREAN_HOLIDAYS_BY_YEAR = {
+  2026: {
+    '2026-01-01': '신정',
+    '2026-02-16': '설날 전날',
+    '2026-02-17': '설날',
+    '2026-02-18': '설날 다음날',
+    '2026-03-01': '삼일절',
+    '2026-03-02': '삼일절 대체공휴일',
+    '2026-05-01': '근로자의 날',
+    '2026-05-05': '어린이날',
+    '2026-05-24': '부처님오신날',
+    '2026-05-25': '부처님오신날 대체공휴일',
+    '2026-06-03': '전국동시지방선거일',
+    '2026-06-06': '현충일',
+    '2026-07-17': '제헌절',
+    '2026-08-15': '광복절',
+    '2026-09-24': '추석 전날',
+    '2026-09-25': '추석',
+    '2026-09-26': '추석 다음날',
+    '2026-10-03': '개천절',
+    '2026-10-09': '한글날',
+    '2026-12-25': '크리스마스',
+  },
+};
+
+function getHolidayName(dateStr) {
+  const year = Number(dateStr.slice(0, 4));
+  const table = KOREAN_HOLIDAYS_BY_YEAR[year];
+  return table ? (table[dateStr] || null) : null;
+}
+
 function renderPerCalendar(occurrences, monthStart, monthEnd) {
   const byDate = {};
   occurrences.forEach(o => {
@@ -238,18 +270,21 @@ function renderPerCalendar(occurrences, monthStart, monthEnd) {
     const dateStr = toISO(dateObj);
     const weekday = dateObj.getDay();
     const isToday = dateStr === todayStr;
+    const holidayName = getHolidayName(dateStr);
     const dayItems = byDate[dateStr] || [];
-    const maxShow = 3;
+    const maxShow = holidayName ? 2 : 3;
     const itemsHtml = dayItems.slice(0, maxShow).map(o => {
       const task = o.personal_schedule_tasks || {};
       const color = memberColor(task.member_name);
       return `<div class="sch-cal-item ${o.status === 'done' ? 'done' : ''}" style="background:${color};" title="[${esc(task.member_name)}] ${esc(task.title)}">${esc(task.title || '')}</div>`;
     }).join('');
     const moreHtml = dayItems.length > maxShow ? `<div class="sch-cal-more">+${dayItems.length - maxShow}개 더</div>` : '';
-    const dayNumClass = weekday === 0 ? 'sun' : (weekday === 6 ? 'sat' : '');
+    const holidayHtml = holidayName ? `<div class="sch-cal-holiday" title="${esc(holidayName)}">${esc(holidayName)}</div>` : '';
+    const dayNumClass = (weekday === 0 || holidayName) ? 'sun' : (weekday === 6 ? 'sat' : '');
     html += `
-      <div class="sch-cal-cell ${isToday ? 'today' : ''}">
+      <div class="sch-cal-cell ${isToday ? 'today' : ''} ${holidayName ? 'holiday' : ''}">
         <div class="sch-cal-daynum ${dayNumClass}">${day}</div>
+        ${holidayHtml}
         ${itemsHtml}
         ${moreHtml}
       </div>
