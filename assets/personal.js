@@ -301,8 +301,8 @@ async function loadPersonalOccurrences() {
   const status = $('perStatusFilter').value;
   const member = $('perMemberFilter').value;
   const today = new Date();
-  const from = toISO(new Date(today.getFullYear(), today.getMonth() - 1, 1));
-  const to = toISO(new Date(today.getFullYear(), today.getMonth() + 3, 0));
+  const from = toISO(new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()));
+  const to = toISO(new Date(today.getFullYear() + 1, today.getMonth(), today.getDate()));
   try {
     let url = `${apiBase()}/api/personal_schedule?from=${from}&to=${to}&status=${status}`;
     if (member) url += `&member=${encodeURIComponent(member)}`;
