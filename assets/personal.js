@@ -574,6 +574,7 @@ let periodsCache = [];
 let entriesCache = [];
 
 function renderTimetable(periods, entries) {
+  subjectColorMap = {};
   const tbody = $('ttTbody');
   if (periods.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" style="padding:24px; color:var(--text-muted);">등록된 교시 시간이 없습니다. "+ 교시 시간 설정"으로 먼저 등록해주세요.</td></tr>`;
@@ -622,8 +623,9 @@ function renderTimetable(periods, entries) {
         }
       }
       const spanAttrs = `${colspan > 1 ? ` colspan="${colspan}"` : ''}${rowspan > 1 ? ` rowspan="${rowspan}"` : ''}`;
+      const bgColor = getSubjectColor(e);
       cells += `
-        <td${spanAttrs}>
+        <td${spanAttrs} style="background:${bgColor};">
           <div class="tt-cell-subject">${esc(e.subject_name)}</div>
           ${e.teacher_name || e.teacher_phone ? `<div class="tt-cell-teacher">${esc(e.teacher_name || '')} ${e.teacher_phone ? esc(e.teacher_phone) : ''}</div>` : ''}
           <span class="tt-cell-edit" onclick="openTimetableEntryModal('${p.period_label}', ${wd}, '${e.id}')" title="수정">✏️</span>
@@ -657,24 +659,44 @@ function renderPeriodList(periods) {
 }
 
 function printTimetable() {
-  $('ttPrintTitle').style.display = 'block';
+  $('ttPrintTimetableBody').innerHTML = $('ttTable').outerHTML;
+  $('ttPrintTeacherBody').innerHTML = $('teacherTable').outerHTML;
+  $('ttFullPrintArea').style.display = 'block';
+
   const style = document.createElement('style');
   style.id = 'ttPrintStyle';
   style.textContent = `
     @media print {
       body * { visibility: hidden; }
-      #ttPrintArea, #ttPrintArea * { visibility: visible; }
-      #ttPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
+      #ttFullPrintArea, #ttFullPrintArea * { visibility: visible; }
+      #ttFullPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
       @page { size: landscape; margin: 10mm; }
-      #ttPrintTitle { font-size: 16px; margin-bottom: 8px; }
-      #ttTable { font-size: 11px; }
-      #ttTable th, #ttTable td { padding: 4px 6px; }
+      #ttFullPrintArea h3 { font-size: 15px; margin-bottom: 8px; }
+      #ttFullPrintArea table { font-size: 11px; }
+      #ttFullPrintArea th, #ttFullPrintArea td { padding: 4px 6px; }
+      .tt-cell-edit { display: none !important; }
     }
   `;
   document.head.appendChild(style);
   window.print();
   document.head.removeChild(style);
-  $('ttPrintTitle').style.display = 'none';
+  $('ttFullPrintArea').style.display = 'none';
+}
+
+// 과목별 색상 — 정규수업은 과목마다 다른 색(팔레트 순환), 방과후/학원은 각각 한 가지 색으로 통일
+const SUBJECT_COLOR_PALETTE = ['#fde2e2', '#fdead0', '#fdf6d0', '#e3f5d3', '#d3f0ea', '#d3e3fb', '#e3d7fb', '#f7d3ec', '#e0e0e0'];
+const AFTERSCHOOL_COLOR = '#dfe6ec';
+const ACADEMY_COLOR = '#dce9fb';
+let subjectColorMap = {};
+
+function getSubjectColor(entry) {
+  if (entry.subject_type === 'afterschool') return AFTERSCHOOL_COLOR;
+  if (entry.subject_type === 'academy') return ACADEMY_COLOR;
+  if (!subjectColorMap[entry.subject_name]) {
+    const idx = Object.keys(subjectColorMap).length % SUBJECT_COLOR_PALETTE.length;
+    subjectColorMap[entry.subject_name] = SUBJECT_COLOR_PALETTE[idx];
+  }
+  return subjectColorMap[entry.subject_name];
 }
 
 let editingPeriodId = null;
@@ -770,8 +792,10 @@ function openTimetableEntryModal(periodLabel, weekday, entryId) {
   if (entryId) {
     const e = entriesCache.find(x => x.id === entryId);
     $('te_subject').value = e ? e.subject_name : '';
+    $('te_subject_type').value = e ? (e.subject_type || 'regular') : 'regular';
   } else {
     $('te_subject').value = '';
+    $('te_subject_type').value = 'regular';
   }
   $('ttEntryModalMsg').textContent = '';
   $('ttEntryModal').style.display = 'flex';
@@ -789,6 +813,7 @@ async function saveTimetableEntry() {
     weekday: pendingEntryWeekday,
     period_label: pendingEntryPeriodLabel,
     subject_name: subject,
+    subject_type: $('te_subject_type').value,
   };
   try {
     let res;
