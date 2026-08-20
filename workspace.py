@@ -27,6 +27,36 @@ import urllib.request
 import urllib.error
 from urllib.parse import urlparse, parse_qs, quote
 
+try:
+    from korean_lunar_calendar import KoreanLunarCalendar
+except ImportError:
+    KoreanLunarCalendar = None
+
+
+def solar_to_lunar(y, m, d):
+    """양력 날짜 -> (음력년, 음력월, 음력일, 윤달여부). 변환 실패 시 None."""
+    if KoreanLunarCalendar is None:
+        return None
+    try:
+        cal = KoreanLunarCalendar()
+        cal.setSolarDate(y, m, d)
+        return cal.lunarYear, cal.lunarMonth, cal.lunarDay, cal.isIntercalation
+    except Exception:
+        return None
+
+
+def lunar_to_solar(y, m, d, leap=False):
+    """(음력년, 음력월, 음력일) -> 양력 날짜 문자열(YYYY-MM-DD). 변환 실패 시 None."""
+    if KoreanLunarCalendar is None:
+        return None
+    try:
+        cal = KoreanLunarCalendar()
+        cal.setLunarDate(y, m, d, leap)
+        return f"{cal.solarYear:04d}-{cal.solarMonth:02d}-{cal.solarDay:02d}"
+    except Exception:
+        return None
+
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 HR_PASSWORD = os.environ.get("HR_PASSWORD", "")
@@ -245,6 +275,10 @@ class handler(BaseHTTPRequestHandler):
                 return self._get_promotions(qs)
             if resource == "annualleave":
                 return self._get_annualleave(qs)
+            if resource == "personal":
+                return self._get_personal(qs)
+            if resource == "timetable":
+                return self._get_timetable(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -347,9 +381,14 @@ class handler(BaseHTTPRequestHandler):
                     })
             return self._send(200, {"upcoming": result})
 
-        rows = rest_request("GET", "contract_documents?select=*&order=contract_end_date.asc.nullslast") or []
+        rows = rest_request(
+            "GET", "contract_documents?select=*,contract_document_files(*)&order=contract_end_date.asc.nullslast"
+        ) or []
         for r in rows:
-            r["view_url"] = storage_sign_url(r.get("storage_path"))
+            files = r.get("contract_document_files") or []
+            for f in files:
+                f["view_url"] = storage_sign_url(f.get("storage_path"))
+            r["files"] = files
         return self._send(200, {"documents": rows})
 
     def _get_todos(self, qs):
@@ -361,6 +400,12 @@ class handler(BaseHTTPRequestHandler):
 
     def _get_annualleave(self, qs):
         """연차수당 자동계산용 — 기준일 시점 (기본급+식대)/209 통상시급을 직원별로 계산.
+        기본급/식대는 매달 확정 저장되는 monthly_payroll의 실제 값을 그대로 씁니다
+        (설정 테이블이 아니라, 그 달 실제로 지급 확정된 급여명세 기준).
+        기준일 이전 중 가장 최근에 '생성/저장'된 달의 급여명세를 사용합니다.
+        단, 그 달이 육아기근로시간단축 등으로 기본급/식대가 일시적으로 줄어든 달이면
+        (base_pay_before/meal_allowance_before가 저장되어 있으면) 그 "조정 전 정상 금액"을
+        우선 사용합니다 — 연차수당은 정상 통상임금 기준이어야 하므로.
         연차수당 = 잔여일수 × 통상시급 × 8시간, 백원단위 올림은 화면(hr.js)에서 처리."""
         as_of_str = qs.get("asof", [None])[0] or datetime.date.today().isoformat()
         include_all = qs.get("all", ["0"])[0] == "1"
@@ -370,35 +415,31 @@ class handler(BaseHTTPRequestHandler):
             emp_path += f"&status=eq.{quote('재직')}"
         employees = rest_request("GET", emp_path) or []
 
-        salary_rows = rest_request(
+        payroll_rows = rest_request(
             "GET",
-            f"salary_history?effective_month=lte.{as_of_str}&select=employee_id,effective_month,annual_salary_thousand"
-            "&order=employee_id.asc,effective_month.desc",
+            f"monthly_payroll?year_month=lte.{as_of_str}"
+            "&select=employee_id,year_month,base_pay,meal_allowance,base_pay_before,meal_allowance_before"
+            "&order=employee_id.asc,year_month.desc",
         ) or []
-        latest_salary = {}
-        for r in salary_rows:
+        latest_payroll = {}
+        for r in payroll_rows:
             eid = r["employee_id"]
-            if eid not in latest_salary:
-                latest_salary[eid] = r["annual_salary_thousand"]
-
-        settings_rows = rest_request(
-            "GET",
-            f"payroll_settings_history?effective_month=lte.{as_of_str}&select=employee_id,effective_month,meal_allowance"
-            "&order=employee_id.asc,effective_month.desc",
-        ) or []
-        latest_meal = {}
-        for r in settings_rows:
-            eid = r["employee_id"]
-            if eid not in latest_meal:
-                latest_meal[eid] = r.get("meal_allowance") or 0
+            if eid not in latest_payroll:
+                latest_payroll[eid] = r
 
         result = []
         for e in employees:
-            salary_thousand = latest_salary.get(e["id"])
-            if salary_thousand is None:
+            pr = latest_payroll.get(e["id"])
+            if not pr or pr.get("base_pay") is None:
                 continue
-            base_pay_monthly = salary_thousand * 1000 / 12
-            meal = latest_meal.get(e["id"], 0) or 0
+            # base_pay_before는 조정 없을 때도 base_pay와 같은 값으로 채워져 있을 수 있어서,
+            # "값이 있냐"가 아니라 "조정 전후 값이 실제로 다르냐"로 판단해야 정확함
+            was_adjusted = (
+                pr.get("base_pay_before") is not None
+                and pr["base_pay_before"] != pr["base_pay"]
+            )
+            base_pay_monthly = pr["base_pay_before"] if was_adjusted else pr["base_pay"]
+            meal = (pr.get("meal_allowance_before") if was_adjusted else pr.get("meal_allowance")) or 0
             hourly_wage = (base_pay_monthly + meal) / 209
             daily_wage = hourly_wage * 8
             result.append({
@@ -408,6 +449,8 @@ class handler(BaseHTTPRequestHandler):
                 "department": e.get("department"),
                 "base_pay_monthly": round(base_pay_monthly),
                 "meal_allowance": meal,
+                "source_month": pr.get("year_month"),
+                "adjusted_month": was_adjusted,
                 "hourly_wage": round(hourly_wage, 2),
                 "daily_wage": round(daily_wage, 2),
             })
@@ -513,6 +556,10 @@ class handler(BaseHTTPRequestHandler):
                 return self._post_todos(payload)
             if resource == "promotions":
                 return self._post_promotions(payload)
+            if resource == "personal":
+                return self._post_personal(payload)
+            if resource == "timetable":
+                return self._post_timetable(payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -668,21 +715,35 @@ class handler(BaseHTTPRequestHandler):
             })
             return self._send(200, {"ok": True})
 
-        file_b64 = payload.get("file_base64")
-        file_name = payload.get("file_name")
-        if not file_b64 or not file_name:
-            return self._send(400, {"error": "file_base64, file_name은 필수입니다"})
+        files_payload = payload.get("files") or []
+        if not files_payload and payload.get("file_base64") and payload.get("file_name"):
+            # 하위호환: 예전 방식(파일 1개)으로 온 요청도 지원
+            files_payload = [{
+                "file_base64": payload["file_base64"],
+                "file_name": payload["file_name"],
+                "content_type": payload.get("content_type"),
+            }]
+        if not files_payload:
+            return self._send(400, {"error": "최소 1개의 파일이 필요합니다"})
 
-        try:
-            file_bytes = base64.b64decode(file_b64)
-        except Exception:
-            return self._send(400, {"error": "파일 데이터를 해독할 수 없습니다"})
-
-        if len(file_bytes) > 8 * 1024 * 1024:
-            return self._send(413, {"error": "파일이 너무 큽니다 (8MB 이하로 올려주세요)"})
-
-        storage_path = safe_filename(file_name)
-        storage_upload(storage_path, file_bytes, payload.get("content_type"))
+        uploaded = []
+        for f in files_payload:
+            fb64 = f.get("file_base64")
+            fname = f.get("file_name")
+            if not fb64 or not fname:
+                continue
+            try:
+                fbytes = base64.b64decode(fb64)
+            except Exception:
+                return self._send(400, {"error": f"'{fname}' 파일 데이터를 해독할 수 없습니다"})
+            if len(fbytes) > 8 * 1024 * 1024:
+                return self._send(413, {"error": f"'{fname}' 파일이 너무 큽니다 (8MB 이하로 올려주세요)"})
+            spath = safe_filename(fname)
+            storage_upload(spath, fbytes, f.get("content_type"))
+            uploaded.append({
+                "file_name": fname, "storage_path": spath,
+                "file_size": len(fbytes), "content_type": f.get("content_type"),
+            })
 
         body = {
             "doc_group": payload.get("doc_group") or "contract",
@@ -696,14 +757,20 @@ class handler(BaseHTTPRequestHandler):
             "account_number": payload.get("account_number"),
             "investment_amount": payload.get("investment_amount"),
             "return_rate": payload.get("return_rate"),
-            "file_name": file_name,
-            "storage_path": storage_path,
-            "file_size": len(file_bytes),
-            "content_type": payload.get("content_type"),
             "note": payload.get("note"),
         }
         created = rest_request("POST", "contract_documents", body=body, prefer="return=representation")
-        return self._send(201, {"ok": True, "id": created[0]["id"] if created else None})
+        doc_id = created[0]["id"] if created else None
+        if doc_id:
+            for uf in uploaded:
+                rest_request("POST", "contract_document_files", body={
+                    "document_id": doc_id,
+                    "file_name": uf["file_name"],
+                    "storage_path": uf["storage_path"],
+                    "file_size": uf["file_size"],
+                    "content_type": uf["content_type"],
+                })
+        return self._send(201, {"ok": True, "id": doc_id})
 
     def _post_todos(self, payload):
         content = payload.get("content")
@@ -842,6 +909,10 @@ class handler(BaseHTTPRequestHandler):
                 return self._patch_todos(item_id, payload)
             if resource == "promotions":
                 return self._patch_promotions(item_id, payload)
+            if resource == "personal":
+                return self._patch_personal(item_id, payload)
+            if resource == "timetable":
+                return self._patch_timetable(item_id, payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -887,11 +958,36 @@ class handler(BaseHTTPRequestHandler):
                     "account_number", "investment_amount", "return_rate"):
             if key in payload:
                 update_fields[key] = payload[key]
-        if not update_fields:
-            return self._send(400, {"error": "수정할 항목이 없습니다"})
-        update_fields["updated_at"] = datetime.datetime.utcnow().isoformat()
 
-        rest_request("PATCH", f"contract_documents?id=eq.{doc_id}", body=update_fields)
+        new_files = payload.get("new_files") or []
+        if not update_fields and not new_files:
+            return self._send(400, {"error": "수정할 항목이 없습니다"})
+
+        if update_fields:
+            update_fields["updated_at"] = datetime.datetime.utcnow().isoformat()
+            rest_request("PATCH", f"contract_documents?id=eq.{doc_id}", body=update_fields)
+
+        for f in new_files:
+            fb64 = f.get("file_base64")
+            fname = f.get("file_name")
+            if not fb64 or not fname:
+                continue
+            try:
+                fbytes = base64.b64decode(fb64)
+            except Exception:
+                return self._send(400, {"error": f"'{fname}' 파일 데이터를 해독할 수 없습니다"})
+            if len(fbytes) > 8 * 1024 * 1024:
+                return self._send(413, {"error": f"'{fname}' 파일이 너무 큽니다 (8MB 이하로 올려주세요)"})
+            spath = safe_filename(fname)
+            storage_upload(spath, fbytes, f.get("content_type"))
+            rest_request("POST", "contract_document_files", body={
+                "document_id": doc_id,
+                "file_name": fname,
+                "storage_path": spath,
+                "file_size": len(fbytes),
+                "content_type": f.get("content_type"),
+            })
+
         return self._send(200, {"ok": True})
 
     def _patch_todos(self, todo_id, payload):
@@ -935,6 +1031,10 @@ class handler(BaseHTTPRequestHandler):
                 return self._delete_todos(qs)
             if resource == "promotions":
                 return self._delete_promotions(qs)
+            if resource == "personal":
+                return self._delete_personal(qs)
+            if resource == "timetable":
+                return self._delete_timetable(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -962,12 +1062,21 @@ class handler(BaseHTTPRequestHandler):
         return self._send(200, {"ok": True})
 
     def _delete_contractdocs(self, qs):
+        file_id = qs.get("file_id", [None])[0]
+        if file_id:
+            existing = rest_request("GET", f"contract_document_files?id=eq.{file_id}&select=storage_path")
+            if existing and existing[0].get("storage_path"):
+                storage_delete(existing[0]["storage_path"])
+            rest_request("DELETE", f"contract_document_files?id=eq.{file_id}")
+            return self._send(200, {"ok": True})
+
         doc_id = qs.get("id", [None])[0]
         if not doc_id:
             return self._send(400, {"error": "id는 필수입니다"})
-        existing = rest_request("GET", f"contract_documents?id=eq.{doc_id}&select=storage_path")
-        if existing and existing[0].get("storage_path"):
-            storage_delete(existing[0]["storage_path"])
+        files = rest_request("GET", f"contract_document_files?document_id=eq.{doc_id}&select=storage_path") or []
+        for f in files:
+            if f.get("storage_path"):
+                storage_delete(f["storage_path"])
         rest_request("DELETE", f"contract_documents?id=eq.{doc_id}")
         return self._send(200, {"ok": True})
 
@@ -989,6 +1098,335 @@ class handler(BaseHTTPRequestHandler):
             rest_request("DELETE", f"position_pay_standards?id=eq.{item_id}")
         else:
             rest_request("DELETE", f"position_history?id=eq.{item_id}")
+        return self._send(200, {"ok": True})
+
+    # ────────────────────────────────────────────────────────
+    # personal (개인 스케줄 - 가족 일정)
+    # ────────────────────────────────────────────────────────
+    def _generate_lunar_occurrences(self):
+        """date_type='lunar'인 매년 반복 일정을, 매년 실제 양력 날짜로 환산해서 발생일자를 채워넣음."""
+        tasks = rest_request(
+            "GET", "personal_schedule_tasks?date_type=eq.lunar&active=eq.true&select=*"
+        ) or []
+        if not tasks:
+            return
+        today = datetime.date.today()
+        horizon_year = (today + datetime.timedelta(days=400)).year
+        for t in tasks:
+            if t.get("lunar_month") is None or t.get("lunar_day") is None:
+                continue
+            start_year = int(t["anchor_date"][:4])
+            end_year = int(t["end_date"][:4]) if t.get("end_date") else horizon_year
+            for y in range(start_year, min(horizon_year, end_year) + 1):
+                solar_date = lunar_to_solar(y, t["lunar_month"], t["lunar_day"], t.get("lunar_leap", False))
+                if not solar_date:
+                    continue
+                if t.get("end_date") and solar_date > t["end_date"]:
+                    continue
+                rest_request(
+                    "POST", "personal_schedule_occurrences",
+                    body={"task_id": t["id"], "due_date": solar_date},
+                    prefer="resolution=merge-duplicates",
+                )
+
+    def _get_personal(self, qs):
+        if qs.get("members", ["0"])[0] == "1":
+            rows = rest_request("GET", "personal_schedule_members?select=*&order=sort_order.asc")
+            return self._send(200, {"members": rows})
+
+        rpc("generate_personal_schedule_occurrences", {})
+        self._generate_lunar_occurrences()
+
+        if qs.get("tasks", ["0"])[0] == "1":
+            rows = rest_request(
+                "GET", "personal_schedule_tasks?select=*&order=active.desc,member_name.asc,anchor_date.asc"
+            )
+            return self._send(200, {"tasks": rows})
+
+        if qs.get("upcoming", ["0"])[0] == "1":
+            today = datetime.date.today()
+            horizon = (today + datetime.timedelta(days=60)).isoformat()
+            rows = rest_request(
+                "GET",
+                "personal_schedule_occurrences?status=eq.pending&due_date=lte." + horizon
+                + "&select=*,personal_schedule_tasks(title,category,member_name,reminder_days_before,note)&order=due_date.asc",
+            ) or []
+            result = []
+            for r in rows:
+                due = datetime.date.fromisoformat(r["due_date"])
+                task = r.get("personal_schedule_tasks") or {}
+                category = task.get("category")
+                reminder_days = task.get("reminder_days_before") or 1
+                days_left = (due - today).days
+                # 결제일이 아니면 "지난 일정(확인 필요)"로 계속 남기지 않고, 다가올 때만 안내
+                if category != "결제일" and days_left < 0:
+                    continue
+                if days_left < 0 or days_left <= reminder_days:
+                    result.append({
+                        "occurrence_id": r["id"], "task_id": r["task_id"], "due_date": r["due_date"],
+                        "days_left": days_left, "title": task.get("title"),
+                        "category": category, "member_name": task.get("member_name"),
+                    })
+            return self._send(200, {"upcoming": result})
+
+        today = datetime.date.today()
+        default_from = (today.replace(day=1) - datetime.timedelta(days=31)).replace(day=1).isoformat()
+        default_to = (today + datetime.timedelta(days=90)).isoformat()
+        from_date = qs.get("from", [None])[0] or default_from
+        to_date = qs.get("to", [None])[0] or default_to
+        status_filter = qs.get("status", [None])[0]
+        member_filter = qs.get("member", [None])[0]
+
+        path = (
+            "personal_schedule_occurrences?due_date=gte." + from_date + "&due_date=lte." + to_date
+            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,note,date_type)&order=due_date.asc"
+        )
+        if status_filter and status_filter != "all":
+            path += "&status=eq." + status_filter
+        rows = rest_request("GET", path) or []
+        if member_filter:
+            rows = [r for r in rows if (r.get("personal_schedule_tasks") or {}).get("member_name") == member_filter]
+        return self._send(200, {"occurrences": rows})
+
+    def _post_personal(self, payload):
+        action = payload.get("type")
+
+        if action == "save_member":
+            name = payload.get("name")
+            if not name:
+                return self._send(400, {"error": "name은 필수입니다"})
+            rest_request("POST", "personal_schedule_members", body={
+                "name": name,
+                "color": payload.get("color") or "#888888",
+                "sort_order": int(payload.get("sort_order") or 99),
+            }, prefer="resolution=merge-duplicates")
+            return self._send(200, {"ok": True})
+
+        if action == "complete":
+            occ_id = payload.get("occurrence_id")
+            if not occ_id:
+                return self._send(400, {"error": "occurrence_id는 필수입니다"})
+            done = payload.get("done", True)
+            rest_request("PATCH", f"personal_schedule_occurrences?id=eq.{occ_id}", body={
+                "status": "done" if done else "pending",
+                "completed_at": datetime.datetime.utcnow().isoformat() if done else None,
+                "completed_note": payload.get("note") if done else None,
+            })
+            return self._send(200, {"ok": True})
+
+        if action == "skip":
+            occ_id = payload.get("occurrence_id")
+            if not occ_id:
+                return self._send(400, {"error": "occurrence_id는 필수입니다"})
+            rest_request("PATCH", f"personal_schedule_occurrences?id=eq.{occ_id}", body={"status": "skipped"})
+            return self._send(200, {"ok": True})
+
+        member_name = payload.get("member_name")
+        title = payload.get("title")
+        anchor_date = payload.get("anchor_date")
+        recurrence_type = payload.get("recurrence_type", "once")
+        if not member_name or not title or not anchor_date:
+            return self._send(400, {"error": "member_name, title, anchor_date는 필수입니다"})
+        if recurrence_type not in ("once", "weekly", "monthly"):
+            return self._send(400, {"error": "recurrence_type이 올바르지 않습니다"})
+
+        # 음력 기준(예: 음력 생일) — 입력하신 기준일자(양력)를 음력으로 환산해서
+        # 음력 월/일을 저장해두고, 해마다 그 음력 월/일에 해당하는 양력 날짜로 발생시킴
+        is_lunar = payload.get("date_type") == "lunar"
+        lunar_month = lunar_day = None
+        if is_lunar:
+            if KoreanLunarCalendar is None:
+                return self._send(400, {"error": "음력 변환 라이브러리가 서버에 설치되지 않았습니다(requirements.txt 재배포 필요)."})
+            try:
+                solar_dt = datetime.date.fromisoformat(anchor_date)
+                cal = KoreanLunarCalendar()
+                cal.setSolarDate(solar_dt.year, solar_dt.month, solar_dt.day)
+                lunar_month, lunar_day = cal.lunarMonth, cal.lunarDay
+            except Exception as e:
+                return self._send(400, {"error": f"음력 변환에 실패했습니다: {type(e).__name__}: {e}"})
+
+        body = {
+            "member_name": member_name,
+            "category": payload.get("category") or "일정",
+            "title": title,
+            "recurrence_type": recurrence_type,
+            "interval_value": int(payload.get("interval_value") or 1),
+            "anchor_date": anchor_date,
+            "day_mode": payload.get("day_mode", "fixed"),
+            "end_date": payload.get("end_date") or None,
+            "reminder_days_before": int(payload.get("reminder_days_before") or 1),
+            "note": payload.get("note"),
+            "active": True,
+            "date_type": "lunar" if is_lunar else "solar",
+            "lunar_month": lunar_month,
+            "lunar_day": lunar_day,
+        }
+        created = rest_request("POST", "personal_schedule_tasks", body=body, prefer="return=representation")
+        rpc("generate_personal_schedule_occurrences", {})
+        self._generate_lunar_occurrences()
+        return self._send(201, {"task": created[0] if created else None})
+
+    def _patch_personal(self, task_id, payload):
+        update_fields = {}
+        for key in ("member_name", "category", "title", "recurrence_type", "interval_value",
+                    "anchor_date", "day_mode", "end_date", "reminder_days_before", "note", "active"):
+            if key in payload:
+                update_fields[key] = payload[key]
+
+        if "date_type" in payload:
+            is_lunar = payload.get("date_type") == "lunar"
+            update_fields["date_type"] = "lunar" if is_lunar else "solar"
+            if is_lunar:
+                anchor = payload.get("anchor_date")
+                if not anchor:
+                    existing = rest_request("GET", f"personal_schedule_tasks?id=eq.{task_id}&select=anchor_date")
+                    anchor = existing[0]["anchor_date"] if existing else None
+                if anchor:
+                    solar_dt = datetime.date.fromisoformat(anchor)
+                    converted = solar_to_lunar(solar_dt.year, solar_dt.month, solar_dt.day)
+                    if converted:
+                        _, lm, ld, _ = converted
+                        update_fields["lunar_month"] = lm
+                        update_fields["lunar_day"] = ld
+            else:
+                update_fields["lunar_month"] = None
+                update_fields["lunar_day"] = None
+
+        if not update_fields:
+            return self._send(400, {"error": "수정할 항목이 없습니다"})
+
+        rest_request("PATCH", f"personal_schedule_tasks?id=eq.{task_id}", body=update_fields)
+        today = datetime.date.today().isoformat()
+        rest_request(
+            "DELETE",
+            f"personal_schedule_occurrences?task_id=eq.{task_id}&status=eq.pending&due_date=gte.{today}",
+        )
+        rpc("generate_personal_schedule_occurrences", {})
+        self._generate_lunar_occurrences()
+        return self._send(200, {"ok": True})
+
+    def _delete_personal(self, qs):
+        task_id = qs.get("id", [None])[0]
+        occ_id = qs.get("occurrence_id", [None])[0]
+        member_id = qs.get("member_id", [None])[0]
+
+        if member_id:
+            rest_request("DELETE", f"personal_schedule_members?id=eq.{member_id}")
+            return self._send(200, {"ok": True})
+        if task_id:
+            rest_request("DELETE", f"personal_schedule_tasks?id=eq.{task_id}")
+            return self._send(200, {"ok": True})
+        if occ_id:
+            rest_request("DELETE", f"personal_schedule_occurrences?id=eq.{occ_id}")
+            return self._send(200, {"ok": True})
+        return self._send(400, {"error": "id, occurrence_id 또는 member_id가 필요합니다"})
+
+    # ────────────────────────────────────────────────────────
+    # timetable (학교 시간표)
+    # ────────────────────────────────────────────────────────
+    def _get_timetable(self, qs):
+        child = qs.get("child", ["하진"])[0]
+
+        if qs.get("periods", ["0"])[0] == "1":
+            rows = rest_request(
+                "GET",
+                f"timetable_period_times?child_name=eq.{quote(child)}&select=*&order=sort_order.asc",
+            )
+            return self._send(200, {"periods": rows})
+
+        if qs.get("teachers", ["0"])[0] == "1":
+            rows = rest_request(
+                "GET", f"timetable_teachers?child_name=eq.{quote(child)}&select=*&order=subject_name.asc"
+            )
+            return self._send(200, {"teachers": rows})
+
+        entries = rest_request(
+            "GET", f"timetable_entries?child_name=eq.{quote(child)}&select=*"
+        ) or []
+
+        # 과목명 기준으로 선생님 정보를 붙여줌 (칸마다 반복입력 안 해도 되도록)
+        teacher_rows = rest_request(
+            "GET", f"timetable_teachers?child_name=eq.{quote(child)}&select=*"
+        ) or []
+        teacher_by_subject = {t["subject_name"]: t for t in teacher_rows}
+        for e in entries:
+            t = teacher_by_subject.get(e["subject_name"])
+            e["teacher_name"] = t.get("teacher_name") if t else None
+            e["teacher_phone"] = t.get("teacher_phone") if t else None
+
+        return self._send(200, {"entries": entries})
+
+    def _post_timetable(self, payload):
+        kind = payload.get("type")
+
+        if kind == "period":
+            label = payload.get("period_label")
+            if not label or not payload.get("start_time") or not payload.get("end_time"):
+                return self._send(400, {"error": "교시명, 시작/종료시간은 필수입니다"})
+            created = rest_request("POST", "timetable_period_times", body={
+                "child_name": payload.get("child_name") or "하진",
+                "period_label": label,
+                "sort_order": int(payload.get("sort_order") or 0),
+                "start_time": payload["start_time"],
+                "end_time": payload["end_time"],
+            }, prefer="return=representation,resolution=merge-duplicates")
+            return self._send(201, {"period": created[0] if created else None})
+
+        if kind == "teacher":
+            subject_name = payload.get("subject_name")
+            if not subject_name:
+                return self._send(400, {"error": "subject_name은 필수입니다"})
+            rest_request("POST", "timetable_teachers", body={
+                "child_name": payload.get("child_name") or "하진",
+                "subject_name": subject_name,
+                "teacher_name": payload.get("teacher_name"),
+                "teacher_phone": payload.get("teacher_phone"),
+                "note": payload.get("note"),
+            }, prefer="resolution=merge-duplicates")
+            return self._send(200, {"ok": True})
+
+        # 기본: 과목 배정(요일/교시별)
+        required = ("weekday", "period_label", "subject_name")
+        if any(not payload.get(k) for k in required):
+            return self._send(400, {"error": f"{', '.join(required)}는 필수입니다"})
+        created = rest_request("POST", "timetable_entries", body={
+            "child_name": payload.get("child_name") or "하진",
+            "weekday": int(payload["weekday"]),
+            "period_label": payload["period_label"],
+            "subject_name": payload["subject_name"],
+            "subject_type": payload.get("subject_type") or "regular",
+            "note": payload.get("note"),
+        }, prefer="return=representation,resolution=merge-duplicates")
+        return self._send(201, {"entry": created[0] if created else None})
+
+    def _patch_timetable(self, item_id, payload):
+        kind = payload.get("type")
+        if kind == "teacher":
+            fields = ("teacher_name", "teacher_phone", "note")
+            update_fields = {k: payload[k] for k in fields if k in payload}
+            if not update_fields:
+                return self._send(400, {"error": "수정할 항목이 없습니다"})
+            rest_request("PATCH", f"timetable_teachers?id=eq.{item_id}", body=update_fields)
+            return self._send(200, {"ok": True})
+
+        if kind == "period":
+            fields = ("period_label", "start_time", "end_time", "sort_order")
+        else:
+            fields = ("weekday", "period_label", "subject_name", "subject_type", "note")
+        update_fields = {k: payload[k] for k in fields if k in payload}
+        if not update_fields:
+            return self._send(400, {"error": "수정할 항목이 없습니다"})
+        table = "timetable_period_times" if kind == "period" else "timetable_entries"
+        rest_request("PATCH", f"{table}?id=eq.{item_id}", body=update_fields)
+        return self._send(200, {"ok": True})
+
+    def _delete_timetable(self, qs):
+        item_id = qs.get("id", [None])[0]
+        if not item_id:
+            return self._send(400, {"error": "id는 필수입니다"})
+        kind = qs.get("type", [None])[0]
+        table = "timetable_period_times" if kind == "period" else ("timetable_teachers" if kind == "teacher" else "timetable_entries")
+        rest_request("DELETE", f"{table}?id=eq.{item_id}")
         return self._send(200, {"ok": True})
 
     def log_message(self, *args):
