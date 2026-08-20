@@ -50,6 +50,7 @@ async function dashLogin() {
 }
 
 function showMain() {
+  $('mainSidebar').style.display = '';
   $('loginPanel').style.display = 'none';
   $('dashMain').style.display = 'flex';
   loadScheduleAlerts();

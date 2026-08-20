@@ -77,6 +77,7 @@ async function hrLogin() {
 }
 
 function showMain() {
+  $('mainSidebar').style.display = '';
   $('loginPanel').style.display = 'none';
   $('hrMain').style.display = 'flex';
   const validGroups = ['home', 'payroll', 'pension', 'contacts', 'contractdocs'];
