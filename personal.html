@@ -169,24 +169,34 @@
             <div class="panel-header">
               <h2>학교 시간표</h2>
               <div style="display:flex; gap:8px;">
+                <button class="secondary" onclick="printTimetable()">인쇄</button>
                 <button class="secondary" onclick="openPeriodModal()">+ 교시 시간 설정</button>
-                <button class="primary" onclick="openTimetableEntryModal()">+ 과목 등록</button>
               </div>
             </div>
             <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
-              학기가 바뀌면 기존 걸 지우지 말고 "기간"을 다르게 해서 새로 등록해주세요 — 지난 학기 시간표도 그대로 남아있어요.
+              항상 "현재 시간표" 하나만 관리해요. 학기가 바뀌면 각 칸을 눌러서 그때그때 수정/삭제해주세요.
             </p>
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
-              <label style="font-size:13px; color:var(--text-secondary);">기준일자:</label>
-              <input id="ttAsOf" type="date" class="hr-input" style="width:150px;">
-              <button class="secondary" onclick="loadTimetable()">조회</button>
+            <div id="ttPrintArea">
+              <h3 id="ttPrintTitle" style="display:none;">하진 시간표</h3>
+              <div class="table-wrap">
+                <table class="tt-table" id="ttTable">
+                  <thead>
+                    <tr><th style="width:80px;">시간</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th></tr>
+                  </thead>
+                  <tbody id="ttTbody"><tr><td colspan="6" style="padding:24px; color:var(--text-muted);">불러오는 중…</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>교시 목록</h2>
             </div>
             <div class="table-wrap">
-              <table class="tt-table" id="ttTable">
-                <thead>
-                  <tr><th style="width:70px;">교시</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th></tr>
-                </thead>
-                <tbody id="ttTbody"><tr><td colspan="6" style="padding:24px; color:var(--text-muted);">불러오는 중…</td></tr></tbody>
+              <table class="table" id="periodListTable">
+                <thead><tr><th>교시명</th><th>시간</th><th>순서</th><th></th></tr></thead>
+                <tbody id="periodListTbody"></tbody>
               </table>
             </div>
           </section>
@@ -232,7 +242,7 @@
 <!-- 개인 일정 추가 모달 -->
 <div id="personalEventModal" class="hr-modal-backdrop" style="display:none;">
   <div class="hr-modal" style="width:460px;">
-    <h2>일정 추가</h2>
+    <h2 id="personalEventModalTitle">일정 추가</h2>
     <div class="hr-form-grid" style="grid-template-columns:1fr 1fr;">
       <label>구성원
         <select id="pe_member" class="hr-input"></select>
@@ -272,9 +282,12 @@
       <label class="hr-span2">비고 <input id="pe_note" class="hr-input"></label>
     </div>
     <div id="personalEventModalMsg" class="hr-msg"></div>
-    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-      <button class="secondary" onclick="closePersonalEventModal()">취소</button>
-      <button class="primary" onclick="savePersonalEvent()">저장</button>
+    <div style="display:flex; gap:8px; justify-content:space-between; margin-top:16px;">
+      <button class="secondary" id="personalEventDeleteBtn" style="display:none; color:var(--red);" onclick="deletePersonalTaskFromModal()">일정 전체 삭제</button>
+      <div style="display:flex; gap:8px; margin-left:auto;">
+        <button class="secondary" onclick="closePersonalEventModal()">취소</button>
+        <button class="primary" onclick="savePersonalEvent()">저장</button>
+      </div>
     </div>
   </div>
 </div>
@@ -296,47 +309,47 @@
 <!-- 교시 시간 설정 모달 -->
 <div id="periodModal" class="hr-modal-backdrop" style="display:none;">
   <div class="hr-modal" style="width:400px;">
-    <h2>교시 시간 설정</h2>
+    <h2 id="periodModalTitle">교시 시간 설정</h2>
     <div class="hr-form-grid" style="grid-template-columns:1fr 1fr;">
-      <label class="hr-span2">아이 이름 <input id="pd_child" class="hr-input" value="하진"></label>
-      <label>교시 <input id="pd_period" type="number" class="hr-input" min="1" placeholder="예: 1"></label>
-      <span></span>
+      <label class="hr-span2">교시명
+        <input id="pd_period" class="hr-input" list="periodLabelList" placeholder="예: 아침활동, 1교시, 점심시간">
+        <datalist id="periodLabelList">
+          <option value="아침활동"><option value="1교시"><option value="2교시">
+          <option value="3교시"><option value="4교시"><option value="점심시간">
+          <option value="5교시"><option value="6교시"><option value="방과후">
+        </datalist>
+      </label>
+      <label>순서(작을수록 위) <input id="pd_sort" type="number" class="hr-input" value="0"></label>
       <label>시작시간 <input id="pd_start" type="time" class="hr-input"></label>
       <label>종료시간 <input id="pd_end" type="time" class="hr-input"></label>
-      <label>적용 시작일 <input id="pd_from" type="date" class="hr-input"></label>
-      <label>적용 종료일(선택) <input id="pd_to" type="date" class="hr-input"></label>
     </div>
     <div id="periodModalMsg" class="hr-msg"></div>
-    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-      <button class="secondary" onclick="closePeriodModal()">취소</button>
-      <button class="primary" onclick="savePeriod()">저장</button>
+    <div style="display:flex; gap:8px; justify-content:space-between; margin-top:16px;">
+      <button class="secondary" id="periodDeleteBtn" style="display:none; color:var(--red);" onclick="deletePeriodFromModal()">삭제</button>
+      <div style="display:flex; gap:8px; margin-left:auto;">
+        <button class="secondary" onclick="closePeriodModal()">취소</button>
+        <button class="primary" onclick="savePeriod()">저장</button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- 과목 등록 모달 -->
+<!-- 과목 등록 모달 (그리드 셀 클릭 시 열림) -->
 <div id="ttEntryModal" class="hr-modal-backdrop" style="display:none;">
-  <div class="hr-modal" style="width:440px;">
+  <div class="hr-modal" style="width:360px;">
     <h2 id="ttEntryModalTitle">과목 등록</h2>
-    <div class="hr-form-grid" style="grid-template-columns:1fr 1fr;">
-      <label class="hr-span2">아이 이름 <input id="te_child" class="hr-input" value="하진"></label>
-      <label>요일
-        <select id="te_weekday" class="hr-input">
-          <option value="1">월</option><option value="2">화</option><option value="3">수</option>
-          <option value="4">목</option><option value="5">금</option>
-        </select>
-      </label>
-      <label>교시 <input id="te_period" type="number" class="hr-input" min="1"></label>
-      <label class="hr-span2">과목명 <input id="te_subject" class="hr-input" list="subjectNameList" placeholder="아래 '선생님 연락처'에 등록된 과목이면 자동으로 선생님 정보가 붙어요"></label>
+    <p id="ttEntryModalSub" style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;"></p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>과목명 <input id="te_subject" class="hr-input" list="subjectNameList" placeholder="등록된 과목이면 선생님 정보가 자동으로 붙어요"></label>
       <datalist id="subjectNameList"></datalist>
-      <label>적용 시작일 <input id="te_from" type="date" class="hr-input"></label>
-      <label>적용 종료일(선택) <input id="te_to" type="date" class="hr-input"></label>
-      <label class="hr-span2">비고 <input id="te_note" class="hr-input"></label>
     </div>
     <div id="ttEntryModalMsg" class="hr-msg"></div>
-    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
-      <button class="secondary" onclick="closeTimetableEntryModal()">취소</button>
-      <button class="primary" onclick="saveTimetableEntry()">저장</button>
+    <div style="display:flex; gap:8px; justify-content:space-between; margin-top:16px;">
+      <button class="secondary" id="ttEntryDeleteBtn" style="display:none; color:var(--red);" onclick="deleteTimetableEntryFromModal()">삭제</button>
+      <div style="display:flex; gap:8px; margin-left:auto;">
+        <button class="secondary" onclick="closeTimetableEntryModal()">취소</button>
+        <button class="primary" onclick="saveTimetableEntry()">저장</button>
+      </div>
     </div>
   </div>
 </div>
