@@ -535,13 +535,16 @@ async function savePersonalEvent() {
         method: 'POST', headers: authHeaders(true), body: JSON.stringify(payload),
       });
     }
-    if (!res.ok) throw new Error('save failed');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || data.detail || `저장 실패 (상태코드 ${res.status})`);
+    }
     closePersonalEventModal();
     loadPerCalendar();
     loadPersonalOccurrences();
     loadPersonalReminderBanner();
   } catch (e) {
-    $('personalEventModalMsg').textContent = '저장 중 오류가 발생했습니다.';
+    $('personalEventModalMsg').textContent = '저장 중 오류가 발생했습니다: ' + (e.message || '');
   }
 }
 
