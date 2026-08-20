@@ -65,8 +65,6 @@ function showMain() {
     loadPersonalOccurrences();
     loadPerCalendar();
   });
-  const today = new Date();
-  $('ttAsOf').value = toISO(today);
   loadTimetable();
 }
 
@@ -329,9 +327,10 @@ async function loadPersonalOccurrences() {
           <td>${esc(task.title || '-')}</td>
           <td style="font-size:12px; color:var(--text-secondary);">${[task.note ? esc(task.note) : null, o.completed_note ? '완료메모: ' + esc(o.completed_note) : null].filter(Boolean).join('<br>') || '-'}</td>
           <td>${statusLabel}</td>
-          <td>
-            ${o.status === 'pending' ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> · <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a>` : ''}
-            · <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">삭제</a>
+          <td style="white-space:nowrap;">
+            ${o.status === 'pending' ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> · <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> · ` : ''}
+            <a class="hr-edit-link" onclick="editPersonalTask('${o.task_id}')">수정</a>
+            · <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">이 날짜만 삭제</a>
           </td>
         </tr>
       `;
@@ -408,7 +407,13 @@ function updateLunarPreview() {
   wrap.textContent = `${dateVal}(양력)을 음력으로 환산해서 저장 → 저장 후 다음 목록에서 정확한 값을 확인해주세요.`;
 }
 
+let editingPersonalTaskId = null;
+let personalTasksCache = [];
+
 function openPersonalEventModal() {
+  editingPersonalTaskId = null;
+  $('personalEventModalTitle').textContent = '일정 추가';
+  $('personalEventDeleteBtn').style.display = 'none';
   $('pe_title').value = '';
   $('pe_category').value = '일정';
   $('pe_recurrence').value = 'once';
@@ -423,6 +428,51 @@ function openPersonalEventModal() {
   $('personalEventModal').style.display = 'flex';
 }
 function closePersonalEventModal() { $('personalEventModal').style.display = 'none'; }
+
+async function editPersonalTask(taskId) {
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_schedule?tasks=1`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    const data = await res.json();
+    personalTasksCache = data.tasks || [];
+    const t = personalTasksCache.find(x => x.id === taskId);
+    if (!t) { alert('일정을 찾을 수 없습니다.'); return; }
+
+    editingPersonalTaskId = taskId;
+    $('personalEventModalTitle').textContent = '일정 수정';
+    $('personalEventDeleteBtn').style.display = 'inline-block';
+    $('pe_member').value = t.member_name;
+    $('pe_category').value = t.category || '일정';
+    $('pe_title').value = t.title || '';
+    const uiRecurrence = (t.recurrence_type === 'monthly' && t.interval_value === 12) ? 'yearly' : t.recurrence_type;
+    $('pe_recurrence').value = uiRecurrence;
+    $('pe_anchor_date').value = t.anchor_date || '';
+    $('pe_interval').value = t.recurrence_type === 'weekly' ? (t.interval_value || 1) : 1;
+    $('pe_is_lunar').checked = t.date_type === 'lunar';
+    $('pe_end_date').value = t.end_date || '';
+    $('pe_reminder_days').value = t.reminder_days_before != null ? t.reminder_days_before : 1;
+    $('pe_note').value = t.note || '';
+    togglePersonalRecurrenceFields();
+    $('personalEventModalMsg').textContent = '';
+    $('personalEventModal').style.display = 'flex';
+  } catch (e) {
+    alert('불러오기 실패');
+  }
+}
+
+async function deletePersonalTaskFromModal() {
+  if (!editingPersonalTaskId) return;
+  if (!confirm('이 일정을 완전히 삭제하시겠습니까? (반복되는 모든 날짜가 함께 삭제됩니다)')) return;
+  try {
+    await fetch(`${apiBase()}/api/personal_schedule?id=${editingPersonalTaskId}`, { method: 'DELETE', headers: authHeaders() });
+    closePersonalEventModal();
+    loadPerCalendar();
+    loadPersonalOccurrences();
+    loadPersonalReminderBanner();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
 
 async function savePersonalEvent() {
   const title = $('pe_title').value.trim();
@@ -440,22 +490,30 @@ async function savePersonalEvent() {
   else if (uiRecurrence === 'weekly') { interval_value = Number($('pe_interval').value) || 1; }
   const isLunar = uiRecurrence === 'yearly' && $('pe_is_lunar').checked;
 
+  const payload = {
+    member_name: memberName,
+    category: $('pe_category').value,
+    title,
+    recurrence_type,
+    interval_value,
+    anchor_date: anchorDate,
+    date_type: isLunar ? 'lunar' : 'solar',
+    end_date: $('pe_end_date').value || null,
+    reminder_days_before: Number($('pe_reminder_days').value) || 0,
+    note: $('pe_note').value.trim() || null,
+  };
+
   try {
-    const res = await fetch(`${apiBase()}/api/personal_schedule`, {
-      method: 'POST', headers: authHeaders(true),
-      body: JSON.stringify({
-        member_name: memberName,
-        category: $('pe_category').value,
-        title,
-        recurrence_type,
-        interval_value,
-        anchor_date: anchorDate,
-        date_type: isLunar ? 'lunar' : 'solar',
-        end_date: $('pe_end_date').value || null,
-        reminder_days_before: Number($('pe_reminder_days').value) || 0,
-        note: $('pe_note').value.trim() || null,
-      }),
-    });
+    let res;
+    if (editingPersonalTaskId) {
+      res = await fetch(`${apiBase()}/api/personal_schedule?id=${editingPersonalTaskId}`, {
+        method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(payload),
+      });
+    } else {
+      res = await fetch(`${apiBase()}/api/personal_schedule`, {
+        method: 'POST', headers: authHeaders(true), body: JSON.stringify(payload),
+      });
+    }
     if (!res.ok) throw new Error('save failed');
     closePersonalEventModal();
     loadPerCalendar();
@@ -468,23 +526,28 @@ async function savePersonalEvent() {
 
 /* ── 학교 시간표 ── */
 async function loadTimetable() {
-  const asOf = $('ttAsOf').value || toISO(new Date());
   const tbody = $('ttTbody');
   tbody.innerHTML = `<tr><td colspan="6" style="padding:24px; color:var(--text-muted);">불러오는 중…</td></tr>`;
   try {
     const [periodsRes, entriesRes] = await Promise.all([
-      fetch(`${apiBase()}/api/timetable?periods=1&asof=${asOf}`, { headers: authHeaders() }),
-      fetch(`${apiBase()}/api/timetable?asof=${asOf}`, { headers: authHeaders() }),
+      fetch(`${apiBase()}/api/timetable?periods=1`, { headers: authHeaders() }),
+      fetch(`${apiBase()}/api/timetable`, { headers: authHeaders() }),
     ]);
     if (handle401(periodsRes)) return;
     const periodsData = await periodsRes.json();
     const entriesData = await entriesRes.json();
-    renderTimetable(periodsData.periods || [], entriesData.entries || []);
+    periodsCache = periodsData.periods || [];
+    entriesCache = entriesData.entries || [];
+    renderTimetable(periodsCache, entriesCache);
+    renderPeriodList(periodsCache);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="6" style="padding:24px; color:var(--red);">불러오기 실패</td></tr>`;
   }
   loadTeachers();
 }
+
+let periodsCache = [];
+let entriesCache = [];
 
 function renderTimetable(periods, entries) {
   const tbody = $('ttTbody');
@@ -492,64 +555,157 @@ function renderTimetable(periods, entries) {
     tbody.innerHTML = `<tr><td colspan="6" style="padding:24px; color:var(--text-muted);">등록된 교시 시간이 없습니다. "+ 교시 시간 설정"으로 먼저 등록해주세요.</td></tr>`;
     return;
   }
+  // (period_label, weekday) -> entry
   const entryMap = {};
-  entries.forEach(e => { entryMap[`${e.weekday}-${e.period_number}`] = e; });
+  entries.forEach(e => { entryMap[`${e.period_label}__${e.weekday}`] = e; });
 
-  tbody.innerHTML = periods.map(p => {
-    const cells = [1, 2, 3, 4, 5].map(wd => {
-      const e = entryMap[`${wd}-${p.period_number}`];
+  // 2차원 병합(가로: 같은 교시에서 요일 연속 동일과목, 세로: 같은 요일에서 교시 연속 동일과목)
+  const consumed = {}; // key: `${periodIdx}_${weekday}`
+  const rowsHtml = periods.map((p, periodIdx) => {
+    let cells = '';
+    for (let wd = 1; wd <= 5; wd++) {
+      const key = `${periodIdx}_${wd}`;
+      if (consumed[key]) continue;
+      const e = entryMap[`${p.period_label}__${wd}`];
       if (!e) {
-        return `<td><span class="tt-cell-edit" onclick="openTimetableEntryModal(${wd}, ${p.period_number})">+ 등록</span></td>`;
+        cells += `<td><span class="tt-cell-edit" onclick="openTimetableEntryModal('${p.period_label}', ${wd})">+ 등록</span></td>`;
+        continue;
       }
-      return `
-        <td>
+      // 가로 병합 범위 계산
+      let colspan = 1;
+      while (wd + colspan <= 5) {
+        const nextE = entryMap[`${p.period_label}__${wd + colspan}`];
+        if (nextE && nextE.subject_name === e.subject_name) colspan++;
+        else break;
+      }
+      // 세로 병합은 가로 병합이 없을 때만(1칸 너비일 때만) 시도
+      let rowspan = 1;
+      if (colspan === 1) {
+        let nextIdx = periodIdx + 1;
+        while (nextIdx < periods.length) {
+          const nextP = periods[nextIdx];
+          const nextE = entryMap[`${nextP.period_label}__${wd}`];
+          if (nextE && nextE.subject_name === e.subject_name) {
+            rowspan++;
+            nextIdx++;
+          } else break;
+        }
+      }
+      for (let r = 0; r < rowspan; r++) {
+        for (let c = 0; c < colspan; c++) {
+          if (r === 0 && c === 0) continue;
+          consumed[`${periodIdx + r}_${wd + c}`] = true;
+        }
+      }
+      const spanAttrs = `${colspan > 1 ? ` colspan="${colspan}"` : ''}${rowspan > 1 ? ` rowspan="${rowspan}"` : ''}`;
+      cells += `
+        <td${spanAttrs}>
           <div class="tt-cell-subject">${esc(e.subject_name)}</div>
           ${e.teacher_name || e.teacher_phone ? `<div class="tt-cell-teacher">${esc(e.teacher_name || '')} ${e.teacher_phone ? esc(e.teacher_phone) : ''}</div>` : ''}
-          <div class="tt-cell-edit" onclick="openTimetableEntryModal(${wd}, ${p.period_number}, '${e.id}')">수정</div>
+          <div class="tt-cell-edit" onclick="openTimetableEntryModal('${p.period_label}', ${wd}, '${e.id}')">수정</div>
         </td>
       `;
-    }).join('');
+    }
     return `
       <tr>
-        <td>${p.period_number}교시<br><span style="font-size:10px; color:var(--text-muted);">${esc(p.start_time.slice(0,5))}~${esc(p.end_time.slice(0,5))}</span></td>
+        <td>${esc(p.period_label)}<br><span style="font-size:10px; color:var(--text-muted);">${esc((p.start_time||'').slice(0,5))}~${esc((p.end_time||'').slice(0,5))}</span></td>
         ${cells}
       </tr>
     `;
   }).join('');
+  tbody.innerHTML = rowsHtml;
 }
 
+function renderPeriodList(periods) {
+  const tbody = $('periodListTbody');
+  if (periods.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 교시가 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = periods.map(p => `
+    <tr>
+      <td>${esc(p.period_label)}</td>
+      <td>${esc((p.start_time||'').slice(0,5))}~${esc((p.end_time||'').slice(0,5))}</td>
+      <td>${p.sort_order}</td>
+      <td><a class="hr-edit-link" onclick="editPeriod('${p.id}')">수정</a> · <a class="hr-edit-link" onclick="quickDeletePeriod('${p.id}')">삭제</a></td>
+    </tr>
+  `).join('');
+}
+
+function printTimetable() {
+  $('ttPrintTitle').style.display = 'block';
+  const style = document.createElement('style');
+  style.id = 'ttPrintStyle';
+  style.textContent = `
+    @media print {
+      body * { visibility: hidden; }
+      #ttPrintArea, #ttPrintArea * { visibility: visible; }
+      #ttPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
+      @page { size: landscape; margin: 10mm; }
+      #ttPrintTitle { font-size: 16px; margin-bottom: 8px; }
+      #ttTable { font-size: 11px; }
+      #ttTable th, #ttTable td { padding: 4px 6px; }
+    }
+  `;
+  document.head.appendChild(style);
+  window.print();
+  document.head.removeChild(style);
+  $('ttPrintTitle').style.display = 'none';
+}
+
+let editingPeriodId = null;
 function openPeriodModal() {
+  editingPeriodId = null;
+  $('periodModalTitle').textContent = '교시 시간 설정';
+  $('periodDeleteBtn').style.display = 'none';
   $('pd_period').value = '';
+  $('pd_sort').value = periodsCache.length;
   $('pd_start').value = '';
   $('pd_end').value = '';
-  $('pd_from').value = $('ttAsOf').value || toISO(new Date());
-  $('pd_to').value = '';
+  $('periodModalMsg').textContent = '';
+  $('periodModal').style.display = 'flex';
+}
+function editPeriod(id) {
+  const p = periodsCache.find(x => x.id === id);
+  if (!p) return;
+  editingPeriodId = id;
+  $('periodModalTitle').textContent = '교시 시간 수정';
+  $('periodDeleteBtn').style.display = 'inline-block';
+  $('pd_period').value = p.period_label;
+  $('pd_sort').value = p.sort_order;
+  $('pd_start').value = (p.start_time || '').slice(0, 5);
+  $('pd_end').value = (p.end_time || '').slice(0, 5);
   $('periodModalMsg').textContent = '';
   $('periodModal').style.display = 'flex';
 }
 function closePeriodModal() { $('periodModal').style.display = 'none'; }
 
 async function savePeriod() {
-  const period_number = $('pd_period').value;
+  const label = $('pd_period').value.trim();
   const start_time = $('pd_start').value;
   const end_time = $('pd_end').value;
-  const from = $('pd_from').value;
-  if (!period_number || !start_time || !end_time || !from) {
-    $('periodModalMsg').textContent = '교시, 시작/종료시간, 적용시작일은 필수입니다.';
+  if (!label || !start_time || !end_time) {
+    $('periodModalMsg').textContent = '교시명, 시작/종료시간은 필수입니다.';
     return;
   }
+  const payload = {
+    type: 'period',
+    child_name: '하진',
+    period_label: label,
+    sort_order: Number($('pd_sort').value) || 0,
+    start_time, end_time,
+  };
   try {
-    const res = await fetch(`${apiBase()}/api/timetable`, {
-      method: 'POST', headers: authHeaders(true),
-      body: JSON.stringify({
-        type: 'period',
-        child_name: $('pd_child').value.trim() || '하진',
-        period_number: Number(period_number),
-        start_time, end_time,
-        effective_start_date: from,
-        effective_end_date: $('pd_to').value || null,
-      }),
-    });
+    let res;
+    if (editingPeriodId) {
+      res = await fetch(`${apiBase()}/api/timetable?id=${editingPeriodId}`, {
+        method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(payload),
+      });
+    } else {
+      res = await fetch(`${apiBase()}/api/timetable`, {
+        method: 'POST', headers: authHeaders(true), body: JSON.stringify(payload),
+      });
+    }
     if (!res.ok) throw new Error('save failed');
     closePeriodModal();
     loadTimetable();
@@ -558,16 +714,41 @@ async function savePeriod() {
   }
 }
 
+async function deletePeriodFromModal() {
+  if (!editingPeriodId) return;
+  if (!confirm('이 교시를 삭제하시겠습니까? (배정된 과목도 함께 정리해주세요)')) return;
+  await quickDeletePeriod(editingPeriodId);
+  closePeriodModal();
+}
+
+async function quickDeletePeriod(id) {
+  if (!confirm('이 교시를 삭제하시겠습니까?')) return;
+  try {
+    await fetch(`${apiBase()}/api/timetable?id=${id}&type=period`, { method: 'DELETE', headers: authHeaders() });
+    loadTimetable();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
 let editingTimetableEntryId = null;
-function openTimetableEntryModal(weekday, period, entryId) {
+let pendingEntryWeekday = null;
+let pendingEntryPeriodLabel = null;
+
+function openTimetableEntryModal(periodLabel, weekday, entryId) {
   editingTimetableEntryId = entryId || null;
+  pendingEntryWeekday = weekday;
+  pendingEntryPeriodLabel = periodLabel;
+  const weekdayNames = { 1: '월', 2: '화', 3: '수', 4: '목', 5: '금' };
   $('ttEntryModalTitle').textContent = entryId ? '과목 수정' : '과목 등록';
-  $('te_weekday').value = weekday || 1;
-  $('te_period').value = period || '';
-  $('te_subject').value = '';
-  $('te_from').value = $('ttAsOf').value || toISO(new Date());
-  $('te_to').value = '';
-  $('te_note').value = '';
+  $('ttEntryModalSub').textContent = `${weekdayNames[weekday] || ''}요일 · ${periodLabel}`;
+  $('ttEntryDeleteBtn').style.display = entryId ? 'inline-block' : 'none';
+  if (entryId) {
+    const e = entriesCache.find(x => x.id === entryId);
+    $('te_subject').value = e ? e.subject_name : '';
+  } else {
+    $('te_subject').value = '';
+  }
   $('ttEntryModalMsg').textContent = '';
   $('ttEntryModal').style.display = 'flex';
 }
@@ -575,20 +756,15 @@ function closeTimetableEntryModal() { $('ttEntryModal').style.display = 'none'; 
 
 async function saveTimetableEntry() {
   const subject = $('te_subject').value.trim();
-  const period = $('te_period').value;
-  const from = $('te_from').value;
-  if (!subject || !period || !from) {
-    $('ttEntryModalMsg').textContent = '과목명, 교시, 적용시작일은 필수입니다.';
+  if (!subject) {
+    $('ttEntryModalMsg').textContent = '과목명은 필수입니다.';
     return;
   }
   const payload = {
-    child_name: $('te_child').value.trim() || '하진',
-    weekday: Number($('te_weekday').value),
-    period_number: Number(period),
+    child_name: '하진',
+    weekday: pendingEntryWeekday,
+    period_label: pendingEntryPeriodLabel,
     subject_name: subject,
-    effective_start_date: from,
-    effective_end_date: $('te_to').value || null,
-    note: $('te_note').value.trim() || null,
   };
   try {
     let res;
@@ -609,6 +785,19 @@ async function saveTimetableEntry() {
   }
 }
 
+async function deleteTimetableEntryFromModal() {
+  if (!editingTimetableEntryId) return;
+  if (!confirm('이 칸의 과목을 삭제하시겠습니까?')) return;
+  try {
+    await fetch(`${apiBase()}/api/timetable?id=${editingTimetableEntryId}`, { method: 'DELETE', headers: authHeaders() });
+    closeTimetableEntryModal();
+    loadTimetable();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 선생님 연락처 (과목별) ── */
 /* ── 선생님 연락처 (과목별) ── */
 let teachersCache = [];
 let editingTeacherId = null;

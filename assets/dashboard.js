@@ -56,6 +56,7 @@ function showMain() {
   loadScheduleAlerts();
   loadContractAlerts();
   loadPersonalAlerts();
+  renderYearEndReminder();
   initTodoState();
   loadTodos();
 }
@@ -323,4 +324,27 @@ async function carryOverTodo(id) {
   } catch (e) {
     alert('이월 처리 중 오류가 발생했습니다.');
   }
+}
+
+/* ── 연말/연초 체크리스트 알림 (공휴일 달력·최저임금 업데이트) ── */
+function renderYearEndReminder() {
+  const wrap = $('yearEndReminderWrap');
+  const today = new Date();
+  const month = today.getMonth() + 1; // 1~12
+  const day = today.getDate();
+  const year = today.getFullYear();
+
+  // 12/22 ~ 12/31, 또는 1/1 ~ 1/15 사이에 노출 (해가 바뀌기 10일 전부터 ~ 새해 보름까지)
+  const inWindow = (month === 12 && day >= 22) || (month === 1 && day <= 15);
+  if (!inWindow) { wrap.innerHTML = ''; return; }
+
+  const targetYear = month === 12 ? year + 1 : year;
+  const isBefore = month === 12;
+  wrap.innerHTML = `
+    <div class="sch-banner warn">
+      <h3>🔔 ${isBefore ? '연말' : '연초'} 체크리스트 — ${targetYear}년 준비</h3>
+      <div class="sch-banner-row"><span>① 업무 일정관리·개인 일정관리 달력에 ${targetYear}년 공휴일이 반영되어 있는지 확인해주세요</span></div>
+      <div class="sch-banner-row"><span>② ${targetYear}년 최저임금이 급여기준표/요율에 반영되어 있는지 확인해주세요</span></div>
+    </div>
+  `;
 }
