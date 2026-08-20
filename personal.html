@@ -62,19 +62,19 @@
     <div class="brand">창현 Dashboard</div>
     <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
     <nav class="nav">
-      <a href="index.html">대시보드</a>
-      <a href="hr.html#home">인사/급여관리</a>
+      <a href="index.html">🏠 대시보드</a>
+      <a href="hr.html#home">👥 인사/급여관리</a>
       <div class="nav-sub">
-        <a href="hr.html#payroll">급여관리</a>
-        <a href="hr.html#pension">퇴직급여관리</a>
+        <a href="hr.html#payroll">💰 급여관리</a>
+        <a href="hr.html#pension">🏦 퇴직급여관리</a>
       </div>
-      <a href="schedule.html">업무 일정관리</a>
-      <a href="hr.html#contractdocs">계약/증빙관리</a>
-      <a href="hr.html#contacts">거래처 연락처</a>
-      <a href="#">월간 보고서</a>
+      <a href="schedule.html">📅 업무 일정관리</a>
+      <a href="hr.html#contractdocs">📁 계약/증빙관리</a>
+      <a href="hr.html#contacts">📇 거래처 연락처</a>
+      <a href="#">📊 월간 보고서</a>
       <div class="nav-personal-divider"></div>
-      <a class="active" href="personal.html"><span class="nav-personal-dot"></span>개인 일정관리</a>
-      <a href="#">설정</a>
+      <a class="active" href="personal.html"><span class="nav-personal-dot"></span>👨‍👩‍👧 개인 일정관리</a>
+      <a href="#">⚙️ 설정</a>
     </nav>
   </aside>
 
@@ -256,9 +256,16 @@
           <option value="yearly">매년</option>
         </select>
       </label>
-      <label>기준일자 <input id="pe_anchor_date" type="date" class="hr-input"></label>
+      <label>기준일자 <input id="pe_anchor_date" type="date" class="hr-input" onchange="togglePersonalRecurrenceFields()"></label>
       <span id="peIntervalWrap" style="display:none;">
         <label>반복 간격(주 단위, 매주일때만) <input id="pe_interval" type="number" class="hr-input" value="1" min="1"></label>
+      </span>
+      <span id="peLunarWrap" class="hr-span2" style="display:none; flex-direction:column; gap:2px;">
+        <label style="flex-direction:row; align-items:center; gap:6px;">
+          <input type="checkbox" id="pe_is_lunar" style="width:auto;" onchange="updateLunarPreview()">
+          <span style="font-weight:400; font-size:12px;">음력 기준(생일 등) — 기준일자를 음력으로 인식해서, 매년 그 음력 날짜에 해당하는 양력 날짜로 자동 계산돼요</span>
+        </label>
+        <div id="lunarPreview" style="font-size:11px; color:var(--text-muted); margin-left:22px;"></div>
       </span>
       <label>종료일(선택) <input id="pe_end_date" type="date" class="hr-input"></label>
       <label class="hr-span2">사전 알림(며칠 전부터) <input id="pe_reminder_days" type="number" class="hr-input" value="1" min="0"></label>
