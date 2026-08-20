@@ -1235,11 +1235,15 @@ class handler(BaseHTTPRequestHandler):
         is_lunar = payload.get("date_type") == "lunar"
         lunar_month = lunar_day = None
         if is_lunar:
-            solar_dt = datetime.date.fromisoformat(anchor_date)
-            converted = solar_to_lunar(solar_dt.year, solar_dt.month, solar_dt.day)
-            if not converted:
-                return self._send(400, {"error": "음력 변환에 실패했습니다. 날짜를 다시 확인해주세요."})
-            _, lunar_month, lunar_day, _ = converted
+            if KoreanLunarCalendar is None:
+                return self._send(400, {"error": "음력 변환 라이브러리가 서버에 설치되지 않았습니다(requirements.txt 재배포 필요)."})
+            try:
+                solar_dt = datetime.date.fromisoformat(anchor_date)
+                cal = KoreanLunarCalendar()
+                cal.setSolarDate(solar_dt.year, solar_dt.month, solar_dt.day)
+                lunar_month, lunar_day = cal.lunarMonth, cal.lunarDay
+            except Exception as e:
+                return self._send(400, {"error": f"음력 변환에 실패했습니다: {type(e).__name__}: {e}"})
 
         body = {
             "member_name": member_name,
