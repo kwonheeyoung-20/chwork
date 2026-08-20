@@ -600,7 +600,7 @@ function renderTimetable(periods, entries) {
       let colspan = 1;
       while (wd + colspan <= 5) {
         const nextE = entryMap[`${p.period_label}__${wd + colspan}`];
-        if (nextE && nextE.subject_name === e.subject_name) colspan++;
+        if (nextE && nextE.subject_name === e.subject_name && (nextE.note||'') === (e.note||'')) colspan++;
         else break;
       }
       // 세로 병합은 가로 병합이 없을 때만(1칸 너비일 때만) 시도
@@ -610,7 +610,7 @@ function renderTimetable(periods, entries) {
         while (nextIdx < periods.length) {
           const nextP = periods[nextIdx];
           const nextE = entryMap[`${nextP.period_label}__${wd}`];
-          if (nextE && nextE.subject_name === e.subject_name) {
+          if (nextE && nextE.subject_name === e.subject_name && (nextE.note||'') === (e.note||'')) {
             rowspan++;
             nextIdx++;
           } else break;
@@ -628,6 +628,7 @@ function renderTimetable(periods, entries) {
         <td${spanAttrs} style="background:${bgColor};">
           <div class="tt-cell-subject">${esc(e.subject_name)}</div>
           ${e.teacher_name || e.teacher_phone ? `<div class="tt-cell-teacher">${esc(e.teacher_name || '')} ${e.teacher_phone ? esc(e.teacher_phone) : ''}</div>` : ''}
+          ${e.note ? `<div class="tt-cell-teacher" style="font-style:italic;">${esc(e.note)}</div>` : ''}
           <span class="tt-cell-edit" onclick="openTimetableEntryModal('${p.period_label}', ${wd}, '${e.id}')" title="수정">✏️</span>
         </td>
       `;
@@ -793,12 +794,15 @@ function openTimetableEntryModal(periodLabel, weekday, entryId) {
     const e = entriesCache.find(x => x.id === entryId);
     $('te_subject').value = e ? e.subject_name : '';
     $('te_subject_type').value = e ? (e.subject_type || 'regular') : 'regular';
+    $('te_note').value = e ? (e.note || '') : '';
   } else {
     $('te_subject').value = '';
     $('te_subject_type').value = 'regular';
+    $('te_note').value = '';
   }
   $('ttEntryModalMsg').textContent = '';
   $('ttEntryModal').style.display = 'flex';
+  setTimeout(() => $('te_subject').focus(), 50);
 }
 function closeTimetableEntryModal() { $('ttEntryModal').style.display = 'none'; }
 
@@ -814,6 +818,7 @@ async function saveTimetableEntry() {
     period_label: pendingEntryPeriodLabel,
     subject_name: subject,
     subject_type: $('te_subject_type').value,
+    note: $('te_note').value.trim() || null,
   };
   try {
     let res;
