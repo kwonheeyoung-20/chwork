@@ -782,6 +782,7 @@ class handler(BaseHTTPRequestHandler):
             "todo_date": todo_date,
             "content": content,
             "done": False,
+            "category": payload.get("category") or "work",
         }, prefer="return=representation")
         return self._send(201, {"todo": created[0] if created else None})
 
@@ -992,7 +993,7 @@ class handler(BaseHTTPRequestHandler):
 
     def _patch_todos(self, todo_id, payload):
         update_fields = {}
-        for key in ("content", "done"):
+        for key in ("content", "done", "category"):
             if key in payload:
                 update_fields[key] = payload[key]
         if not update_fields:
@@ -1394,6 +1395,7 @@ class handler(BaseHTTPRequestHandler):
             "weekday": int(payload["weekday"]),
             "period_label": payload["period_label"],
             "subject_name": payload["subject_name"],
+            "subject_type": payload.get("subject_type") or "regular",
             "note": payload.get("note"),
         }, prefer="return=representation,resolution=merge-duplicates")
         return self._send(201, {"entry": created[0] if created else None})
@@ -1411,7 +1413,7 @@ class handler(BaseHTTPRequestHandler):
         if kind == "period":
             fields = ("period_label", "start_time", "end_time", "sort_order")
         else:
-            fields = ("weekday", "period_label", "subject_name", "note")
+            fields = ("weekday", "period_label", "subject_name", "subject_type", "note")
         update_fields = {k: payload[k] for k in fields if k in payload}
         if not update_fields:
             return self._send(400, {"error": "수정할 항목이 없습니다"})
