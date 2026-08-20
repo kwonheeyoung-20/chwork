@@ -1237,14 +1237,31 @@ class handler(BaseHTTPRequestHandler):
             )
             return self._send(200, {"periods": rows})
 
-        rows = rest_request(
+        if qs.get("teachers", ["0"])[0] == "1":
+            rows = rest_request(
+                "GET", f"timetable_teachers?child_name=eq.{quote(child)}&select=*&order=subject_name.asc"
+            )
+            return self._send(200, {"teachers": rows})
+
+        entries = rest_request(
             "GET",
             f"timetable_entries?child_name=eq.{quote(child)}"
             f"&effective_start_date=lte.{as_of}"
             f"&or=(effective_end_date.is.null,effective_end_date.gte.{as_of})"
             "&select=*&order=weekday.asc,period_number.asc",
-        )
-        return self._send(200, {"entries": rows})
+        ) or []
+
+        # 과목명 기준으로 선생님 정보를 붙여줌 (칸마다 반복입력 안 해도 되도록)
+        teacher_rows = rest_request(
+            "GET", f"timetable_teachers?child_name=eq.{quote(child)}&select=*"
+        ) or []
+        teacher_by_subject = {t["subject_name"]: t for t in teacher_rows}
+        for e in entries:
+            t = teacher_by_subject.get(e["subject_name"])
+            e["teacher_name"] = t.get("teacher_name") if t else None
+            e["teacher_phone"] = t.get("teacher_phone") if t else None
+
+        return self._send(200, {"entries": entries})
 
     def _post_timetable(self, payload):
         kind = payload.get("type")
@@ -1263,6 +1280,19 @@ class handler(BaseHTTPRequestHandler):
             }, prefer="return=representation")
             return self._send(201, {"period": created[0] if created else None})
 
+        if kind == "teacher":
+            subject_name = payload.get("subject_name")
+            if not subject_name:
+                return self._send(400, {"error": "subject_name은 필수입니다"})
+            rest_request("POST", "timetable_teachers", body={
+                "child_name": payload.get("child_name") or "하진",
+                "subject_name": subject_name,
+                "teacher_name": payload.get("teacher_name"),
+                "teacher_phone": payload.get("teacher_phone"),
+                "note": payload.get("note"),
+            }, prefer="resolution=merge-duplicates")
+            return self._send(200, {"ok": True})
+
         # 기본: 과목 배정(요일/교시별)
         required = ("weekday", "period_number", "subject_name", "effective_start_date")
         if any(payload.get(k) is None for k in required):
@@ -1272,8 +1302,6 @@ class handler(BaseHTTPRequestHandler):
             "weekday": int(payload["weekday"]),
             "period_number": int(payload["period_number"]),
             "subject_name": payload["subject_name"],
-            "teacher_name": payload.get("teacher_name"),
-            "teacher_phone": payload.get("teacher_phone"),
             "effective_start_date": payload["effective_start_date"],
             "effective_end_date": payload.get("effective_end_date") or None,
             "note": payload.get("note"),
@@ -1282,9 +1310,17 @@ class handler(BaseHTTPRequestHandler):
 
     def _patch_timetable(self, item_id, payload):
         kind = payload.get("type")
+        if kind == "teacher":
+            fields = ("teacher_name", "teacher_phone", "note")
+            update_fields = {k: payload[k] for k in fields if k in payload}
+            if not update_fields:
+                return self._send(400, {"error": "수정할 항목이 없습니다"})
+            rest_request("PATCH", f"timetable_teachers?id=eq.{item_id}", body=update_fields)
+            return self._send(200, {"ok": True})
+
         table = "timetable_period_times" if kind == "period" else "timetable_entries"
         fields = ("period_number", "start_time", "end_time", "weekday", "subject_name",
-                  "teacher_name", "teacher_phone", "effective_start_date", "effective_end_date", "note")
+                  "effective_start_date", "effective_end_date", "note")
         update_fields = {k: payload[k] for k in fields if k in payload}
         if not update_fields:
             return self._send(400, {"error": "수정할 항목이 없습니다"})
@@ -1295,7 +1331,8 @@ class handler(BaseHTTPRequestHandler):
         item_id = qs.get("id", [None])[0]
         if not item_id:
             return self._send(400, {"error": "id는 필수입니다"})
-        table = "timetable_period_times" if qs.get("type", [None])[0] == "period" else "timetable_entries"
+        kind = qs.get("type", [None])[0]
+        table = "timetable_period_times" if kind == "period" else ("timetable_teachers" if kind == "teacher" else "timetable_entries")
         rest_request("DELETE", f"{table}?id=eq.{item_id}")
         return self._send(200, {"ok": True})
 
