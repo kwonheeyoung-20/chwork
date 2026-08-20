@@ -568,7 +568,7 @@ function renderTimetable(periods, entries) {
       if (consumed[key]) continue;
       const e = entryMap[`${p.period_label}__${wd}`];
       if (!e) {
-        cells += `<td><span class="tt-cell-edit" onclick="openTimetableEntryModal('${p.period_label}', ${wd})">+ 등록</span></td>`;
+        cells += `<td><span class="tt-cell-empty-add" onclick="openTimetableEntryModal('${p.period_label}', ${wd})">+ 등록</span></td>`;
         continue;
       }
       // 가로 병합 범위 계산
@@ -602,7 +602,7 @@ function renderTimetable(periods, entries) {
         <td${spanAttrs}>
           <div class="tt-cell-subject">${esc(e.subject_name)}</div>
           ${e.teacher_name || e.teacher_phone ? `<div class="tt-cell-teacher">${esc(e.teacher_name || '')} ${e.teacher_phone ? esc(e.teacher_phone) : ''}</div>` : ''}
-          <div class="tt-cell-edit" onclick="openTimetableEntryModal('${p.period_label}', ${wd}, '${e.id}')">수정</div>
+          <span class="tt-cell-edit" onclick="openTimetableEntryModal('${p.period_label}', ${wd}, '${e.id}')" title="수정">✏️</span>
         </td>
       `;
     }
