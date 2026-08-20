@@ -1,4 +1,1 @@
-pandas
-openpyxl
-numpy
-xlrd==2.0.1
+cryptography>=42.0.0
