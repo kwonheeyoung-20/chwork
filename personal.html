@@ -191,16 +191,18 @@
             <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
               항상 "현재 시간표" 하나만 관리해요. 학기가 바뀌면 각 칸을 눌러서 그때그때 수정/삭제해주세요.
             </p>
-            <div id="ttPrintArea">
-              <h3 id="ttPrintTitle" style="display:none;">하진 시간표</h3>
-              <div class="table-wrap">
-                <table class="tt-table" id="ttTable">
-                  <thead>
-                    <tr><th style="width:80px;">시간</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th></tr>
-                  </thead>
-                  <tbody id="ttTbody"><tr><td colspan="6" style="padding:24px; color:var(--text-muted);">불러오는 중…</td></tr></tbody>
-                </table>
-              </div>
+            <div style="display:flex; gap:14px; align-items:center; margin-bottom:14px; font-size:11px; color:var(--text-secondary);">
+              <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#e3f5d3; margin-right:4px;"></span>정규수업(과목별 색)</span>
+              <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#dfe6ec; margin-right:4px;"></span>방과후</span>
+              <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#dce9fb; margin-right:4px;"></span>학원</span>
+            </div>
+            <div class="table-wrap">
+              <table class="tt-table" id="ttTable">
+                <thead>
+                  <tr><th style="width:80px;">시간</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th></tr>
+                </thead>
+                <tbody id="ttTbody"><tr><td colspan="6" style="padding:24px; color:var(--text-muted);">불러오는 중…</td></tr></tbody>
+              </table>
             </div>
           </section>
 
@@ -358,6 +360,13 @@
     <p id="ttEntryModalSub" style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;"></p>
     <div class="hr-form-grid" style="grid-template-columns:1fr;">
       <label>과목명 <input id="te_subject" class="hr-input" list="subjectNameList" placeholder="등록된 과목이면 선생님 정보가 자동으로 붙어요"></label>
+      <label>구분
+        <select id="te_subject_type" class="hr-input">
+          <option value="regular">정규수업 (과목별 다른 색)</option>
+          <option value="afterschool">방과후 (한 가지 색으로 묶임)</option>
+          <option value="academy">학원 (방과후와 별도 색)</option>
+        </select>
+      </label>
       <datalist id="subjectNameList"></datalist>
     </div>
     <div id="ttEntryModalMsg" class="hr-msg"></div>
@@ -387,6 +396,14 @@
       <button class="primary" onclick="saveTeacher()">저장</button>
     </div>
   </div>
+</div>
+
+<!-- 시간표 인쇄 전용 영역 (시간표 + 선생님 연락처 같이 출력) -->
+<div id="ttFullPrintArea" style="display:none;">
+  <h3>하진 시간표</h3>
+  <div id="ttPrintTimetableBody"></div>
+  <h3 style="margin-top:24px;">선생님 연락처</h3>
+  <div id="ttPrintTeacherBody"></div>
 </div>
 
 <script src="assets/personal.js"></script>
