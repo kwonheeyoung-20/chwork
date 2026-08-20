@@ -76,6 +76,8 @@
     { "src": "/api/daily_todos", "dest": "api/workspace.py?resource=todos" },
     { "src": "/api/promotions", "dest": "api/workspace.py?resource=promotions" },
     { "src": "/api/annual_leave_calc", "dest": "api/workspace.py?resource=annualleave" },
+    { "src": "/api/personal_schedule", "dest": "api/workspace.py?resource=personal" },
+    { "src": "/api/timetable", "dest": "api/workspace.py?resource=timetable" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
