@@ -45,8 +45,9 @@
     .member-dot { width:9px; height:9px; border-radius:50%; background:#fff; opacity:0.85; }
     .member-legend { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
 
-    .tt-table { width:100%; border-collapse:collapse; }
-    .tt-table th, .tt-table td { border:0.5px solid var(--border); padding:6px 8px; font-size:12px; text-align:center; vertical-align:top; }
+    .tt-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    .tt-table th, .tt-table td { border:0.5px solid var(--border); padding:6px 8px; font-size:12px; text-align:center; vertical-align:middle; word-break:break-word; }
+    .tt-table th:first-child, .tt-table td:first-child { width:80px; }
     .tt-table th { background:var(--bg); font-weight:600; }
     .tt-table td { position: relative; }
     .tt-cell-subject { font-weight:600; font-size:13px; }
