@@ -431,6 +431,7 @@ async function loadTimetable() {
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="6" style="padding:24px; color:var(--red);">불러오기 실패</td></tr>`;
   }
+  loadTeachers();
 }
 
 function renderTimetable(periods, entries) {
@@ -512,8 +513,6 @@ function openTimetableEntryModal(weekday, period, entryId) {
   $('te_weekday').value = weekday || 1;
   $('te_period').value = period || '';
   $('te_subject').value = '';
-  $('te_teacher_name').value = '';
-  $('te_teacher_phone').value = '';
   $('te_from').value = $('ttAsOf').value || toISO(new Date());
   $('te_to').value = '';
   $('te_note').value = '';
@@ -535,8 +534,6 @@ async function saveTimetableEntry() {
     weekday: Number($('te_weekday').value),
     period_number: Number(period),
     subject_name: subject,
-    teacher_name: $('te_teacher_name').value.trim() || null,
-    teacher_phone: $('te_teacher_phone').value.trim() || null,
     effective_start_date: from,
     effective_end_date: $('te_to').value || null,
     note: $('te_note').value.trim() || null,
@@ -557,5 +554,107 @@ async function saveTimetableEntry() {
     loadTimetable();
   } catch (e) {
     $('ttEntryModalMsg').textContent = '저장 중 오류가 발생했습니다.';
+  }
+}
+
+/* ── 선생님 연락처 (과목별) ── */
+let teachersCache = [];
+let editingTeacherId = null;
+
+async function loadTeachers() {
+  const tbody = $('teacherTbody');
+  try {
+    const child = $('te_child') ? ($('te_child').value.trim() || '하진') : '하진';
+    const res = await fetch(`${apiBase()}/api/timetable?teachers=1&child=${encodeURIComponent(child)}`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    const data = await res.json();
+    teachersCache = data.teachers || [];
+    $('subjectNameList').innerHTML = teachersCache.map(t => `<option value="${esc(t.subject_name)}">`).join('');
+    if (teachersCache.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 선생님이 없습니다.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = teachersCache.map(t => `
+      <tr>
+        <td>${esc(t.subject_name)}</td>
+        <td>${esc(t.teacher_name || '-')}</td>
+        <td>${esc(t.teacher_phone || '-')}</td>
+        <td style="font-size:12px; color:var(--text-secondary);">${esc(t.note || '-')}</td>
+        <td>
+          <a class="hr-edit-link" onclick="editTeacher('${t.id}')">수정</a>
+          · <a class="hr-edit-link" onclick="deleteTeacher('${t.id}')">삭제</a>
+        </td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function openTeacherModal() {
+  editingTeacherId = null;
+  $('teacherModalTitle').textContent = '선생님 등록';
+  $('tc_subject').value = '';
+  $('tc_name').value = '';
+  $('tc_phone').value = '';
+  $('tc_note').value = '';
+  $('teacherModalMsg').textContent = '';
+  $('teacherModal').style.display = 'flex';
+}
+
+function editTeacher(id) {
+  const t = teachersCache.find(x => x.id === id);
+  if (!t) return;
+  editingTeacherId = id;
+  $('teacherModalTitle').textContent = `선생님 수정 — ${t.subject_name}`;
+  $('tc_subject').value = t.subject_name;
+  $('tc_name').value = t.teacher_name || '';
+  $('tc_phone').value = t.teacher_phone || '';
+  $('tc_note').value = t.note || '';
+  $('teacherModalMsg').textContent = '';
+  $('teacherModal').style.display = 'flex';
+}
+
+function closeTeacherModal() { $('teacherModal').style.display = 'none'; }
+
+async function saveTeacher() {
+  const subject = $('tc_subject').value.trim();
+  if (!subject) { $('teacherModalMsg').textContent = '과목명은 필수입니다.'; return; }
+  const payload = {
+    type: 'teacher',
+    child_name: ($('te_child') ? $('te_child').value.trim() : '') || '하진',
+    subject_name: subject,
+    teacher_name: $('tc_name').value.trim() || null,
+    teacher_phone: $('tc_phone').value.trim() || null,
+    note: $('tc_note').value.trim() || null,
+  };
+  try {
+    let res;
+    if (editingTeacherId) {
+      res = await fetch(`${apiBase()}/api/timetable?id=${editingTeacherId}`, {
+        method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(payload),
+      });
+    } else {
+      res = await fetch(`${apiBase()}/api/timetable`, {
+        method: 'POST', headers: authHeaders(true), body: JSON.stringify(payload),
+      });
+    }
+    if (!res.ok) throw new Error('save failed');
+    closeTeacherModal();
+    loadTeachers();
+    loadTimetable();
+  } catch (e) {
+    $('teacherModalMsg').textContent = '저장 중 오류가 발생했습니다.';
+  }
+}
+
+async function deleteTeacher(id) {
+  if (!confirm('이 선생님 정보를 삭제하시겠습니까?')) return;
+  try {
+    await fetch(`${apiBase()}/api/timetable?id=${id}&type=teacher`, { method: 'DELETE', headers: authHeaders() });
+    loadTeachers();
+    loadTimetable();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
   }
 }
