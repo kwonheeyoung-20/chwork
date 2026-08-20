@@ -331,6 +331,7 @@ async function loadPersonalOccurrences() {
             ${o.status === 'pending' ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> · <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> · ` : ''}
             <a class="hr-edit-link" onclick="editPersonalTask('${o.task_id}')">수정</a>
             · <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">이 날짜만 삭제</a>
+            · <a class="hr-edit-link" onclick="deletePersonalTaskDirect('${o.task_id}')" style="color:var(--red);">전체 삭제</a>
           </td>
         </tr>
       `;
@@ -378,13 +379,33 @@ async function perSkip(occId) {
 }
 
 async function deletePersonalOccurrence(occId) {
-  if (!confirm('이 일정을 삭제하시겠습니까?')) return;
+  if (!confirm('이 날짜의 일정을 삭제하시겠습니까?')) return;
   try {
-    await fetch(`${apiBase()}/api/personal_schedule?occurrence_id=${occId}`, { method: 'DELETE', headers: authHeaders() });
+    const res = await fetch(`${apiBase()}/api/personal_schedule?occurrence_id=${occId}`, { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || data.detail || `삭제 실패 (상태코드 ${res.status})`);
+    }
     loadPersonalOccurrences();
     loadPerCalendar();
   } catch (e) {
-    alert('삭제 중 오류가 발생했습니다.');
+    alert('삭제 중 오류가 발생했습니다: ' + (e.message || ''));
+  }
+}
+
+async function deletePersonalTaskDirect(taskId) {
+  if (!confirm('이 일정을 완전히 삭제하시겠습니까? (반복되는 모든 날짜가 함께 삭제됩니다)')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_schedule?id=${taskId}`, { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || data.detail || `삭제 실패 (상태코드 ${res.status})`);
+    }
+    loadPersonalOccurrences();
+    loadPerCalendar();
+    loadPersonalReminderBanner();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다: ' + (e.message || ''));
   }
 }
 
