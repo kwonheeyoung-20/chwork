@@ -328,7 +328,7 @@ async function loadPersonalOccurrences() {
           <td style="font-size:12px; color:var(--text-secondary);">${[task.note ? esc(task.note) : null, o.completed_note ? '완료메모: ' + esc(o.completed_note) : null].filter(Boolean).join('<br>') || '-'}</td>
           <td>${statusLabel}</td>
           <td style="white-space:nowrap;">
-            ${o.status === 'pending' ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> · <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> · ` : ''}
+            ${(o.status === 'pending' && task.category === '결제일') ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> · <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> · ` : ''}
             <a class="hr-edit-link" onclick="editPersonalTask('${o.task_id}')">수정</a>
             · <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">이 날짜만 삭제</a>
             · <a class="hr-edit-link" onclick="deletePersonalTaskDirect('${o.task_id}')" style="color:var(--red);">전체 삭제</a>
