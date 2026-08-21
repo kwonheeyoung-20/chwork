@@ -60,16 +60,4 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.mobile-sidebar-overlay').forEach(ov => {
     ov.addEventListener('click', toggleMobileSidebar);
   });
-
-  // ── 임시 진단 배지 (원인 확인 후 제거 예정) ──
-  const btn = document.querySelector('.mobile-menu-btn');
-  const badge = document.createElement('div');
-  badge.style.cssText = 'position:fixed; bottom:8px; right:8px; z-index:9999; background:#000; color:#0f0; font-size:11px; padding:6px 8px; border-radius:6px; font-family:monospace; line-height:1.5; opacity:0.9;';
-  function updateBadge() {
-    const btnDisplay = btn ? getComputedStyle(btn).display : 'btn없음';
-    badge.textContent = `width:${window.innerWidth} btn:${btnDisplay}`;
-  }
-  updateBadge();
-  window.addEventListener('resize', updateBadge);
-  document.body.appendChild(badge);
 });

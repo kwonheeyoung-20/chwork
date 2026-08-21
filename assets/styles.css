@@ -166,7 +166,6 @@ canvas { max-width: 100%; }
   .chart-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
-  .sidebar { display: none; }
   .content { padding: 12px; gap: 14px; }
   .topbar { padding: 14px 14px 0; flex-wrap: wrap; }
   .topbar h1 { font-size: 17px; }
