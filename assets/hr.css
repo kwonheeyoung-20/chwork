@@ -1,7 +1,7 @@
 /* hr.css — 인사 모듈 전용 스타일 (기존 styles.css 디자인 토큰 재사용) */
 .hr-input {
   width: 100%;
-  border: 0.5px solid var(--border-strong);
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 7px 10px;
   font-size: 13px;
@@ -31,7 +31,7 @@
 .settle-row {
   display: flex; justify-content: space-between; align-items: center;
   padding: 10px 4px; font-size: 13px; color: var(--text-secondary);
-  border-bottom: 0.5px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .settle-row b { font-size: 14px; color: var(--text-primary); font-weight: 500; }
 .settle-row.highlight { background: var(--bg-accent, var(--bg)); padding: 12px 8px; border-radius: var(--radius-sm); border-bottom: none; }

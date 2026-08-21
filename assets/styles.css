@@ -31,7 +31,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD G
 .layout { display: flex; min-height: 100vh; }
 
 /* Sidebar */
-.sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 0.5px solid var(--border-strong); display: flex; flex-direction: column; padding: 20px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; flex-shrink: 0; }
+.sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border-strong); display: flex; flex-direction: column; padding: 20px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; flex-shrink: 0; }
 .brand { font-size: 15px; font-weight: 600; color: var(--text-primary); padding: 0 16px 2px; }
 .brand-sub { font-size: 11px; color: var(--text-muted); padding: 0 16px 16px; }
 .nav { display: flex; flex-direction: column; gap: 1px; padding: 0 8px; }
@@ -56,7 +56,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD G
 
 /* Cards row */
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-.card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
 .card span { display: block; font-size: 11px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
 .card strong { display: block; font-size: 22px; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
 .card small { display: block; font-size: 11px; color: var(--text-muted); margin-top: 3px; }
@@ -66,14 +66,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD G
 .card.accent-purple strong { color: var(--purple); }
 
 /* Panel */
-.panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; }
 .panel h2 { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 14px; }
 .panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .panel-header h2 { margin-bottom: 0; }
 
 /* Upload grid */
 .upload-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
-.upload-card { background: var(--bg); border: 0.5px solid var(--border-strong); border-radius: var(--radius-md); padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; transition: border-color 0.12s, background 0.12s; }
+.upload-card { background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 12px 14px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; transition: border-color 0.12s, background 0.12s; }
 .upload-card:hover { border-color: var(--accent-mid); background: var(--accent-light); }
 .upload-card.has-file { border-color: var(--green); background: var(--green-light); }
 .upload-card strong { font-size: 12px; font-weight: 600; color: var(--text-primary); }
@@ -82,11 +82,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD G
 .upload-card input[type=file] { display: none; }
 .server-box { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
 .server-box label { font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
-.server-box input[type=text] { flex: 1; min-width: 200px; border: 0.5px solid var(--border-strong); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); outline: none; }
+.server-box input[type=text] { flex: 1; min-width: 200px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12px; background: var(--bg); color: var(--text-primary); outline: none; }
 .server-box input[type=text]:focus { border-color: var(--accent-mid); background: var(--surface); }
 
 /* Tabs */
-.tabs { display: flex; gap: 2px; border-bottom: 0.5px solid var(--border); margin-bottom: 18px; overflow-x: auto; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 18px; overflow-x: auto; }
 .tab-btn { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 14px; font-size: 13px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; margin-bottom: -0.5px; transition: color 0.12s, border-color 0.12s; }
 .tab-btn:hover { color: var(--text-primary); }
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 500; }
@@ -96,8 +96,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD G
 /* Table */
 .table-wrap { overflow-x: auto; }
 .table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 0.5px solid var(--border); background: var(--bg); }
-.table td { padding: 9px 12px; border-bottom: 0.5px solid var(--border); color: var(--text-primary); }
+.table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: var(--bg); }
+.table td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-primary); }
 .table tbody tr:hover { background: var(--bg); }
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .table .positive { color: var(--green); font-weight: 500; }
@@ -115,7 +115,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD G
 button.primary { background: var(--accent); color: white; border: none; border-radius: var(--radius-sm); padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.12s; }
 button.primary:hover { opacity: 0.88; }
 button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
-a.secondary, button.secondary { background: var(--surface); color: var(--text-primary); border: 0.5px solid var(--border-strong); border-radius: var(--radius-sm); padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; transition: background 0.12s; }
+a.secondary, button.secondary { background: var(--surface); color: var(--text-primary); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; transition: background 0.12s; }
 a.secondary:hover, button.secondary:hover { background: var(--bg); }
 a.secondary.disabled, button.secondary:disabled { opacity: 0.4; pointer-events: none; }
 a.secondary.green { border-color: var(--green); color: var(--green); }
@@ -129,12 +129,12 @@ a.secondary.green:hover { background: var(--green-light); }
 
 /* History list */
 .history-list { display: flex; flex-direction: column; gap: 8px; }
-.history-item { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-md); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.history-item { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .history-item .hist-meta { display: flex; flex-direction: column; gap: 2px; }
 .history-item .hist-date { font-size: 13px; font-weight: 500; color: var(--text-primary); }
 .history-item .hist-detail { font-size: 11px; color: var(--text-secondary); }
 .history-item .hist-actions { display: flex; gap: 6px; flex-shrink: 0; }
-.history-item .hist-btn { background: none; border: 0.5px solid var(--border-strong); border-radius: var(--radius-sm); padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--text-secondary); transition: background 0.12s, color 0.12s; }
+.history-item .hist-btn { background: none; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--text-secondary); transition: background 0.12s, color 0.12s; }
 .history-item .hist-btn:hover { background: var(--surface); color: var(--text-primary); }
 .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 20px; background: var(--green-light); color: var(--green); }
 .badge.warn { background: var(--amber-light); color: var(--amber); }
@@ -147,7 +147,7 @@ a.secondary.green:hover { background: var(--green-light); }
 canvas { max-width: 100%; }
 
 /* Compare table (2개월 변동) */
-.compare-row { display: flex; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
+.compare-row { display: flex; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .compare-row:last-child { border-bottom: none; }
 .compare-label { flex: 1; color: var(--text-secondary); }
 .compare-val { width: 110px; text-align: right; font-variant-numeric: tabular-nums; }
@@ -184,8 +184,12 @@ canvas { max-width: 100%; }
 
 /* Menu grid (index.html) */
 .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-.menu-card { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); text-decoration: none; color: inherit; transition: border-color 0.12s, background 0.12s; }
+.menu-card { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); text-decoration: none; color: inherit; transition: border-color 0.12s, background 0.12s; }
 .menu-card:hover { border-color: var(--accent-mid); background: var(--accent-light); }
 .menu-card em { font-style: normal; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
 .menu-card strong { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .menu-card span { font-size: 12px; color: var(--text-secondary); }
+
+/* ── 선을 좀 더 명확하게: 라이트모드에서 0.5px 테두리를 1px로 일괄 두껍게 ── */
+html:not([data-theme="dark"]) [style*="0.5px solid"] { border-width: 1px !important; }
+
