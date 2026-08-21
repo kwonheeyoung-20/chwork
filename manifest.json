@@ -1,7 +1,7 @@
 {
-  "name": "창현 Dashboard",
-  "short_name": "창현 WorkHub",
-  "description": "창현 임직원 전용 통합 워크스페이스 — 인사/급여, 업무일정, 계약관리, 개인일정을 한 곳에서",
+  "name": "WORKS",
+  "short_name": "WORKS",
+  "description": "인사·급여·일정·계약을 관리하는 공간",
   "id": "/index.html",
   "start_url": "/index.html",
   "scope": "/",
