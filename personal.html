@@ -4,9 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/webfontworld/gmarket/GmarketSans.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/webfontworld/Cafe24/Cafe24Ssurround.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/webfontworld/SCore/SCoreDream.css">
+  <link rel="stylesheet" href="assets/fonts.css">
   <title>개인 일정관리 | 창현 Dashboard</title>
 <script>document.documentElement.setAttribute("data-theme", localStorage.getItem("chwork_theme") || "light");</script>
 <script>document.documentElement.setAttribute("data-font", localStorage.getItem("chwork_font") || "default");</script>
@@ -639,10 +637,10 @@
       <div class="settings-row" style="cursor:default; flex-direction:column; align-items:flex-start; gap:6px;">
         <span>🔤 글꼴</span>
         <select id="fontSelect" class="hr-input" style="width:100%;" onchange="applyFont(this.value)">
-          <option value="default">기본 (Pretendard)</option>
-          <option value="gmarket">지마켓 산스</option>
-          <option value="cafe24">카페24 써라운드</option>
-          <option value="scdream">에스코어드림</option>
+          <option value="default" style="font-family:'Pretendard', sans-serif;">기본 (Pretendard)</option>
+          <option value="gmarket" style="font-family:'GmarketSans', sans-serif;">지마켓 산스</option>
+          <option value="cafe24" style="font-family:'Cafe24Ssurround', sans-serif;">카페24 써라운드</option>
+          <option value="scdream" style="font-family:'SCoreDream', sans-serif;">에스코어드림</option>
         </select>
       </div>
       <button class="settings-row" style="color:var(--red);" onclick="logoutUser()">
