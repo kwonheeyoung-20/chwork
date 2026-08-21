@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>업무 일정관리 | 창현 Dashboard</title>
+<script>document.documentElement.setAttribute("data-theme", localStorage.getItem("chwork_theme") || "light");</script>
   <link rel="stylesheet" href="assets/styles.css">
   <link rel="stylesheet" href="assets/hr.css">
   <link rel="manifest" href="manifest.json">
@@ -62,6 +63,27 @@
     .login-tagline { font-size:13px; color:var(--text-secondary); margin-bottom:30px; line-height:1.5; }
     .login-form { display:flex; flex-direction:column; gap:10px; text-align:left; }
     .login-footer { margin-top:26px; padding-top:20px; border-top:0.5px solid var(--border); font-size:11px; color:var(--text-muted); line-height:1.7; }
+    /* ── 다크모드 ── */
+    :root[data-theme="dark"] {
+      --bg: #16181c;
+      --surface: #1e2126;
+      --border: #3a3f47;
+      --border-strong: #ffffff;
+      --text-secondary: #d5d8dd;
+      --text-muted: #9aa0aa;
+      --green-light: #123821;
+    }
+    html[data-theme="dark"] body { background:#16181c; color:#e8eaed; }
+    html[data-theme="dark"] .panel, html[data-theme="dark"] .sidebar,
+    html[data-theme="dark"] .hr-modal, html[data-theme="dark"] .topbar,
+    html[data-theme="dark"] .login-card { background:#1e2126; color:#e8eaed; border-color:#3a3f47; }
+    html[data-theme="dark"] .hr-input { background:#22262c; color:#e8eaed; border-color:#3a3f47; }
+    html[data-theme="dark"] .table th, html[data-theme="dark"] .table td,
+    html[data-theme="dark"] .tt-table th, html[data-theme="dark"] .tt-table td { border-color:#ffffff !important; }
+    html[data-theme="dark"] .sch-cal-cell, html[data-theme="dark"] .member-legend { border-color:#3a3f47; }
+    html[data-theme="dark"] a { color:#7fb3ff; }
+    .theme-toggle-btn { display:block; width:100%; text-align:left; background:none; border:none; color:inherit; font-size:13px; padding:8px 0; cursor:pointer; }
+    .logout-btn { display:block; width:100%; text-align:left; background:none; border:none; color:var(--red); font-size:13px; padding:8px 0; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -84,6 +106,10 @@
       <div class="nav-personal-divider"></div>
       <a href="personal.html"><span class="nav-personal-dot"></span>👨‍👩‍👧 개인 일정관리</a>
       <a href="#">⚙️ 설정</a>
+      <div style="margin-top:14px; padding:10px 20px 4px; border-top:0.5px solid var(--border);">
+        <button class="theme-toggle-btn" onclick="toggleTheme()">🌙 다크 모드로 전환</button>
+        <button class="logout-btn" onclick="logoutUser()">🚪 로그아웃</button>
+      </div>
     </nav>
   </aside>
 
@@ -94,7 +120,7 @@
         <p>세무 신고·납부 등 반복/일회성 업무 일정을 관리하고 처리 여부를 체크합니다.</p>
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
-        <div class="pill">Vercel 배포</div>
+        <!-- pill removed -->
       </div>
     </header>
 
@@ -272,6 +298,7 @@
   </div>
 </div>
 
+<script src="assets/theme.js"></script>
 <script src="assets/schedule.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
