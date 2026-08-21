@@ -37,6 +37,17 @@ function toggleMobileSidebar() {
   if (!sidebar) return;
   sidebar.classList.toggle('mobile-open');
   if (overlay) overlay.classList.toggle('show');
+
+  // ── 임시 진단: 클릭 직후 사이드바의 실제 CSS 값을 화면에 표시 (원인 확인용) ──
+  const cs = getComputedStyle(sidebar);
+  let badge = document.getElementById('sbDiagBadge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'sbDiagBadge';
+    badge.style.cssText = 'position:fixed; bottom:8px; left:8px; right:8px; z-index:99999; background:#000; color:#0f0; font-size:11px; padding:8px; border-radius:6px; font-family:monospace; line-height:1.6; opacity:0.95; word-break:break-all;';
+    document.body.appendChild(badge);
+  }
+  badge.textContent = `open:${sidebar.classList.contains('mobile-open')} display:${cs.display} position:${cs.position} transform:${cs.transform} z:${cs.zIndex}`;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
