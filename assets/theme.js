@@ -1,5 +1,13 @@
 /* ───────── theme.js — 다크/화이트 모드 + 로그아웃 공통 ───────── */
 
+function openSettingsModal() {
+  updateThemeToggleUI();
+  $('settingsModal').style.display = 'flex';
+}
+function closeSettingsModal() {
+  $('settingsModal').style.display = 'none';
+}
+
 function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme') || 'light';
   const next = current === 'dark' ? 'light' : 'dark';
@@ -10,9 +18,10 @@ function toggleTheme() {
 
 function updateThemeToggleUI() {
   const current = document.documentElement.getAttribute('data-theme') || 'light';
-  document.querySelectorAll('.theme-toggle-btn').forEach(btn => {
-    btn.textContent = current === 'dark' ? '☀️ 화이트 모드로 전환' : '🌙 다크 모드로 전환';
-  });
+  const label = current === 'dark' ? '☀️ 화이트 모드로 전환' : '🌙 다크 모드로 전환';
+  document.querySelectorAll('.theme-toggle-btn').forEach(btn => { btn.textContent = label; });
+  const settingsLabel = document.getElementById('settingsThemeLabel');
+  if (settingsLabel) settingsLabel.textContent = label;
 }
 
 function logoutUser() {
