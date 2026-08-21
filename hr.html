@@ -143,8 +143,8 @@
   <main class="main">
     <header class="topbar">
       <div>
-        <h1>인사관리 — 직원마스터</h1>
-        <p>급여관리·퇴직연금 공통 직원 기준정보를 관리합니다.</p>
+        <h1 id="topbarTitle">인사/급여관리[직원마스터]</h1>
+        <p id="topbarDesc">급여관리·퇴직연금 공통 직원 기준정보를 관리합니다.</p>
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
         <button class="secondary" onclick="downloadFullBackup()" id="backupBtn">전체 데이터 백업</button>
@@ -171,7 +171,7 @@
       <!-- 인사 메인 화면 (로그인 후 표시) -->
       <div id="hrMain" style="display:none; flex-direction:column; gap:20px;">
 
-        <div id="hrGroupLabel" style="display:none; font-size:12px; color:var(--text-muted); margin-bottom:-10px;"></div>
+        <div id="hrGroupLabel" style="display:none;"></div>
         <div id="hrTabBar" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:4px;"></div>
 
         <section class="panel" id="tab-employees">
