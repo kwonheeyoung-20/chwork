@@ -706,13 +706,16 @@ function renderPeriodList(periods) {
 function printTimetable() {
   const titleText = '하진 시간표';
   const tableHTML = $('ttTable').outerHTML;
+  const teacherHTML = $('teacherTable').outerHTML;
   const singleCopy = `
     <div class="tt-print-copy">
       <h3>${esc(titleText)}</h3>
       ${tableHTML}
+      <h4>선생님 연락처</h4>
+      ${teacherHTML}
     </div>
   `;
-  // A4 한 장에 3개(잘라서 각자 나눠 쓰기 좋게)
+  // A4 한 장에 3세트(시간표+선생님 연락처, 잘라서 각자 나눠 쓰기 좋게)
   $('ttPrintTimetableBody').innerHTML = singleCopy + singleCopy + singleCopy;
   $('ttPrintTeacherBody').innerHTML = '';
   $('ttFullPrintArea').style.display = 'block';
@@ -725,15 +728,16 @@ function printTimetable() {
       body * { visibility: hidden; }
       #ttFullPrintArea, #ttFullPrintArea * { visibility: visible; }
       #ttFullPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
-      @page { size: portrait; margin: 8mm; }
-      #ttPrintTimetableBody { display: flex; flex-direction: column; gap: 5mm; }
-      .tt-print-copy { border-bottom: 1px dashed #999; padding-bottom: 3mm; }
+      @page { size: portrait; margin: 6mm; }
+      #ttPrintTimetableBody { display: flex; flex-direction: column; gap: 3mm; }
+      .tt-print-copy { border-bottom: 1px dashed #999; padding-bottom: 2mm; }
       .tt-print-copy:last-child { border-bottom: none; }
-      .tt-print-copy h3 { font-size: 11px; margin-bottom: 3px; }
-      .tt-print-copy table { font-size: 7px; border-collapse: collapse !important; width: 100%; table-layout: fixed; }
+      .tt-print-copy h3 { font-size: 10px; margin: 0 0 2px; }
+      .tt-print-copy h4 { font-size: 8px; margin: 2px 0 1px; font-weight:600; }
+      .tt-print-copy table { font-size: 6px; border-collapse: collapse !important; width: 100%; table-layout: fixed; margin-bottom: 1px; }
       .tt-print-copy th, .tt-print-copy td {
-        padding: 1px 3px;
-        border: 1px solid #000000 !important;
+        padding: 0.5px 2px;
+        border: 0.75px solid #000000 !important;
       }
       .tt-cell-edit { display: none !important; }
     }
