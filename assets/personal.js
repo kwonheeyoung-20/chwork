@@ -708,7 +708,7 @@ async function printTimetable() {
   const titleText = '하진 시간표';
   const tableHTML = $('ttTable').outerHTML;
   const teacherHTML = $('teacherTable').outerHTML;
-  const singleCopy = `
+  $('ttPrintTimetableBody').innerHTML = `
     <div class="tt-print-copy">
       <h3>${esc(titleText)}</h3>
       ${tableHTML}
@@ -716,8 +716,6 @@ async function printTimetable() {
       ${teacherHTML}
     </div>
   `;
-  // A4 한 장에 3세트(시간표+선생님 연락처, 잘라서 각자 나눠 쓰기 좋게)
-  $('ttPrintTimetableBody').innerHTML = singleCopy + singleCopy + singleCopy;
   $('ttPrintTeacherBody').innerHTML = '';
   $('ttFullPrintArea').style.display = 'block';
 
@@ -729,21 +727,20 @@ async function printTimetable() {
       body * { visibility: hidden; }
       #ttFullPrintArea, #ttFullPrintArea * { visibility: visible; }
       #ttFullPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
-      @page { size: portrait; margin: 6mm; }
-      #ttPrintTimetableBody { display: flex; flex-direction: column; gap: 3mm; }
-      .tt-print-copy { border-bottom: 1px dashed #999; padding-bottom: 2mm; }
-      .tt-print-copy:last-child { border-bottom: none; }
-      .tt-print-copy h3 { font-size: 10px; margin: 0 0 2px; }
-      .tt-print-copy h4 { font-size: 8px; margin: 2px 0 1px; font-weight:600; }
-      .tt-print-copy table { font-size: 6px; border-collapse: collapse !important; width: 100%; table-layout: fixed; margin-bottom: 1px; }
+      @page { size: landscape; margin: 10mm; }
+      .tt-print-copy h3 { font-size: 16px; margin: 0 0 8px; }
+      .tt-print-copy h4 { font-size: 13px; margin: 18px 0 6px; font-weight:700; }
+      .tt-print-copy table { font-size: 11px; border-collapse: collapse !important; width: 100%; table-layout: fixed; }
       .tt-print-copy th, .tt-print-copy td {
-        padding: 0.5px 2px;
-        border: 0.75px solid #000000 !important;
+        padding: 4px 6px;
+        border: 1.5px solid #000000 !important;
       }
       .tt-cell-edit { display: none !important; }
-      /* 선생님 연락처 표의 "수정/삭제" 링크 칸(마지막 열)은 인쇄에서 제외 */
+      /* 선생님 연락처 표의 "수정/삭제" 링크 칸(마지막 열)은 인쇄에서 제외하고, 과목명 칸을 넓힘 */
       .tt-print-copy #teacherTable th:last-child,
       .tt-print-copy #teacherTable td:last-child { display: none !important; }
+      .tt-print-copy #teacherTable th:first-child,
+      .tt-print-copy #teacherTable td:first-child { width: 34%; }
     }
   `;
   document.head.appendChild(style);
