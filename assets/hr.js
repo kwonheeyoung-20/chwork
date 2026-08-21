@@ -804,6 +804,7 @@ async function calcSettlement() {
       return;
     }
     $('s_name').textContent = $('s_employee_id').selectedOptions[0]?.textContent.replace(/\s*\(.*\)$/, '') || '-';
+    $('s_hire_display').textContent = data.hire_date || '-';
     $('s_retire_display').textContent = retireDate;
     $('s_cum').textContent = fmt(data.cumulative_estimate) + '원';
     $('s_paid').textContent = fmt(data.total_contributed) + '원';
@@ -957,6 +958,7 @@ function downloadSettlementExcel() {
     ['퇴직금(DC형 퇴직연금) 정산내역서'],
     [],
     ['성명', name],
+    ['입사일', $('s_hire_display').textContent],
     ['퇴사일', $('s_retire_display').textContent],
     [],
     ['누적추계액 (퇴사일 기준)', Number($('settlementResult').dataset.cum || 0)],
