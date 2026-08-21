@@ -138,7 +138,7 @@ class handler(BaseHTTPRequestHandler):
                 if not period_key:
                     return self._send(400, {"error": "period_key는 필수입니다"})
                 rest_request(
-                    "POST", "period_locks",
+                    "POST", "period_locks?on_conflict=module,period_key",
                     body={"module": "other_payments", "period_key": period_key, "locked": locked, "note": payload.get("note")},
                     prefer="resolution=merge-duplicates",
                 )

@@ -1213,7 +1213,7 @@ class handler(BaseHTTPRequestHandler):
                 "updated_at": datetime.datetime.utcnow().isoformat(),
             }
             rest_request(
-                "POST", "position_pay_standards", body=body, prefer="resolution=merge-duplicates"
+                "POST", "position_pay_standards?on_conflict=position", body=body, prefer="resolution=merge-duplicates"
             )
             return self._send(200, {"ok": True})
 
@@ -1533,7 +1533,7 @@ class handler(BaseHTTPRequestHandler):
                 if t.get("end_date") and solar_date > t["end_date"]:
                     continue
                 rest_request(
-                    "POST", "personal_schedule_occurrences",
+                    "POST", "personal_schedule_occurrences?on_conflict=task_id,due_date",
                     body={"task_id": t["id"], "due_date": solar_date},
                     prefer="resolution=merge-duplicates",
                 )
@@ -1604,7 +1604,7 @@ class handler(BaseHTTPRequestHandler):
             name = payload.get("name")
             if not name:
                 return self._send(400, {"error": "name은 필수입니다"})
-            rest_request("POST", "personal_schedule_members", body={
+            rest_request("POST", "personal_schedule_members?on_conflict=name", body={
                 "name": name,
                 "color": payload.get("color") or "#888888",
                 "sort_order": int(payload.get("sort_order") or 99),
@@ -1770,7 +1770,7 @@ class handler(BaseHTTPRequestHandler):
             label = payload.get("period_label")
             if not label or not payload.get("start_time") or not payload.get("end_time"):
                 return self._send(400, {"error": "교시명, 시작/종료시간은 필수입니다"})
-            created = rest_request("POST", "timetable_period_times", body={
+            created = rest_request("POST", "timetable_period_times?on_conflict=child_name,period_label", body={
                 "child_name": payload.get("child_name") or "하진",
                 "period_label": label,
                 "sort_order": int(payload.get("sort_order") or 0),
@@ -1783,7 +1783,7 @@ class handler(BaseHTTPRequestHandler):
             subject_name = payload.get("subject_name")
             if not subject_name:
                 return self._send(400, {"error": "subject_name은 필수입니다"})
-            rest_request("POST", "timetable_teachers", body={
+            rest_request("POST", "timetable_teachers?on_conflict=child_name,subject_name", body={
                 "child_name": payload.get("child_name") or "하진",
                 "subject_name": subject_name,
                 "teacher_name": payload.get("teacher_name"),
@@ -1796,7 +1796,7 @@ class handler(BaseHTTPRequestHandler):
         required = ("weekday", "period_label", "subject_name")
         if any(not payload.get(k) for k in required):
             return self._send(400, {"error": f"{', '.join(required)}는 필수입니다"})
-        created = rest_request("POST", "timetable_entries", body={
+        created = rest_request("POST", "timetable_entries?on_conflict=child_name,weekday,period_label", body={
             "child_name": payload.get("child_name") or "하진",
             "weekday": int(payload["weekday"]),
             "period_label": payload["period_label"],
