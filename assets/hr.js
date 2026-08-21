@@ -125,15 +125,24 @@ function switchMenuGroup(group) {
   $('navContacts').classList.toggle('active', group === 'contacts');
   $('navContractDocs').classList.toggle('active', group === 'contractdocs');
 
+  // 상단 타이틀/설명 — 메뉴명과 일치시킴
+  const TOPBAR_TEXT = {
+    home: { title: '인사/급여관리[직원마스터]', desc: '급여관리·퇴직연금 공통 직원 기준정보를 관리합니다.' },
+    payroll: { title: '급여관리', desc: '월별 급여명세, 성과급/기타지급, 연봉계약서, 인사기록보고서를 관리합니다.' },
+    pension: { title: '퇴직급여관리', desc: '퇴직연금(DC형) 현황과 퇴사자 정산을 관리합니다.' },
+    contacts: { title: '거래처 연락처', desc: '거래처별 담당자와 연락처를 관리합니다.' },
+    contractdocs: { title: '계약/증빙관리', desc: '금융상품, 계약/보증서, 증빙/백데이터 자료를 관리합니다.' },
+  };
+  const topText = TOPBAR_TEXT[group] || TOPBAR_TEXT.home;
+  $('topbarTitle').textContent = topText.title;
+  $('topbarDesc').textContent = topText.desc;
+
   // 상단 탭바 렌더링
   const bar = $('hrTabBar');
   if (g.tabs.length <= 1) {
     bar.style.display = 'none';
-    $('hrGroupLabel').style.display = 'none';
   } else {
     bar.style.display = 'flex';
-    $('hrGroupLabel').style.display = 'block';
-    $('hrGroupLabel').textContent = g.label;
     bar.innerHTML = g.tabs.map((t, i) => `
       <button class="tab-btn${i === 0 ? ' active' : ''}" data-tab="${t.id}" onclick="switchHrTab('${t.id}')">${t.label}</button>
     `).join('');
