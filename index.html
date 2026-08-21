@@ -112,6 +112,12 @@
       border-left: 4px solid var(--accent);
       margin: 28px 0 12px;
     }
+    /* 패널 안 부제목(일정 목록/학교 시간표/선생님 연락처/거래처 연락처 등)도 동일한 스타일로 통일 */
+    .panel-header h2 {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 800; padding-left: 10px;
+      border-left: 4px solid var(--accent);
+    }
     /* 옅은 배경 위 진한 글씨로 만들어진 배지/라벨류는 밝게 바꾸면 안 보이니 배경까지 같이 다크 버전으로 */
     html[data-theme="dark"] .hr-badge { filter: brightness(1.3) saturate(0.9); }
     html[data-theme="dark"] .sch-dday.soon, html[data-theme="dark"] .sch-dday.personal-soon,
