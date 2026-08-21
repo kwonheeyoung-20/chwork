@@ -27,7 +27,28 @@ function updateThemeToggleUI() {
 function logoutUser() {
   if (!confirm('로그아웃 하시겠습니까?')) return;
   sessionStorage.removeItem('chwork_hr_pw');
+  sessionStorage.removeItem('chwork_hr_role');
   window.location.href = 'index.html';
 }
 
-document.addEventListener('DOMContentLoaded', updateThemeToggleUI);
+function toggleMobileSidebar() {
+  const sidebar = document.getElementById('mainSidebar');
+  const overlay = document.getElementById('mobileSidebarOverlay');
+  if (!sidebar) return;
+  sidebar.classList.toggle('mobile-open');
+  if (overlay) overlay.classList.toggle('show');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  updateThemeToggleUI();
+  document.querySelectorAll('.nav a').forEach(a => {
+    a.addEventListener('click', () => {
+      const sidebar = document.getElementById('mainSidebar');
+      const overlay = document.getElementById('mobileSidebarOverlay');
+      if (sidebar && sidebar.classList.contains('mobile-open')) {
+        sidebar.classList.remove('mobile-open');
+        if (overlay) overlay.classList.remove('show');
+      }
+    });
+  });
+});
