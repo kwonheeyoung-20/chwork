@@ -95,6 +95,9 @@ async function loadMembers() {
   }
 }
 
+// "0교시"/"점심시간"처럼 요일 상관없이 항상 같은 내용인 교시는, 한 번만 입력하면 월~금 전체에 자동 적용됨
+const WHOLE_ROW_PERIODS = ['0교시', '점심시간'];
+
 const CATEGORY_EMOJI = {
   '생일': '🎂',
   '기념일': '💝',
@@ -815,15 +818,24 @@ function openTimetableEntryModal(periodLabel, weekday, entryId) {
   editingTimetableEntryId = entryId || null;
   pendingEntryWeekday = weekday;
   pendingEntryPeriodLabel = periodLabel;
+  const isWholeRow = WHOLE_ROW_PERIODS.includes(periodLabel);
   const weekdayNames = { 1: '월', 2: '화', 3: '수', 4: '목', 5: '금' };
   $('ttEntryModalTitle').textContent = entryId ? '과목 수정' : '과목 등록';
-  $('ttEntryModalSub').textContent = `${weekdayNames[weekday] || ''}요일 · ${periodLabel}`;
+  $('ttEntryModalSub').textContent = isWholeRow
+    ? `${periodLabel} (요일 전체 공통 — 한 번만 입력하면 월~금 전부 적용돼요)`
+    : `${weekdayNames[weekday] || ''}요일 · ${periodLabel}`;
   $('ttEntryDeleteBtn').style.display = entryId ? 'inline-block' : 'none';
   if (entryId) {
     const e = entriesCache.find(x => x.id === entryId);
     $('te_subject').value = e ? e.subject_name : '';
     $('te_subject_type').value = e ? (e.subject_type || 'regular') : 'regular';
     $('te_note').value = e ? (e.note || '') : '';
+  } else if (isWholeRow) {
+    // 이미 다른 요일에 등록되어 있으면 그 내용을 그대로 불러와 보여줌
+    const existing = entriesCache.find(x => x.period_label === periodLabel);
+    $('te_subject').value = existing ? existing.subject_name : '';
+    $('te_subject_type').value = existing ? (existing.subject_type || 'regular') : 'regular';
+    $('te_note').value = existing ? (existing.note || '') : '';
   } else {
     $('te_subject').value = '';
     $('te_subject_type').value = 'regular';
@@ -841,26 +853,44 @@ async function saveTimetableEntry() {
     $('ttEntryModalMsg').textContent = '과목명은 필수입니다.';
     return;
   }
-  const payload = {
+  const isWholeRow = WHOLE_ROW_PERIODS.includes(pendingEntryPeriodLabel);
+  const basePayload = {
     child_name: '하진',
-    weekday: pendingEntryWeekday,
     period_label: pendingEntryPeriodLabel,
     subject_name: subject,
     subject_type: $('te_subject_type').value,
     note: $('te_note').value.trim() || null,
   };
   try {
-    let res;
-    if (editingTimetableEntryId) {
-      res = await fetch(`${apiBase()}/api/timetable?id=${editingTimetableEntryId}`, {
-        method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(payload),
-      });
+    if (isWholeRow) {
+      // 요일 전체(월~금) 공통 한 번에 저장 — 기존 등록분은 자동으로 upsert됨
+      for (let wd = 1; wd <= 5; wd++) {
+        const existing = entriesCache.find(x => x.period_label === pendingEntryPeriodLabel && x.weekday === wd);
+        const payload = { ...basePayload, weekday: wd };
+        if (existing) {
+          await fetch(`${apiBase()}/api/timetable?id=${existing.id}`, {
+            method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(payload),
+          });
+        } else {
+          await fetch(`${apiBase()}/api/timetable`, {
+            method: 'POST', headers: authHeaders(true), body: JSON.stringify(payload),
+          });
+        }
+      }
     } else {
-      res = await fetch(`${apiBase()}/api/timetable`, {
-        method: 'POST', headers: authHeaders(true), body: JSON.stringify(payload),
-      });
+      const payload = { ...basePayload, weekday: pendingEntryWeekday };
+      let res;
+      if (editingTimetableEntryId) {
+        res = await fetch(`${apiBase()}/api/timetable?id=${editingTimetableEntryId}`, {
+          method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch(`${apiBase()}/api/timetable`, {
+          method: 'POST', headers: authHeaders(true), body: JSON.stringify(payload),
+        });
+      }
+      if (!res.ok) throw new Error('save failed');
     }
-    if (!res.ok) throw new Error('save failed');
     closeTimetableEntryModal();
     loadTimetable();
   } catch (e) {
@@ -870,9 +900,17 @@ async function saveTimetableEntry() {
 
 async function deleteTimetableEntryFromModal() {
   if (!editingTimetableEntryId) return;
-  if (!confirm('이 칸의 과목을 삭제하시겠습니까?')) return;
+  const isWholeRow = WHOLE_ROW_PERIODS.includes(pendingEntryPeriodLabel);
+  if (!confirm(isWholeRow ? '이 교시(월~금 전체)를 삭제하시겠습니까?' : '이 칸의 과목을 삭제하시겠습니까?')) return;
   try {
-    await fetch(`${apiBase()}/api/timetable?id=${editingTimetableEntryId}`, { method: 'DELETE', headers: authHeaders() });
+    if (isWholeRow) {
+      const all = entriesCache.filter(x => x.period_label === pendingEntryPeriodLabel);
+      for (const e of all) {
+        await fetch(`${apiBase()}/api/timetable?id=${e.id}`, { method: 'DELETE', headers: authHeaders() });
+      }
+    } else {
+      await fetch(`${apiBase()}/api/timetable?id=${editingTimetableEntryId}`, { method: 'DELETE', headers: authHeaders() });
+    }
     closeTimetableEntryModal();
     loadTimetable();
   } catch (e) {
