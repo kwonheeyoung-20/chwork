@@ -121,9 +121,13 @@ class handler(BaseHTTPRequestHandler):
             total_contributed = total_contributed or 0
             additional_payment = round(cumulative_estimate - total_contributed)
 
+            emp_row = rest_request("GET", f"employees?id=eq.{employee_id}&select=hire_date")
+            hire_date = emp_row[0]["hire_date"] if emp_row else None
+
             yearly = self._build_yearly_breakdown(employee_id, retire_date)
 
             return self._send(200, {
+                "hire_date": hire_date,
                 "cumulative_estimate": cumulative_estimate,
                 "total_contributed": total_contributed,
                 "additional_payment": additional_payment,
