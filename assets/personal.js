@@ -664,9 +664,12 @@ function renderTimetable(periods, entries) {
         </td>
       `;
     }
+    const isWholeRow = WHOLE_ROW_PERIODS.includes(p.period_label);
     return `
       <tr>
-        <td>${esc(p.period_label)}<br><span style="font-size:10px; color:var(--text-muted);">${esc((p.start_time||'').slice(0,5))}~${esc((p.end_time||'').slice(0,5))}</span></td>
+        <td>${esc(p.period_label)}<br><span style="font-size:10px; color:var(--text-muted);">${esc((p.start_time||'').slice(0,5))}~${esc((p.end_time||'').slice(0,5))}</span>
+          ${!isWholeRow ? `<div class="tt-cell-edit" style="position:static; margin-top:4px; font-size:10px; color:var(--accent);" onclick="openBulkPeriodModal('${p.period_label}')">📝 일괄입력</div>` : ''}
+        </td>
         ${cells}
       </tr>
     `;
@@ -915,6 +918,61 @@ async function deleteTimetableEntryFromModal() {
     loadTimetable();
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 정규수업 요일별 일괄입력 ── */
+let pendingBulkPeriodLabel = null;
+const BULK_WEEKDAY_FIELDS = { 1: 'bp_mon', 2: 'bp_tue', 3: 'bp_wed', 4: 'bp_thu', 5: 'bp_fri' };
+
+function openBulkPeriodModal(periodLabel) {
+  pendingBulkPeriodLabel = periodLabel;
+  $('bulkPeriodModalTitle').textContent = `요일별 일괄입력 — ${periodLabel}`;
+  const existingForType = entriesCache.find(x => x.period_label === periodLabel);
+  $('bp_subject_type').value = existingForType ? (existingForType.subject_type || 'regular') : 'regular';
+  for (let wd = 1; wd <= 5; wd++) {
+    const e = entriesCache.find(x => x.period_label === periodLabel && x.weekday === wd);
+    $(BULK_WEEKDAY_FIELDS[wd]).value = e ? e.subject_name : '';
+  }
+  $('bulkPeriodModalMsg').textContent = '';
+  $('bulkPeriodModal').style.display = 'flex';
+}
+function closeBulkPeriodModal() { $('bulkPeriodModal').style.display = 'none'; }
+
+async function saveBulkPeriod() {
+  const subjectType = $('bp_subject_type').value;
+  try {
+    for (let wd = 1; wd <= 5; wd++) {
+      const value = $(BULK_WEEKDAY_FIELDS[wd]).value.trim();
+      const existing = entriesCache.find(x => x.period_label === pendingBulkPeriodLabel && x.weekday === wd);
+      if (!value) {
+        // 비워두면: 기존에 등록되어 있던 건 지워줌 (없으면 그냥 넘어감)
+        if (existing) {
+          await fetch(`${apiBase()}/api/timetable?id=${existing.id}`, { method: 'DELETE', headers: authHeaders() });
+        }
+        continue;
+      }
+      const payload = {
+        child_name: '하진',
+        weekday: wd,
+        period_label: pendingBulkPeriodLabel,
+        subject_name: value,
+        subject_type: subjectType,
+      };
+      if (existing) {
+        await fetch(`${apiBase()}/api/timetable?id=${existing.id}`, {
+          method: 'PATCH', headers: authHeaders(true), body: JSON.stringify(payload),
+        });
+      } else {
+        await fetch(`${apiBase()}/api/timetable`, {
+          method: 'POST', headers: authHeaders(true), body: JSON.stringify(payload),
+        });
+      }
+    }
+    closeBulkPeriodModal();
+    loadTimetable();
+  } catch (e) {
+    $('bulkPeriodModalMsg').textContent = '저장 중 오류가 발생했습니다.';
   }
 }
 
