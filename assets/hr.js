@@ -3347,11 +3347,13 @@ function populateContractDocTypeFilter() {
 
 function renderDocFileLinks(files) {
   if (!files || files.length === 0) return '-';
+  // 파일이 여러 개면 <br>로 세로로 쌓으면 그 행만 세로로 길어져서(가로스크롤 표라 안 보이는 채로)
+  // 표 전체 줄 간격이 이상하게 벌어져 보이는 문제가 있어, 한 줄로 이어서 표시하고 필요하면 가로 스크롤로 보게 함.
   return files.map(f =>
     f.view_url
       ? `<a href="${esc(f.view_url)}" target="_blank" rel="noopener" download="${esc(f.file_name || '')}" class="hr-edit-link">${esc(f.file_name || '보기')}</a>`
       : `${esc(f.file_name || '')} (만료된 링크, 새로고침 필요)`
-  ).join('<br>');
+  ).join(' · ');
 }
 
 function contractDocStatus(c) {
