@@ -770,12 +770,15 @@ function getHolidayName(dateStr) {
   return table ? (table[dateStr] || null) : null;
 }
 
+let schCalByDate = {};
+
 function renderCalendar(occurrences, monthStart, monthEnd) {
   const byDate = {};
   occurrences.forEach(o => {
     if (!byDate[o.due_date]) byDate[o.due_date] = [];
     byDate[o.due_date].push(o);
   });
+  schCalByDate = byDate;
 
   const todayStr = toISO(new Date());
   const firstWeekday = monthStart.getDay(); // 0=일
@@ -806,15 +809,17 @@ function renderCalendar(occurrences, monthStart, monthEnd) {
         if (diff < 0) cls = 'overdue';
         else if (diff <= 7) cls = 'soon';
       }
-      return `<div class="sch-cal-item ${cls}" title="${esc(task.title || '')}">${esc(task.title || '')}</div>`;
+      return `<div class="sch-cal-item ${cls}">${esc(task.title || '')}</div>`;
     }).join('');
     const moreHtml = dayItems.length > maxShow ? `<div class="sch-cal-more">+${dayItems.length - maxShow}개 더</div>` : '';
     const holidayHtml = holidayName ? `<div class="sch-cal-holiday" title="${esc(holidayName)}">${esc(holidayName)}</div>` : '';
 
     // 토/일요일 외에도 공휴일이면 빨간색으로 표시
     const dayNumClass = (weekday === 0 || holidayName) ? 'sun' : (weekday === 6 ? 'sat' : '');
+    const clickable = dayItems.length > 0;
     html += `
-      <div class="sch-cal-cell ${isToday ? 'today' : ''} ${holidayName ? 'holiday' : ''}">
+      <div class="sch-cal-cell ${isToday ? 'today' : ''} ${holidayName ? 'holiday' : ''} ${clickable ? 'has-items' : ''}"
+           ${clickable ? `onclick="openSchDayDetail('${dateStr}')" style="cursor:pointer;"` : ''}>
         <div class="sch-cal-daynum ${dayNumClass}">${day}</div>
         ${holidayHtml}
         ${itemsHtml}
@@ -832,3 +837,29 @@ function renderCalendar(occurrences, monthStart, monthEnd) {
 
   $('calGrid').innerHTML = html;
 }
+
+/* ── 날짜 클릭 시 그 날 업무일정 전체를 팝업으로 표시 (호버가 없는 터치기기에서도 동작) ── */
+function openSchDayDetail(dateStr) {
+  const items = schCalByDate[dateStr] || [];
+  if (items.length === 0) return;
+  const dateObj = new Date(dateStr);
+  const wk = ['일', '월', '화', '수', '목', '금', '토'][dateObj.getDay()];
+  $('schDayDetailTitle').textContent = `${dateStr} (${wk}) 일정 ${items.length}건`;
+  $('schDayDetailBody').innerHTML = items.map(o => {
+    const task = o.tax_schedule_tasks || {};
+    const statusLabel = o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료');
+    return `
+      <div style="display:flex; align-items:flex-start; gap:8px; padding:10px 0; border-bottom:0.5px solid var(--border);">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:500;">${esc(task.title || '-')}</div>
+          ${task.category ? `<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${esc(task.category)}</div>` : ''}
+          ${task.note ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">${esc(task.note)}</div>` : ''}
+          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${statusLabel}</div>
+        </div>
+        <a class="hr-edit-link" onclick="closeSchDayDetail(); editTask('${o.task_id}')">수정</a>
+      </div>
+    `;
+  }).join('');
+  $('schDayDetailModal').style.display = 'flex';
+}
+function closeSchDayDetail() { $('schDayDetailModal').style.display = 'none'; }

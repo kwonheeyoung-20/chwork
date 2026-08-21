@@ -269,12 +269,15 @@ function getHolidayName(dateStr) {
   return table ? (table[dateStr] || null) : null;
 }
 
+let perCalByDate = {};
+
 function renderPerCalendar(occurrences, monthStart, monthEnd) {
   const byDate = {};
   occurrences.forEach(o => {
     if (!byDate[o.due_date]) byDate[o.due_date] = [];
     byDate[o.due_date].push(o);
   });
+  perCalByDate = byDate;
   const todayStr = toISO(new Date());
   const firstWeekday = monthStart.getDay();
   const daysInMonth = monthEnd.getDate();
@@ -293,13 +296,15 @@ function renderPerCalendar(occurrences, monthStart, monthEnd) {
     const itemsHtml = dayItems.slice(0, maxShow).map(o => {
       const task = o.personal_schedule_tasks || {};
       const color = memberColor(task.member_name);
-      return `<div class="sch-cal-item ${o.status === 'done' ? 'done' : ''}" style="background:${color};" title="[${esc(task.member_name)}] ${esc(task.title)}">${categoryEmoji(task.category)} ${esc(task.title || '')}</div>`;
+      return `<div class="sch-cal-item ${o.status === 'done' ? 'done' : ''}" style="background:${color};">${categoryEmoji(task.category)} ${esc(task.title || '')}</div>`;
     }).join('');
     const moreHtml = dayItems.length > maxShow ? `<div class="sch-cal-more">+${dayItems.length - maxShow}개 더</div>` : '';
     const holidayHtml = holidayName ? `<div class="sch-cal-holiday" title="${esc(holidayName)}">${esc(holidayName)}</div>` : '';
     const dayNumClass = (weekday === 0 || holidayName) ? 'sun' : (weekday === 6 ? 'sat' : '');
+    const clickable = dayItems.length > 0;
     html += `
-      <div class="sch-cal-cell ${isToday ? 'today' : ''} ${holidayName ? 'holiday' : ''}">
+      <div class="sch-cal-cell ${isToday ? 'today' : ''} ${holidayName ? 'holiday' : ''} ${clickable ? 'has-items' : ''}"
+           ${clickable ? `onclick="openPerDayDetail('${dateStr}')" style="cursor:pointer;"` : ''}>
         <div class="sch-cal-daynum ${dayNumClass}">${day}</div>
         ${holidayHtml}
         ${itemsHtml}
@@ -312,6 +317,33 @@ function renderPerCalendar(occurrences, monthStart, monthEnd) {
   for (let i = 0; i < remain; i++) html += `<div class="sch-cal-cell empty"></div>`;
   $('perCalGrid').innerHTML = html;
 }
+
+/* ── 날짜 클릭 시 그 날 일정 전체를 팝업으로 표시 (호버가 없는 터치기기에서도 동작) ── */
+function openPerDayDetail(dateStr) {
+  const items = perCalByDate[dateStr] || [];
+  if (items.length === 0) return;
+  const dateObj = new Date(dateStr);
+  const wk = ['일', '월', '화', '수', '목', '금', '토'][dateObj.getDay()];
+  $('perDayDetailTitle').textContent = `${dateStr} (${wk}) 일정 ${items.length}건`;
+  $('perDayDetailBody').innerHTML = items.map(o => {
+    const task = o.personal_schedule_tasks || {};
+    const color = memberColor(task.member_name);
+    const statusLabel = o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료');
+    return `
+      <div style="display:flex; align-items:flex-start; gap:8px; padding:10px 0; border-bottom:0.5px solid var(--border);">
+        <span class="member-chip" style="background:${color}; font-size:11px; flex-shrink:0;">${esc(task.member_name || '-')}</span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:500;">${categoryEmoji(task.category)} ${esc(task.title || '-')}${task.is_private ? ' 🔒' : ''}</div>
+          ${task.note ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">${esc(task.note)}</div>` : ''}
+          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${statusLabel}</div>
+        </div>
+        <a class="hr-edit-link" onclick="closePerDayDetail(); editPersonalTask('${o.task_id}')">수정</a>
+      </div>
+    `;
+  }).join('');
+  $('perDayDetailModal').style.display = 'flex';
+}
+function closePerDayDetail() { $('perDayDetailModal').style.display = 'none'; }
 
 /* ── 일정 목록 ── */
 function setPerRangePreset(kind) {
