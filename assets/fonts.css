@@ -1,0 +1,39 @@
+/* ───────── fonts.css — 직접 업로드받은 웹폰트 (외부 CDN 의존 없음) ───────── */
+
+@font-face {
+  font-family: 'GmarketSans';
+  src: url('fonts/GmarketSansLight.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'GmarketSans';
+  src: url('fonts/GmarketSansMedium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Cafe24Ssurround';
+  src: url('fonts/Cafe24Ssurround.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SCoreDream';
+  src: url('fonts/SCDream4.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'SCoreDream';
+  src: url('fonts/SCDream6.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

@@ -198,7 +198,7 @@ html:not([data-theme="dark"]) [style*="0.5px solid"] { border-width: 1px !import
 html[data-font="gmarket"] body,
 html[data-font="gmarket"] input, html[data-font="gmarket"] button,
 html[data-font="gmarket"] select, html[data-font="gmarket"] textarea {
-  font-family: 'GmarketSansMedium', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'GmarketSans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 html[data-font="cafe24"] body,
 html[data-font="cafe24"] input, html[data-font="cafe24"] button,
@@ -208,5 +208,5 @@ html[data-font="cafe24"] select, html[data-font="cafe24"] textarea {
 html[data-font="scdream"] body,
 html[data-font="scdream"] input, html[data-font="scdream"] button,
 html[data-font="scdream"] select, html[data-font="scdream"] textarea {
-  font-family: 'S-CoreDream-4Regular', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'SCoreDream', -apple-system, BlinkMacSystemFont, sans-serif;
 }
