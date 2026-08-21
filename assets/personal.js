@@ -693,13 +693,14 @@ function printTimetable() {
   style.id = 'ttPrintStyle';
   style.textContent = `
     @media print {
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
       body * { visibility: hidden; }
       #ttFullPrintArea, #ttFullPrintArea * { visibility: visible; }
       #ttFullPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
       @page { size: landscape; margin: 10mm; }
       #ttFullPrintArea h3 { font-size: 15px; margin-bottom: 8px; }
       #ttFullPrintArea table { font-size: 11px; }
-      #ttFullPrintArea th, #ttFullPrintArea td { padding: 4px 6px; }
+      #ttFullPrintArea th, #ttFullPrintArea td { padding: 4px 6px; border: 1.5px solid #6b7280 !important; }
       .tt-cell-edit { display: none !important; }
     }
   `;
