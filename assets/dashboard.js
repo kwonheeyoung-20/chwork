@@ -147,6 +147,8 @@ async function loadContractAlerts() {
 
 /* ── 개인 일정관리 알림 ── */
 async function loadPersonalAlerts() {
+  const CATEGORY_EMOJI = { '생일': '🎂', '기념일': '💝', '결제일': '💳', '학원': '📚', '일정': '📌', '기타': '⭐' };
+  const catEmoji = c => CATEGORY_EMOJI[c] || '📌';
   const wrap = $('personalAlertWrap');
   try {
     const res = await fetch(`${apiBase()}/api/personal_schedule?upcoming=1`, { headers: authHeaders() });
@@ -164,7 +166,7 @@ async function loadPersonalAlerts() {
       html += `<div class="sch-banner personal-danger"><h3>⚠ 지난 일정 (${overdue.length}건)</h3>`;
       html += overdue.slice(0, 5).map(x => `
         <div class="sch-banner-row">
-          <a href="personal.html"><span class="sch-dday overdue">D+${Math.abs(x.days_left)}</span> [${esc(x.member_name)}] ${esc(x.title)}</a>
+          <a href="personal.html"><span class="sch-dday overdue">D+${Math.abs(x.days_left)}</span> ${catEmoji(x.category)} [${esc(x.member_name)}] ${esc(x.title)}</a>
         </div>
       `).join('');
       html += `</div>`;
@@ -173,7 +175,7 @@ async function loadPersonalAlerts() {
       html += `<div class="sch-banner personal-warn"><h3>🔔 다가오는 일정 (${soon.length}건)</h3>`;
       html += soon.slice(0, 5).map(x => `
         <div class="sch-banner-row">
-          <a href="personal.html"><span class="sch-dday personal-soon">${x.days_left === 0 ? 'D-DAY' : 'D-' + x.days_left}</span> [${esc(x.member_name)}] ${esc(x.title)}</a>
+          <a href="personal.html"><span class="sch-dday personal-soon">${x.days_left === 0 ? 'D-DAY' : 'D-' + x.days_left}</span> ${catEmoji(x.category)} [${esc(x.member_name)}] ${esc(x.title)}</a>
         </div>
       `).join('');
       html += `</div>`;

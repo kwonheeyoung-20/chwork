@@ -95,6 +95,18 @@ async function loadMembers() {
   }
 }
 
+const CATEGORY_EMOJI = {
+  '생일': '🎂',
+  '기념일': '💝',
+  '결제일': '💳',
+  '학원': '📚',
+  '일정': '📌',
+  '기타': '⭐',
+};
+function categoryEmoji(category) {
+  return CATEGORY_EMOJI[category] || '📌';
+}
+
 function memberColor(name) {
   const m = membersCache.find(x => x.name === name);
   return m ? m.color : '#888888';
@@ -164,12 +176,12 @@ async function loadPersonalReminderBanner() {
     let html = '';
     if (overdue.length > 0) {
       html += `<div class="sch-banner danger"><h3>⚠ 지난 일정 (${overdue.length}건)</h3>`;
-      html += overdue.map(x => `<div class="sch-banner-row"><span><span class="sch-dday overdue">D+${Math.abs(x.days_left)}</span> [${esc(x.member_name)}] ${esc(x.title)}</span></div>`).join('');
+      html += overdue.map(x => `<div class="sch-banner-row"><span><span class="sch-dday overdue">D+${Math.abs(x.days_left)}</span> ${categoryEmoji(x.category)} [${esc(x.member_name)}] ${esc(x.title)}</span></div>`).join('');
       html += `</div>`;
     }
     if (soon.length > 0) {
       html += `<div class="sch-banner warn"><h3>🔔 다가오는 일정 (${soon.length}건)</h3>`;
-      html += soon.map(x => `<div class="sch-banner-row"><span><span class="sch-dday soon">${x.days_left === 0 ? 'D-DAY' : 'D-' + x.days_left}</span> [${esc(x.member_name)}] ${esc(x.title)}</span></div>`).join('');
+      html += soon.map(x => `<div class="sch-banner-row"><span><span class="sch-dday soon">${x.days_left === 0 ? 'D-DAY' : 'D-' + x.days_left}</span> ${categoryEmoji(x.category)} [${esc(x.member_name)}] ${esc(x.title)}</span></div>`).join('');
       html += `</div>`;
     }
     wrap.innerHTML = html;
@@ -274,7 +286,7 @@ function renderPerCalendar(occurrences, monthStart, monthEnd) {
     const itemsHtml = dayItems.slice(0, maxShow).map(o => {
       const task = o.personal_schedule_tasks || {};
       const color = memberColor(task.member_name);
-      return `<div class="sch-cal-item ${o.status === 'done' ? 'done' : ''}" style="background:${color};" title="[${esc(task.member_name)}] ${esc(task.title)}">${esc(task.title || '')}</div>`;
+      return `<div class="sch-cal-item ${o.status === 'done' ? 'done' : ''}" style="background:${color};" title="[${esc(task.member_name)}] ${esc(task.title)}">${categoryEmoji(task.category)} ${esc(task.title || '')}</div>`;
     }).join('');
     const moreHtml = dayItems.length > maxShow ? `<div class="sch-cal-more">+${dayItems.length - maxShow}개 더</div>` : '';
     const holidayHtml = holidayName ? `<div class="sch-cal-holiday" title="${esc(holidayName)}">${esc(holidayName)}</div>` : '';
@@ -339,7 +351,7 @@ async function loadPersonalOccurrences() {
         <tr>
           <td>${esc(o.due_date)}${task.date_type === 'lunar' ? ' <span style="font-size:10px; color:var(--accent);">(음력)</span>' : ''}</td>
           <td><span class="member-chip" style="background:${color}; font-size:11px;">${esc(task.member_name || '-')}</span></td>
-          <td>${esc(task.category || '-')}</td>
+          <td>${categoryEmoji(task.category)} ${esc(task.category || '-')}</td>
           <td>${esc(task.title || '-')}</td>
           <td style="font-size:12px; color:var(--text-secondary);">${[task.note ? esc(task.note) : null, o.completed_note ? '완료메모: ' + esc(o.completed_note) : null].filter(Boolean).join('<br>') || '-'}</td>
           <td>${statusLabel}</td>
