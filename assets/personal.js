@@ -631,16 +631,22 @@ function renderTimetable(periods, entries) {
         cells += `<td><span class="tt-cell-empty-add" onclick="openTimetableEntryModal('${p.period_label}', ${wd})">+ 등록</span></td>`;
         continue;
       }
+      // 병합 대상: 0교시/점심시간(요일공통) 이거나, 방과후/학원(같은 활동 묶어보기)일 때만.
+      // 정규수업(regular)은 요일별로 각각 따로 보여줘야 하니 병합 안 함.
+      const mergeable = WHOLE_ROW_PERIODS.includes(p.period_label) || e.subject_type === 'afterschool' || e.subject_type === 'academy';
+
       // 가로 병합 범위 계산
       let colspan = 1;
-      while (wd + colspan <= 5) {
-        const nextE = entryMap[`${p.period_label}__${wd + colspan}`];
-        if (nextE && nextE.subject_name === e.subject_name && (nextE.note||'') === (e.note||'')) colspan++;
-        else break;
+      if (mergeable) {
+        while (wd + colspan <= 5) {
+          const nextE = entryMap[`${p.period_label}__${wd + colspan}`];
+          if (nextE && nextE.subject_name === e.subject_name && (nextE.note||'') === (e.note||'')) colspan++;
+          else break;
+        }
       }
-      // 세로 병합은 가로 병합이 없을 때만(1칸 너비일 때만) 시도
+      // 세로 병합은 가로 병합이 없을 때만(1칸 너비일 때만) + 병합 대상일 때만 시도
       let rowspan = 1;
-      if (colspan === 1) {
+      if (mergeable && colspan === 1) {
         let nextIdx = periodIdx + 1;
         while (nextIdx < periods.length) {
           const nextP = periods[nextIdx];
