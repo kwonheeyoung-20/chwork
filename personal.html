@@ -505,6 +505,33 @@
   </div>
 </div>
 
+<!-- 정규수업 요일별 일괄입력 모달 -->
+<div id="bulkPeriodModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:420px;">
+    <h2 id="bulkPeriodModalTitle">요일별 일괄입력</h2>
+    <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">비워두면 그 요일은 등록 안 하거나(기존 있으면) 삭제됩니다.</p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>구분
+        <select id="bp_subject_type" class="hr-input">
+          <option value="regular">정규수업 (과목별 다른 색)</option>
+          <option value="afterschool">방과후 (한 가지 색으로 묶임)</option>
+          <option value="academy">학원 (방과후와 별도 색)</option>
+        </select>
+      </label>
+      <label>월 <input id="bp_mon" class="hr-input" list="subjectNameList"></label>
+      <label>화 <input id="bp_tue" class="hr-input" list="subjectNameList"></label>
+      <label>수 <input id="bp_wed" class="hr-input" list="subjectNameList"></label>
+      <label>목 <input id="bp_thu" class="hr-input" list="subjectNameList"></label>
+      <label>금 <input id="bp_fri" class="hr-input" list="subjectNameList"></label>
+    </div>
+    <div id="bulkPeriodModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeBulkPeriodModal()">취소</button>
+      <button class="primary" onclick="saveBulkPeriod()">전체 저장</button>
+    </div>
+  </div>
+</div>
+
 <!-- 선생님 연락처 등록/수정 모달 -->
 <div id="teacherModal" class="hr-modal-backdrop" style="display:none;">
   <div class="hr-modal" style="width:400px;">
