@@ -1,6 +1,11 @@
 [project]
 name = "chwork"
 version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "cryptography>=42.0.0",
+    "korean_lunar_calendar>=0.3.1",
+]
 
 [tool.vercel]
 entrypoint = "api/analyze:handler"
