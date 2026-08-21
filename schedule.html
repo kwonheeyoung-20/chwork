@@ -53,7 +53,7 @@
     .sch-cal-item.done { background:var(--green-light); color:var(--green); text-decoration:line-through; }
     .sch-cal-item.skipped { background:var(--bg); color:var(--text-muted); text-decoration:line-through; }
     .sch-cal-more { font-size:10px; color:var(--text-muted); padding-left:5px; }
-    .nav-personal-divider { border-top: 0.5px solid var(--border); margin: 10px 20px 6px; }
+    .nav-personal-divider { border-top: 0.5px solid var(--border); margin: 10px 10px 6px; }
     .nav-personal-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#8b5cf6; margin-right:7px; vertical-align:middle; }
     .login-card { max-width:380px; margin:60px auto; background:var(--surface); border:0.5px solid var(--border); border-radius:20px; padding:44px 32px 32px; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.08); }
     .login-icon { width:64px; height:64px; margin:0 auto 22px; border-radius:16px; overflow:hidden; border:0.5px solid var(--border); box-shadow:0 2px 8px rgba(0,0,0,0.08); }
@@ -168,6 +168,7 @@
     <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
     <nav class="nav">
       <a href="index.html">🏠 대시보드</a>
+      <div class="nav-personal-divider"></div>
       <a href="hr.html#home">👥 인사/급여관리</a>
       <div class="nav-sub">
         <a href="hr.html#payroll">💰 급여관리</a>
@@ -179,6 +180,7 @@
       <a href="#">📊 월간 보고서</a>
       <div class="nav-personal-divider"></div>
       <a href="personal.html"><span class="nav-personal-dot"></span>👨‍👩‍👧 개인 일정관리</a>
+      <div class="nav-personal-divider"></div>
       <a href="#" onclick="openSettingsModal(); return false;">⚙️ 설정</a>
     </nav>
   </aside>
