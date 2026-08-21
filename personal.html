@@ -102,6 +102,27 @@
     html[data-theme="dark"] a { color:#7fb3ff; }
     .theme-toggle-btn { display:block; width:100%; text-align:left; background:none; border:none; color:inherit; font-size:13px; padding:8px 0; cursor:pointer; }
     .logout-btn { display:block; width:100%; text-align:left; background:none; border:none; color:var(--red); font-size:13px; padding:8px 0; cursor:pointer; }
+    /* ── 탭 메뉴: 상자(카드)형 디자인 ── */
+    .tab-btn {
+      padding: 9px 16px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.12s, box-shadow 0.12s, background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .tab-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+    .tab-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 3px 10px rgba(200,40,40,0.28);
+    }
+    html[data-theme="dark"] .tab-btn.active { box-shadow: 0 3px 10px rgba(255,107,107,0.25); }
+    #hrTabBar { border-bottom: none !important; padding-bottom: 4px; }
   </style>
 </head>
 <body>
@@ -158,7 +179,7 @@
 
       <div id="perMain" style="display:none; flex-direction:column; gap:20px;">
 
-        <div style="display:flex; gap:4px; border-bottom: 0.5px solid var(--border); margin-bottom:4px;">
+        <div style="display:flex; gap:8px; margin-bottom:14px;">
           <button class="tab-btn active" data-persub="family" onclick="switchPerTab('family')">가족 일정</button>
           <button class="tab-btn" data-persub="timetable" onclick="switchPerTab('timetable')">학교 시간표</button>
         </div>
