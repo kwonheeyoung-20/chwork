@@ -1,59 +1,225 @@
-/* hr.css — 인사 모듈 전용 스타일 (기존 styles.css 디자인 토큰 재사용) */
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/webfontworld/gmarket/GmarketSans.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/webfontworld/Cafe24/Cafe24Ssurround.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/webfontworld/SCore/SCoreDream.css">
+  <title>법인 손익 분석 | 창현 Dashboard</title>
+<script>document.documentElement.setAttribute("data-theme", localStorage.getItem("chwork_theme") || "light");</script>
+<script>document.documentElement.setAttribute("data-font", localStorage.getItem("chwork_font") || "default");</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/hr.css">
+  <link rel="icon" href="icons/icon-192.png">
+  <style>
+    :root[data-theme="dark"] {
+      --bg: #15171a; --surface: #1d2024; --border: #3a3f47; --border-strong: #ffffff;
+      --text-primary: #eaeaea; --text-secondary: #b0b0b0; --text-muted: #808080;
+    }
+    body { background: var(--bg); }
+    .hidden { display: none !important; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+    .kpi-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; }
+    .kpi-card .kpi-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+    .kpi-card .kpi-value { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+    .upload-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+    .chart-box { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-top: 14px; }
+    .compare-header { display: flex; gap: 8px; padding: 4px 0 8px; font-size: 11px; color: var(--text-muted); border-bottom: 0.5px solid var(--border); margin-bottom: 4px; }
+    .compare-header .compare-label { flex: 1; }
+    .compare-header .compare-val { width: 110px; text-align: right; }
+    .compare-header .compare-delta { width: 90px; text-align: right; }
+    .mobile-menu-btn { display:none; }
+    .mobile-sidebar-overlay { display:none; }
+    @media (max-width: 820px) {
+      .mobile-menu-btn {
+        display:flex; align-items:center; justify-content:center;
+        width:38px; height:38px; border:0.5px solid var(--border-strong); border-radius:10px;
+        background:var(--surface); color:inherit; font-size:18px; cursor:pointer; flex-shrink:0;
+      }
+      .sidebar {
+        position:fixed; top:0; left:0; height:100vh; z-index:210;
+        transform:translateX(-105%); transition:transform 0.22s ease; box-shadow:4px 0 20px rgba(0,0,0,0.35);
+        overflow-y:auto;
+      }
+      .sidebar.mobile-open { transform:translateX(0); }
+      .mobile-sidebar-overlay.show { display:block; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:205; }
+      .kpi-grid, .upload-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="mobile-sidebar-overlay" id="mobileSidebarOverlay" onclick="toggleMobileSidebar()"></div>
+  <div class="layout">
+    <aside class="sidebar" id="mainSidebar">
+      <div style="padding:0 20px 16px;">
+        <div style="font-size:17px; font-weight:700;">창현 Dashboard</div>
+        <div style="font-size:11px; color:var(--text-muted);">관리부 · 경영관리 · 재무보고</div>
+      </div>
+      <nav class="nav" style="display:flex; flex-direction:column; gap:2px; padding:0 12px;">
+        <a href="index.html">🏠 대시보드</a>
+        <div class="nav-personal-divider"></div>
+        <a href="hr.html#home">👥 인사/급여관리</a>
+        <a href="schedule.html">📅 업무 일정관리</a>
+        <a href="hr.html#contractdocs">📁 계약/증빙관리</a>
+        <a href="hr.html#contacts">📇 거래처 연락처</a>
+        <a href="corporate-profit.html" style="font-weight:700; color:var(--accent);">📊 법인 손익 분석</a>
+        <div class="nav-personal-divider"></div>
+        <a href="personal.html"><span class="nav-personal-dot"></span>👨‍👩‍👧 개인 일정관리</a>
+        <div class="nav-personal-divider"></div>
+        <a href="#" onclick="openSettingsModal(); return false;">⚙️ 설정</a>
+      </nav>
+    </aside>
 
-.hr-input {
-  width: 100%;
-  border: 0.5px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  padding: 7px 10px;
-  font-size: 13px;
-  background: var(--bg);
-  color: var(--text-primary);
-  outline: none;
-  font-family: inherit;
-}
-.hr-input:focus { border-color: var(--accent-mid); background: var(--surface); }
+    <main class="main">
+      <div class="topbar" style="display:flex; align-items:center; gap:10px;">
+        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="메뉴">☰</button>
+        <div>
+          <h1>법인 손익 분석</h1>
+          <p>회계 원장(ACA0090)·합계잔액시산표(ACB0021) 엑셀을 업로드하면 손익/재무 현황을 자동 분석합니다.</p>
+        </div>
+      </div>
 
-.hr-msg { font-size: 12px; color: var(--red); min-height: 16px; }
-.hr-msg.success { color: var(--green); }
+      <div class="content" style="display:flex; flex-direction:column; gap:18px; padding:20px 28px;">
+        <div class="panel">
+          <div class="panel-header"><h2 style="font-size:16px; margin-bottom:12px;">📤 파일 업로드</h2></div>
+          <div class="upload-grid">
+            <label class="upload-card" for="glFile">
+              <strong>ACA0090 원장 (필수)</strong>
+              <span>총계정원장 엑셀 파일</span>
+              <span class="file-name"></span>
+              <input type="file" id="glFile" accept=".xlsx,.xls">
+            </label>
+            <label class="upload-card" for="tbFile">
+              <strong>ACB0021 합계잔액시산표 (필수)</strong>
+              <span>시산표 엑셀 파일</span>
+              <span class="file-name"></span>
+              <input type="file" id="tbFile" accept=".xlsx,.xls">
+            </label>
+            <label class="upload-card" for="deptFile">
+              <strong>부서(지점)별 자료 (선택)</strong>
+              <span>지점별 매출/비용 비교가 필요할 때</span>
+              <span class="file-name"></span>
+              <input type="file" id="deptFile" accept=".xlsx,.xls">
+            </label>
+            <label class="upload-card" for="extraFile">
+              <strong>기타 참고자료 (선택)</strong>
+              <span>추가로 반영할 자료</span>
+              <span class="file-name"></span>
+              <input type="file" id="extraFile" accept=".xlsx,.xls">
+            </label>
+          </div>
+          <button class="primary" id="analyzeBtn" onclick="runAnalyze()">분석 실행</button>
+          <div class="status" id="status"></div>
+        </div>
 
-.hr-count { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 6px; }
+        <div id="result" class="hidden" style="display:flex; flex-direction:column; gap:18px;">
+          <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-label">매출액</div><div class="kpi-value" id="kSales">-</div></div>
+            <div class="kpi-card"><div class="kpi-label">영업이익</div><div class="kpi-value" id="kOp">-</div></div>
+            <div class="kpi-card"><div class="kpi-label">영업이익률</div><div class="kpi-value" id="kMargin">-</div></div>
+            <div class="kpi-card"><div class="kpi-label">비용률</div><div class="kpi-value" id="kCost">-</div></div>
+          </div>
 
-.hr-checkbox { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+          <div style="display:flex; gap:10px;">
+            <a id="downloadBtn" class="secondary disabled" href="#">📥 엑셀 다운로드</a>
+            <button id="pdfBtn" class="secondary">📄 PDF 다운로드</button>
+          </div>
 
-.hr-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
-.hr-badge.active { background: var(--green-light); color: var(--green); }
-.hr-badge.retired { background: var(--bg); color: var(--text-muted); }
-.hr-badge.yes { background: var(--accent-light); color: var(--accent); }
-.hr-badge.no { background: var(--bg); color: var(--text-muted); }
+          <div class="tabs" id="profitTabBar">
+            <button class="tab-btn active" data-tab="summary" onclick="switchTab('summary')">요약</button>
+            <button class="tab-btn" data-tab="branch" onclick="switchTab('branch')">지점별</button>
+            <button class="tab-btn" data-tab="cost" onclick="switchTab('cost')">비용분석</button>
+            <button class="tab-btn" data-tab="trend" onclick="switchTab('trend')">추세분석</button>
+          </div>
 
-.hr-edit-link { font-size: 12px; color: var(--accent); cursor: pointer; text-decoration: none; }
-.hr-edit-link:hover { text-decoration: underline; }
+          <div class="tab-content active" id="tab-summary">
+            <div class="panel">
+              <div class="panel-header"><h2 style="font-size:15px; margin-bottom:10px;">손익계산서</h2></div>
+              <table class="table" id="incomeTable">
+                <thead><tr><th>항목</th><th class="num">금액</th><th class="num">비율</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="panel" style="margin-top:14px;">
+              <div class="panel-header"><h2 style="font-size:15px; margin-bottom:10px;">재무상태표</h2></div>
+              <table class="table" id="bsTable">
+                <thead><tr><th>항목</th><th class="num">금액</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
 
-/* 모달 */
-.hr-modal-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 100;
-}
-.hr-modal {
-  background: var(--surface); border-radius: var(--radius-lg);
-  padding: 24px 26px; width: 560px; max-width: 92vw;
-  max-height: 88vh; overflow-y: auto;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.18);
-}
-.hr-modal h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+          <div class="tab-content" id="tab-branch">
+            <div class="panel">
+              <div class="panel-header"><h2 style="font-size:15px; margin-bottom:10px;">지점별 손익</h2></div>
+              <table class="table" id="branchTable">
+                <thead><tr><th>지점</th><th class="num">매출</th><th class="num">비용</th><th class="num">영업이익</th><th class="num">이익률</th></tr></thead>
+                <tbody></tbody>
+              </table>
+              <div class="chart-box"><canvas id="branchChart" height="90"></canvas></div>
+            </div>
+          </div>
 
-.hr-form-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 12px 14px;
-}
-.hr-form-grid label {
-  display: flex; flex-direction: column; gap: 4px;
-  font-size: 12px; color: var(--text-secondary); font-weight: 500;
-}
-.hr-form-grid .hr-span2 { grid-column: span 2; }
+          <div class="tab-content" id="tab-cost">
+            <div class="panel">
+              <div class="panel-header"><h2 style="font-size:15px; margin-bottom:10px;">비용 구조</h2></div>
+              <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-secondary); margin-bottom:4px;">
+                <span>매출 대비 비용 비율</span><span id="costPct">-</span>
+              </div>
+              <div class="prog-bar"><div class="fill" id="costFill" style="width:0%"></div></div>
+              <div class="chart-box"><canvas id="costChart" height="140"></canvas></div>
+            </div>
+          </div>
 
-@media (max-width: 520px) {
-  .hr-form-grid { grid-template-columns: 1fr; }
-  .hr-form-grid .hr-span2 { grid-column: span 1; }
-}
+          <div class="tab-content" id="tab-trend">
+            <div class="panel">
+              <div class="panel-header"><h2 style="font-size:15px; margin-bottom:10px;">전월 대비 추세</h2></div>
+              <div class="compare-header">
+                <span class="compare-label">항목</span><span class="compare-val">전월</span><span class="compare-val">당월</span><span class="compare-delta">증감</span>
+              </div>
+              <div id="trendRows"></div>
+              <div class="chart-box"><canvas id="trendChart" height="140"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header"><h2 style="font-size:16px; margin-bottom:12px;">🕘 분석 이력</h2></div>
+          <div id="historyList" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="settingsModal" class="hr-modal-backdrop" style="display:none;">
+    <div class="hr-modal" style="width:360px;">
+      <h2>설정</h2>
+      <div style="display:flex; flex-direction:column; gap:4px; margin-top:10px;">
+        <button class="settings-row" onclick="toggleTheme()">
+          <span id="settingsThemeLabel">🌙 다크 모드로 전환</span>
+        </button>
+        <div class="settings-row" style="cursor:default; flex-direction:column; align-items:flex-start; gap:6px;">
+          <span>🔤 글꼴</span>
+          <select id="fontSelect" class="hr-input" style="width:100%;" onchange="applyFont(this.value)">
+            <option value="default">기본 (Pretendard)</option>
+            <option value="gmarket">지마켓 산스</option>
+            <option value="cafe24">카페24 써라운드</option>
+            <option value="scdream">에스코어드림</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin-top:18px;">
+        <button class="secondary" onclick="closeSettingsModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <script src="assets/theme.js"></script>
+  <script src="assets/profit.js"></script>
+</body>
+</html>
