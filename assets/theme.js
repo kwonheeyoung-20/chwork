@@ -51,4 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // 모바일 메뉴 버튼: onclick 속성이 일부 환경(웹뷰 등)에서 씹히는 경우가 있어
+  // addEventListener로 한 번 더 확실하게 연결합니다.
+  document.querySelectorAll('.mobile-menu-btn').forEach(btn => {
+    btn.addEventListener('click', toggleMobileSidebar);
+  });
+  document.querySelectorAll('.mobile-sidebar-overlay').forEach(ov => {
+    ov.addEventListener('click', toggleMobileSidebar);
+  });
 });
