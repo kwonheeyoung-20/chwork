@@ -572,7 +572,11 @@ async function savePersonalEvent() {
     }
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || data.detail || `저장 실패 (상태코드 ${res.status})`);
+      // data.detail에 Supabase가 돌려준 실제 원인(예: 컬럼 없음 등)이 담겨있는 경우가 많아서
+      // data.error(예: "supabase_error")만 보여주면 원인 파악이 안 됨 → detail을 우선 표시
+      const detailMsg = typeof data.detail === 'string' ? data.detail
+        : (data.detail && (data.detail.message || JSON.stringify(data.detail))) || null;
+      throw new Error(detailMsg || data.error || `저장 실패 (상태코드 ${res.status})`);
     }
     closePersonalEventModal();
     loadPerCalendar();
