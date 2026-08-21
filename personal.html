@@ -242,7 +242,7 @@
       <a href="schedule.html" class="admin-only-nav">📅 업무 일정관리</a>
       <a href="hr.html#contractdocs" class="admin-only-nav">📁 계약/증빙관리</a>
       <a href="hr.html#contacts" class="admin-only-nav">📇 거래처 연락처</a>
-      <a href="#" class="admin-only-nav">📊 월간 보고서</a>
+      <a href="corporate-profit.html" class="admin-only-nav">📊 법인 손익 분석</a>
       <div class="nav-personal-divider"></div>
       <a class="active" href="personal.html"><span class="nav-personal-dot"></span>👨‍👩‍👧 개인 일정관리</a>
       <div class="nav-personal-divider"></div>
@@ -475,6 +475,10 @@
       <label>종료일(선택) <input id="pe_end_date" type="date" class="hr-input"></label>
       <label class="hr-span2">사전 알림(며칠 전부터) <input id="pe_reminder_days" type="number" class="hr-input" value="1" min="0"></label>
       <label class="hr-span2">비고 <input id="pe_note" class="hr-input"></label>
+      <label class="hr-span2" style="flex-direction:row; align-items:center; gap:6px;">
+        <input type="checkbox" id="pe_is_private" style="width:auto;">
+        <span style="font-weight:400; font-size:12px;">🔒 나만 보기 (가족 계정에는 이 일정이 보이지 않습니다)</span>
+      </label>
     </div>
     <div id="personalEventModalMsg" class="hr-msg"></div>
     <div style="display:flex; gap:8px; justify-content:space-between; margin-top:16px;">
