@@ -727,7 +727,7 @@ async function printTimetable() {
       body * { visibility: hidden; }
       #ttFullPrintArea, #ttFullPrintArea * { visibility: visible; }
       #ttFullPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
-      @page { size: landscape; margin: 10mm; }
+      @page { size: portrait; margin: 10mm; }
       .tt-print-copy h3 { font-size: 16px; margin: 0 0 8px; }
       .tt-print-copy h4 { font-size: 13px; margin: 18px 0 6px; font-weight:700; }
       .tt-print-copy table { font-size: 11px; border-collapse: collapse !important; width: 100%; table-layout: fixed; }
