@@ -60,6 +60,10 @@ def lunar_to_solar(y, m, d, leap=False):
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 HR_PASSWORD = os.environ.get("HR_PASSWORD", "")
+FAMILY_PASSWORD = os.environ.get("FAMILY_PASSWORD", "")
+
+# 가족용 비밀번호는 "개인 일정관리(personal)"와 "학교 시간표(timetable)"만 열 수 있음
+FAMILY_ALLOWED_RESOURCES = {"personal", "timetable"}
 CONTRACT_BUCKET = "contracts"
 
 
@@ -104,6 +108,15 @@ def check_password(candidate: str) -> bool:
     if not HR_PASSWORD:
         return False
     return candidate == HR_PASSWORD
+
+
+def auth_role(candidate: str) -> str:
+    """비밀번호로 role 판별: 'admin' | 'family' | None(불일치)"""
+    if HR_PASSWORD and candidate == HR_PASSWORD:
+        return "admin"
+    if FAMILY_PASSWORD and candidate == FAMILY_PASSWORD:
+        return "family"
+    return None
 
 
 def rpc(fn_name, params):
@@ -227,8 +240,16 @@ def _format_tenure(t):
 # 메인 핸들러
 # ════════════════════════════════════════════════════════════
 class handler(BaseHTTPRequestHandler):
-    def _authorized(self):
-        return check_password(self.headers.get("X-HR-Password", ""))
+    def _authorized(self, qs=None):
+        """role을 확인하고, family 계정이면 personal/timetable 외 접근을 차단"""
+        role = auth_role(self.headers.get("X-HR-Password", ""))
+        if role is None:
+            return False
+        if role == "family":
+            resource = self._resource(qs) if qs is not None else None
+            if resource not in FAMILY_ALLOWED_RESOURCES:
+                return False
+        return True
 
     def _send(self, status, obj):
         body = json.dumps(obj, ensure_ascii=False, default=str).encode("utf-8")
@@ -258,9 +279,9 @@ class handler(BaseHTTPRequestHandler):
     # ────────────────────────────────────────────────────────
     def do_GET(self):
         try:
-            if not self._authorized():
-                return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
+            if not self._authorized(qs):
+                return self._send(401, {"error": "unauthorized"})
             resource = self._resource(qs)
 
             if resource == "schedule":
@@ -540,9 +561,9 @@ class handler(BaseHTTPRequestHandler):
     # ────────────────────────────────────────────────────────
     def do_POST(self):
         try:
-            if not self._authorized():
-                return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
+            if not self._authorized(qs):
+                return self._send(401, {"error": "unauthorized"})
             resource = self._resource(qs)
             payload = self._read_json_body()
 
@@ -782,6 +803,7 @@ class handler(BaseHTTPRequestHandler):
             "todo_date": todo_date,
             "content": content,
             "done": False,
+            "category": payload.get("category") or "work",
         }, prefer="return=representation")
         return self._send(201, {"todo": created[0] if created else None})
 
@@ -890,9 +912,9 @@ class handler(BaseHTTPRequestHandler):
     # ────────────────────────────────────────────────────────
     def do_PATCH(self):
         try:
-            if not self._authorized():
-                return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
+            if not self._authorized(qs):
+                return self._send(401, {"error": "unauthorized"})
             resource = self._resource(qs)
             item_id = qs.get("id", [None])[0]
             if not item_id:
@@ -992,7 +1014,7 @@ class handler(BaseHTTPRequestHandler):
 
     def _patch_todos(self, todo_id, payload):
         update_fields = {}
-        for key in ("content", "done"):
+        for key in ("content", "done", "category"):
             if key in payload:
                 update_fields[key] = payload[key]
         if not update_fields:
@@ -1016,9 +1038,9 @@ class handler(BaseHTTPRequestHandler):
     # ────────────────────────────────────────────────────────
     def do_DELETE(self):
         try:
-            if not self._authorized():
-                return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
+            if not self._authorized(qs):
+                return self._send(401, {"error": "unauthorized"})
             resource = self._resource(qs)
 
             if resource == "schedule":
