@@ -60,7 +60,7 @@ function showMain() {
   $('mainSidebar').style.display = '';
   $('loginPanel').style.display = 'none';
   $('perMain').style.display = 'flex';
-  if (sessionStorage.getItem('chwork_hr_role') !== 'admin') {
+  if (sessionStorage.getItem('chwork_hr_role') === 'family') {
     document.querySelectorAll('.admin-only-nav').forEach(el => el.style.display = 'none');
   }
   loadMembers().then(() => {

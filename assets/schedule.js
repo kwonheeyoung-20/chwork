@@ -21,9 +21,15 @@ async function schLogin() {
       body: JSON.stringify({ password: pw }),
     });
     const data = await res.json();
-    if (data.ok) {
+    if (data.ok && data.role === 'admin') {
       sessionStorage.setItem('chwork_hr_pw', pw);
+      sessionStorage.setItem('chwork_hr_role', data.role);
       window.location.href = 'index.html'; // 로그인 직후엔 대시보드(알림 모음)로 먼저 이동
+    } else if (data.ok && data.role === 'family') {
+      $('loginMsg').textContent = '이 계정은 개인 일정관리만 이용 가능합니다. 개인 일정관리로 이동합니다.';
+      sessionStorage.setItem('chwork_hr_pw', pw);
+      sessionStorage.setItem('chwork_hr_role', data.role);
+      setTimeout(() => { window.location.href = 'personal.html'; }, 1200);
     } else {
       $('loginMsg').textContent = '비밀번호가 올바르지 않습니다.';
     }
@@ -44,7 +50,8 @@ function showMain() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  if (hrPassword()) showMain();
+  if (hrPassword() && sessionStorage.getItem('chwork_hr_role') !== 'family') showMain();
+  else if (hrPassword()) { window.location.href = 'personal.html'; return; }
   $('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') schLogin(); });
 });
 
