@@ -42,7 +42,8 @@
     .sch-cal-weekday { text-align:center; font-size:12px; font-weight:600; color:var(--text-muted); padding:4px 0 8px; }
     .sch-cal-weekday.sun { color:var(--red); }
     .sch-cal-weekday.sat { color:#3366cc; }
-    .sch-cal-cell { min-height:88px; border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:6px; background:var(--surface); display:flex; flex-direction:column; gap:2px; }
+    .sch-cal-cell { min-height:88px; border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:6px; background:var(--surface); display:flex; flex-direction:column; gap:2px; transition:transform 0.12s, box-shadow 0.12s, z-index 0s; position:relative; }
+    .sch-cal-cell.has-items:hover { transform:scale(1.06); box-shadow:0 4px 16px rgba(0,0,0,0.16); z-index:5; }
     .sch-cal-cell.empty { background:transparent; border-color:transparent; }
     .sch-cal-cell.today { border:1.5px solid var(--red); background:#fff8f7; }
     .sch-cal-daynum { font-size:12px; font-weight:600; color:var(--text-secondary); }
@@ -406,6 +407,17 @@
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
       <button class="secondary" onclick="closeTaskModal()">취소</button>
       <button class="primary" id="taskSaveBtn" onclick="saveTask()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 날짜 클릭 시 그 날 업무일정 전체 보기 모달 -->
+<div id="schDayDetailModal" class="hr-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeSchDayDetail()">
+  <div class="hr-modal" style="width:400px; max-height:80vh; overflow-y:auto;">
+    <h2 id="schDayDetailTitle">일정</h2>
+    <div id="schDayDetailBody" style="margin-top:8px;"></div>
+    <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeSchDayDetail()">닫기</button>
     </div>
   </div>
 </div>
