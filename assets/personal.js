@@ -354,20 +354,23 @@ async function loadPersonalOccurrences() {
       const task = o.personal_schedule_tasks || {};
       const color = memberColor(task.member_name);
       const statusLabel = o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료');
+      const isFamily = sessionStorage.getItem('chwork_hr_role') === 'family';
+      const lockedForFamily = isFamily && task.member_name === '나';
+      const actionsHtml = lockedForFamily
+        ? `<span style="color:var(--text-muted); font-size:12px;">🔒 수정 불가</span>`
+        : `${(o.status === 'pending' && task.category === '결제일') ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> · <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> · ` : ''}
+            <a class="hr-edit-link" onclick="editPersonalTask('${o.task_id}')">수정</a>
+            · <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">이 날짜만 삭제</a>
+            · <a class="hr-edit-link" onclick="deletePersonalTaskDirect('${o.task_id}')" style="color:var(--red);">전체 삭제</a>`;
       return `
         <tr>
           <td>${esc(o.due_date)}${task.date_type === 'lunar' ? ' <span style="font-size:10px; color:var(--accent);">(음력)</span>' : ''}</td>
           <td><span class="member-chip" style="background:${color}; font-size:11px;">${esc(task.member_name || '-')}</span></td>
           <td>${categoryEmoji(task.category)} ${esc(task.category || '-')}</td>
-          <td>${esc(task.title || '-')}</td>
+          <td>${esc(task.title || '-')}${task.is_private ? ' 🔒' : ''}</td>
           <td style="font-size:12px; color:var(--text-secondary);">${[task.note ? esc(task.note) : null, o.completed_note ? '완료메모: ' + esc(o.completed_note) : null].filter(Boolean).join('<br>') || '-'}</td>
           <td>${statusLabel}</td>
-          <td style="white-space:nowrap;">
-            ${(o.status === 'pending' && task.category === '결제일') ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> · <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> · ` : ''}
-            <a class="hr-edit-link" onclick="editPersonalTask('${o.task_id}')">수정</a>
-            · <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">이 날짜만 삭제</a>
-            · <a class="hr-edit-link" onclick="deletePersonalTaskDirect('${o.task_id}')" style="color:var(--red);">전체 삭제</a>
-          </td>
+          <td style="white-space:nowrap;">${actionsHtml}</td>
         </tr>
       `;
     }).join('');
@@ -386,30 +389,38 @@ function closePerCompleteModal() { $('perCompleteModal').style.display = 'none';
 
 async function confirmPerComplete() {
   try {
-    await fetch(`${apiBase()}/api/personal_schedule`, {
+    const res = await fetch(`${apiBase()}/api/personal_schedule`, {
       method: 'POST', headers: authHeaders(true),
       body: JSON.stringify({ type: 'complete', occurrence_id: pendingPerCompleteOccId, done: true, note: $('pc_note').value.trim() || null }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || data.detail || `처리 실패 (상태코드 ${res.status})`);
+    }
     closePerCompleteModal();
     loadPersonalOccurrences();
     loadPerCalendar();
     loadPersonalReminderBanner();
   } catch (e) {
-    alert('처리 중 오류가 발생했습니다.');
+    alert('처리 중 오류가 발생했습니다: ' + (e.message || ''));
   }
 }
 
 async function perSkip(occId) {
   if (!confirm('이 일정을 건너뛰시겠습니까?')) return;
   try {
-    await fetch(`${apiBase()}/api/personal_schedule`, {
+    const res = await fetch(`${apiBase()}/api/personal_schedule`, {
       method: 'POST', headers: authHeaders(true),
       body: JSON.stringify({ type: 'skip', occurrence_id: occId }),
     });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || data.detail || `처리 실패 (상태코드 ${res.status})`);
+    }
     loadPersonalOccurrences();
     loadPerCalendar();
   } catch (e) {
-    alert('처리 중 오류가 발생했습니다.');
+    alert('처리 중 오류가 발생했습니다: ' + (e.message || ''));
   }
 }
 
@@ -479,6 +490,7 @@ function openPersonalEventModal() {
   $('pe_end_date').value = '';
   $('pe_reminder_days').value = '1';
   $('pe_note').value = '';
+  $('pe_is_private').checked = false;
   togglePersonalRecurrenceFields();
   $('personalEventModalMsg').textContent = '';
   $('personalEventModal').style.display = 'flex';
@@ -496,7 +508,8 @@ async function editPersonalTask(taskId) {
 
     editingPersonalTaskId = taskId;
     $('personalEventModalTitle').textContent = '일정 수정';
-    $('personalEventDeleteBtn').style.display = 'inline-block';
+    const lockedForFamily = sessionStorage.getItem('chwork_hr_role') === 'family' && t.member_name === '나';
+    $('personalEventDeleteBtn').style.display = lockedForFamily ? 'none' : 'inline-block';
     $('pe_member').value = t.member_name;
     $('pe_category').value = t.category || '일정';
     $('pe_title').value = t.title || '';
@@ -508,6 +521,7 @@ async function editPersonalTask(taskId) {
     $('pe_end_date').value = t.end_date || '';
     $('pe_reminder_days').value = t.reminder_days_before != null ? t.reminder_days_before : 1;
     $('pe_note').value = t.note || '';
+    $('pe_is_private').checked = !!t.is_private;
     togglePersonalRecurrenceFields();
     $('personalEventModalMsg').textContent = '';
     $('personalEventModal').style.display = 'flex';
@@ -557,6 +571,7 @@ async function savePersonalEvent() {
     end_date: $('pe_end_date').value || null,
     reminder_days_before: Number($('pe_reminder_days').value) || 0,
     note: $('pe_note').value.trim() || null,
+    is_private: $('pe_is_private').checked,
   };
 
   try {
