@@ -638,6 +638,9 @@ class handler(BaseHTTPRequestHandler):
                 return False
         return True
 
+    def _role(self):
+        return auth_role(self.headers.get("X-HR-Password", ""))
+
     def _send(self, status, obj):
         body = json.dumps(obj, ensure_ascii=False, default=str).encode("utf-8")
         self.send_response(status)
@@ -1539,6 +1542,7 @@ class handler(BaseHTTPRequestHandler):
                 )
 
     def _get_personal(self, qs):
+        role = self._role()
         if qs.get("members", ["0"])[0] == "1":
             rows = rest_request("GET", "personal_schedule_members?select=*&order=sort_order.asc")
             return self._send(200, {"members": rows})
@@ -1549,7 +1553,9 @@ class handler(BaseHTTPRequestHandler):
         if qs.get("tasks", ["0"])[0] == "1":
             rows = rest_request(
                 "GET", "personal_schedule_tasks?select=*&order=active.desc,member_name.asc,anchor_date.asc"
-            )
+            ) or []
+            if role == "family":
+                rows = [r for r in rows if not r.get("is_private")]
             return self._send(200, {"tasks": rows})
 
         if qs.get("upcoming", ["0"])[0] == "1":
@@ -1558,12 +1564,14 @@ class handler(BaseHTTPRequestHandler):
             rows = rest_request(
                 "GET",
                 "personal_schedule_occurrences?status=eq.pending&due_date=lte." + horizon
-                + "&select=*,personal_schedule_tasks(title,category,member_name,reminder_days_before,note)&order=due_date.asc",
+                + "&select=*,personal_schedule_tasks(title,category,member_name,reminder_days_before,note,is_private)&order=due_date.asc",
             ) or []
             result = []
             for r in rows:
                 due = datetime.date.fromisoformat(r["due_date"])
                 task = r.get("personal_schedule_tasks") or {}
+                if role == "family" and task.get("is_private"):
+                    continue
                 category = task.get("category")
                 reminder_days = task.get("reminder_days_before") or 1
                 days_left = (due - today).days
@@ -1588,17 +1596,20 @@ class handler(BaseHTTPRequestHandler):
 
         path = (
             "personal_schedule_occurrences?due_date=gte." + from_date + "&due_date=lte." + to_date
-            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,note,date_type)&order=due_date.asc"
+            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,note,date_type,is_private)&order=due_date.asc"
         )
         if status_filter and status_filter != "all":
             path += "&status=eq." + status_filter
         rows = rest_request("GET", path) or []
+        if role == "family":
+            rows = [r for r in rows if not (r.get("personal_schedule_tasks") or {}).get("is_private")]
         if member_filter:
             rows = [r for r in rows if (r.get("personal_schedule_tasks") or {}).get("member_name") == member_filter]
         return self._send(200, {"occurrences": rows})
 
     def _post_personal(self, payload):
         action = payload.get("type")
+        role = self._role()
 
         if action == "save_member":
             name = payload.get("name")
@@ -1615,6 +1626,8 @@ class handler(BaseHTTPRequestHandler):
             occ_id = payload.get("occurrence_id")
             if not occ_id:
                 return self._send(400, {"error": "occurrence_id는 필수입니다"})
+            if role == "family" and self._occurrence_is_mine(occ_id):
+                return self._send(403, {"error": "이 일정은 가족 계정으로 처리할 수 없습니다"})
             done = payload.get("done", True)
             rest_request("PATCH", f"personal_schedule_occurrences?id=eq.{occ_id}", body={
                 "status": "done" if done else "pending",
@@ -1627,6 +1640,8 @@ class handler(BaseHTTPRequestHandler):
             occ_id = payload.get("occurrence_id")
             if not occ_id:
                 return self._send(400, {"error": "occurrence_id는 필수입니다"})
+            if role == "family" and self._occurrence_is_mine(occ_id):
+                return self._send(403, {"error": "이 일정은 가족 계정으로 처리할 수 없습니다"})
             rest_request("PATCH", f"personal_schedule_occurrences?id=eq.{occ_id}", body={"status": "skipped"})
             return self._send(200, {"ok": True})
 
@@ -1667,18 +1682,38 @@ class handler(BaseHTTPRequestHandler):
             "date_type": "lunar" if is_lunar else "solar",
             "lunar_month": lunar_month,
             "lunar_day": lunar_day,
+            "is_private": bool(payload.get("is_private")),
         }
         created = rest_request("POST", "personal_schedule_tasks", body=body, prefer="return=representation")
         rpc("generate_personal_schedule_occurrences", {})
         self._generate_lunar_occurrences()
         return self._send(201, {"task": created[0] if created else None})
 
+    def _task_member_name(self, task_id):
+        rows = rest_request("GET", f"personal_schedule_tasks?id=eq.{task_id}&select=member_name")
+        return rows[0]["member_name"] if rows else None
+
+    def _occurrence_is_mine(self, occ_id):
+        rows = rest_request(
+            "GET",
+            f"personal_schedule_occurrences?id=eq.{occ_id}&select=personal_schedule_tasks(member_name)",
+        )
+        if not rows:
+            return False
+        task = rows[0].get("personal_schedule_tasks") or {}
+        return task.get("member_name") == "나"
+
     def _patch_personal(self, task_id, payload):
+        if self._role() == "family" and self._task_member_name(task_id) == "나":
+            return self._send(403, {"error": "이 일정은 가족 계정으로 수정할 수 없습니다"})
+
         update_fields = {}
         for key in ("member_name", "category", "title", "recurrence_type", "interval_value",
                     "anchor_date", "day_mode", "end_date", "reminder_days_before", "note", "active"):
             if key in payload:
                 update_fields[key] = payload[key]
+        if "is_private" in payload:
+            update_fields["is_private"] = bool(payload["is_private"])
 
         if "date_type" in payload:
             is_lunar = payload.get("date_type") == "lunar"
@@ -1716,14 +1751,19 @@ class handler(BaseHTTPRequestHandler):
         task_id = qs.get("id", [None])[0]
         occ_id = qs.get("occurrence_id", [None])[0]
         member_id = qs.get("member_id", [None])[0]
+        role = self._role()
 
         if member_id:
             rest_request("DELETE", f"personal_schedule_members?id=eq.{member_id}")
             return self._send(200, {"ok": True})
         if task_id:
+            if role == "family" and self._task_member_name(task_id) == "나":
+                return self._send(403, {"error": "이 일정은 가족 계정으로 삭제할 수 없습니다"})
             rest_request("DELETE", f"personal_schedule_tasks?id=eq.{task_id}")
             return self._send(200, {"ok": True})
         if occ_id:
+            if role == "family" and self._occurrence_is_mine(occ_id):
+                return self._send(403, {"error": "이 일정은 가족 계정으로 삭제할 수 없습니다"})
             rest_request("DELETE", f"personal_schedule_occurrences?id=eq.{occ_id}")
             return self._send(200, {"ok": True})
         return self._send(400, {"error": "id, occurrence_id 또는 member_id가 필요합니다"})
