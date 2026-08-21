@@ -704,8 +704,17 @@ function renderPeriodList(periods) {
 }
 
 function printTimetable() {
-  $('ttPrintTimetableBody').innerHTML = $('ttTable').outerHTML;
-  $('ttPrintTeacherBody').innerHTML = $('teacherTable').outerHTML;
+  const titleText = '하진 시간표';
+  const tableHTML = $('ttTable').outerHTML;
+  const singleCopy = `
+    <div class="tt-print-copy">
+      <h3>${esc(titleText)}</h3>
+      ${tableHTML}
+    </div>
+  `;
+  // A4 한 장에 3개(잘라서 각자 나눠 쓰기 좋게)
+  $('ttPrintTimetableBody').innerHTML = singleCopy + singleCopy + singleCopy;
+  $('ttPrintTeacherBody').innerHTML = '';
   $('ttFullPrintArea').style.display = 'block';
 
   const style = document.createElement('style');
@@ -716,10 +725,16 @@ function printTimetable() {
       body * { visibility: hidden; }
       #ttFullPrintArea, #ttFullPrintArea * { visibility: visible; }
       #ttFullPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
-      @page { size: landscape; margin: 10mm; }
-      #ttFullPrintArea h3 { font-size: 15px; margin-bottom: 8px; }
-      #ttFullPrintArea table { font-size: 11px; }
-      #ttFullPrintArea th, #ttFullPrintArea td { padding: 4px 6px; border: 1.5px solid #6b7280 !important; }
+      @page { size: portrait; margin: 8mm; }
+      #ttPrintTimetableBody { display: flex; flex-direction: column; gap: 5mm; }
+      .tt-print-copy { border-bottom: 1px dashed #999; padding-bottom: 3mm; }
+      .tt-print-copy:last-child { border-bottom: none; }
+      .tt-print-copy h3 { font-size: 11px; margin-bottom: 3px; }
+      .tt-print-copy table { font-size: 7px; border-collapse: collapse !important; width: 100%; table-layout: fixed; }
+      .tt-print-copy th, .tt-print-copy td {
+        padding: 1px 3px;
+        border: 1px solid #000000 !important;
+      }
       .tt-cell-edit { display: none !important; }
     }
   `;
