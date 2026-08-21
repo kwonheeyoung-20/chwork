@@ -703,7 +703,8 @@ function renderPeriodList(periods) {
   `).join('');
 }
 
-function printTimetable() {
+async function printTimetable() {
+  await loadTeachers(); // 인쇄 직전에 다시 한번 확실하게 불러와서, "불러오는 중" 상태로 인쇄되는 것 방지
   const titleText = '하진 시간표';
   const tableHTML = $('ttTable').outerHTML;
   const teacherHTML = $('teacherTable').outerHTML;
@@ -740,6 +741,9 @@ function printTimetable() {
         border: 0.75px solid #000000 !important;
       }
       .tt-cell-edit { display: none !important; }
+      /* 선생님 연락처 표의 "수정/삭제" 링크 칸(마지막 열)은 인쇄에서 제외 */
+      .tt-print-copy #teacherTable th:last-child,
+      .tt-print-copy #teacherTable td:last-child { display: none !important; }
     }
   `;
   document.head.appendChild(style);
