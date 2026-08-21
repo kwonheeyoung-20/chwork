@@ -156,8 +156,24 @@
       .panel-header h2 { font-size:15px !important; }
       /* 표 — 모바일에서 줄 간격/여백 축소 */
       .table th, .table td { padding:6px 8px !important; font-size:12px !important; line-height:1.4 !important; }
+      /* 컬럼 많은 표(금융상품 등)는 억지로 줄바꿈시키지 말고 가로 스크롤로 보여줌 — 그래야 줄 높이가 안 늘어남 */
+      .table-wrap { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
+      .table { white-space:nowrap; }
+      .table td[style*="white-space:normal"], .table td .hr-edit-link { white-space:normal; }
       .tt-table th, .tt-table td { padding:4px 6px !important; }
     }
+    /* 필터 영역: 라벨+입력을 하나의 상자로 묶어서 보여줌 */
+    .field-group {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--surface); border: 0.5px solid var(--border-strong);
+      border-radius: 8px; padding: 4px 8px 4px 10px;
+    }
+    .field-group label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .field-group .hr-input, .field-group input, .field-group select {
+      border: none !important; background: transparent !important; padding: 2px 0 !important;
+      font-size: 13px; min-width: 0;
+    }
+    .field-group input[type="date"] { width: 118px; }
   </style>
 </head>
 <body>
@@ -892,13 +908,17 @@
             세무사무소·노무사·은행·보험사 등 자주 연락하는 업체 정보를 모아둡니다.
           </p>
 
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <label style="font-size:13px; color:var(--text-secondary);">유형:</label>
-            <select id="contactCategoryFilter" class="hr-input" style="width:150px;" onchange="renderContacts()">
-              <option value="">전체</option>
-            </select>
-            <label style="font-size:13px; color:var(--text-secondary);">검색:</label>
-            <input id="contactSearch" class="hr-input" style="width:220px;" placeholder="업체명·담당자·전화번호" oninput="renderContacts()">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+            <div class="field-group">
+              <label>유형</label>
+              <select id="contactCategoryFilter" class="hr-input" onchange="renderContacts()">
+                <option value="">전체</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label>검색</label>
+              <input id="contactSearch" class="hr-input" style="width:200px;" placeholder="업체명·담당자·전화번호" oninput="renderContacts()">
+            </div>
           </div>
 
           <div class="table-wrap">
@@ -927,16 +947,20 @@
           </p>
 
           <div class="section-title">💰 금융상품 <span id="financialDocCount" class="hr-count"></span></div>
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <label style="font-size:13px; color:var(--text-secondary);">상태:</label>
-            <select id="finStatusFilter" class="hr-input" style="width:130px;" onchange="renderFinancialDocs()">
-              <option value="">전체</option>
-              <option value="active">만기전(유지중)</option>
-              <option value="expired">만기경과</option>
-              <option value="terminated">중도해지</option>
-            </select>
-            <label style="font-size:13px; color:var(--text-secondary);">검색:</label>
-            <input id="finSearch" class="hr-input" style="width:220px;" placeholder="금융기관명·상품명" oninput="renderFinancialDocs()">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+            <div class="field-group">
+              <label>상태</label>
+              <select id="finStatusFilter" class="hr-input" onchange="renderFinancialDocs()">
+                <option value="">전체</option>
+                <option value="active">만기전(유지중)</option>
+                <option value="expired">만기경과</option>
+                <option value="terminated">중도해지</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label>검색</label>
+              <input id="finSearch" class="hr-input" style="width:200px;" placeholder="금융기관명·상품명" oninput="renderFinancialDocs()">
+            </div>
           </div>
           <div class="table-wrap">
             <table class="table" id="financialDocTable">
@@ -953,20 +977,26 @@
           </div>
 
           <h3 class="section-title" style="margin:32px 0 12px;">📄 계약/보증서 <span id="contractDocCount" class="hr-count"></span></h3>
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <label style="font-size:13px; color:var(--text-secondary);">계약상태:</label>
-            <select id="cdStatusFilter" class="hr-input" style="width:130px;" onchange="renderContractDocs()">
-              <option value="">전체</option>
-              <option value="active">계약유지중</option>
-              <option value="expired">계약만료</option>
-              <option value="terminated">계약종료(해지)</option>
-            </select>
-            <label style="font-size:13px; color:var(--text-secondary);">서류구분:</label>
-            <select id="cdTypeFilter" class="hr-input" style="width:150px;" onchange="renderContractDocs()">
-              <option value="">전체</option>
-            </select>
-            <label style="font-size:13px; color:var(--text-secondary);">검색:</label>
-            <input id="cdSearch" class="hr-input" style="width:220px;" placeholder="거래처명·계약서명" oninput="renderContractDocs()">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+            <div class="field-group">
+              <label>계약상태</label>
+              <select id="cdStatusFilter" class="hr-input" onchange="renderContractDocs()">
+                <option value="">전체</option>
+                <option value="active">계약유지중</option>
+                <option value="expired">계약만료</option>
+                <option value="terminated">계약종료(해지)</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label>서류구분</label>
+              <select id="cdTypeFilter" class="hr-input" onchange="renderContractDocs()">
+                <option value="">전체</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label>검색</label>
+              <input id="cdSearch" class="hr-input" style="width:180px;" placeholder="거래처명·계약서명" oninput="renderContractDocs()">
+            </div>
             <label class="hr-checkbox">
               <input type="checkbox" id="cdExpiringOnly" onchange="renderContractDocs()">
               만료임박/경과만 보기
@@ -987,17 +1017,21 @@
           </div>
 
           <h3 class="section-title" style="margin:32px 0 12px;">🗂️ 증빙/백데이터 자료 <span id="referenceDocCount" class="hr-count"></span></h3>
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <label style="font-size:13px; color:var(--text-secondary);">구분:</label>
-            <select id="refCategoryFilter" class="hr-input" style="width:130px;" onchange="renderReferenceDocs()">
-              <option value="">전체</option>
-              <option value="인사">인사</option>
-              <option value="총무">총무</option>
-              <option value="재무">재무</option>
-              <option value="기타">기타</option>
-            </select>
-            <label style="font-size:13px; color:var(--text-secondary);">검색:</label>
-            <input id="refSearch" class="hr-input" style="width:220px;" placeholder="문서명" oninput="renderReferenceDocs()">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+            <div class="field-group">
+              <label>구분</label>
+              <select id="refCategoryFilter" class="hr-input" onchange="renderReferenceDocs()">
+                <option value="">전체</option>
+                <option value="인사">인사</option>
+                <option value="총무">총무</option>
+                <option value="재무">재무</option>
+                <option value="기타">기타</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label>검색</label>
+              <input id="refSearch" class="hr-input" style="width:200px;" placeholder="문서명" oninput="renderReferenceDocs()">
+            </div>
           </div>
 
           <div class="table-wrap">
