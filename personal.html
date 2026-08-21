@@ -210,6 +210,7 @@
       .tt-table th, .tt-table td { padding:4px 6px !important; }
     }
     /* 필터 영역: 라벨+입력을 하나의 상자로 묶어서 보여줌 */
+    .sch-filter-bar { display:flex; align-items:center; gap:8px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap; }
     .field-group {
       display: flex; align-items: center; gap: 6px;
       background: var(--surface); border: 0.5px solid var(--border-strong);
@@ -318,7 +319,7 @@
             <div class="panel-header">
               <h2>일정 목록 <span id="perOccCount" class="hr-count"></span></h2>
             </div>
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+            <div class="sch-filter-bar" style="margin-bottom:14px;">
               <div class="field-group">
                 <label>기간</label>
                 <input id="perRangeFrom" type="date" class="hr-input">
@@ -327,8 +328,6 @@
               </div>
               <button class="secondary" onclick="setPerRangePreset('month')">이번달</button>
               <button class="secondary" onclick="setPerRangePreset('3m')">앞으로 3개월</button>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
               <div class="field-group">
                 <label>구성원</label>
                 <select id="perMemberFilter" class="hr-input">
@@ -604,9 +603,7 @@
 
 <!-- 시간표 인쇄 전용 영역 (시간표 + 선생님 연락처 같이 출력) -->
 <div id="ttFullPrintArea" style="display:none;">
-  <h3>하진 시간표</h3>
   <div id="ttPrintTimetableBody"></div>
-  <h3 style="margin-top:24px;">선생님 연락처</h3>
   <div id="ttPrintTeacherBody"></div>
 </div>
 

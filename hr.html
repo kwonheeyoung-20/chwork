@@ -163,6 +163,7 @@
       .tt-table th, .tt-table td { padding:4px 6px !important; }
     }
     /* 필터 영역: 라벨+입력을 하나의 상자로 묶어서 보여줌 */
+    .sch-filter-bar { display:flex; align-items:center; gap:8px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap; }
     .field-group {
       display: flex; align-items: center; gap: 6px;
       background: var(--surface); border: 0.5px solid var(--border-strong);
@@ -908,7 +909,7 @@
             세무사무소·노무사·은행·보험사 등 자주 연락하는 업체 정보를 모아둡니다.
           </p>
 
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+          <div class="sch-filter-bar" style="margin-bottom:14px;">
             <div class="field-group">
               <label>유형</label>
               <select id="contactCategoryFilter" class="hr-input" onchange="renderContacts()">
@@ -947,7 +948,7 @@
           </p>
 
           <div class="section-title">💰 금융상품 <span id="financialDocCount" class="hr-count"></span></div>
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+          <div class="sch-filter-bar" style="margin-bottom:14px;">
             <div class="field-group">
               <label>상태</label>
               <select id="finStatusFilter" class="hr-input" onchange="renderFinancialDocs()">
@@ -977,7 +978,7 @@
           </div>
 
           <h3 class="section-title" style="margin:32px 0 12px;">📄 계약/보증서 <span id="contractDocCount" class="hr-count"></span></h3>
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+          <div class="sch-filter-bar" style="margin-bottom:14px;">
             <div class="field-group">
               <label>계약상태</label>
               <select id="cdStatusFilter" class="hr-input" onchange="renderContractDocs()">
@@ -1017,7 +1018,7 @@
           </div>
 
           <h3 class="section-title" style="margin:32px 0 12px;">🗂️ 증빙/백데이터 자료 <span id="referenceDocCount" class="hr-count"></span></h3>
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+          <div class="sch-filter-bar" style="margin-bottom:14px;">
             <div class="field-group">
               <label>구분</label>
               <select id="refCategoryFilter" class="hr-input" onchange="renderReferenceDocs()">
