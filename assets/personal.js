@@ -191,18 +191,15 @@ function perCalPrevMonth() {
   perCalMonth -= 1;
   if (perCalMonth < 0) { perCalMonth = 11; perCalYear -= 1; }
   loadPerCalendar();
-  if ($('perRangeFilter').value === 'month') loadPersonalOccurrences();
 }
 function perCalNextMonth() {
   perCalMonth += 1;
   if (perCalMonth > 11) { perCalMonth = 0; perCalYear += 1; }
   loadPerCalendar();
-  if ($('perRangeFilter').value === 'month') loadPersonalOccurrences();
 }
 function perCalToday() {
   initPerCalState();
   loadPerCalendar();
-  if ($('perRangeFilter').value === 'month') loadPersonalOccurrences();
 }
 
 async function loadPerCalendar() {
@@ -298,13 +295,14 @@ function renderPerCalendar(occurrences, monthStart, monthEnd) {
 }
 
 /* ── 일정 목록 ── */
-function handlePerRangeChange() {
-  const mode = $('perRangeFilter').value;
-  $('perCustomRangeWrap').style.display = mode === 'custom' ? 'inline-flex' : 'none';
-  if (mode === 'custom' && !$('perRangeFrom').value) {
-    // 기본값: 달력이 보고 있는 달로 채워줌 (그대로 조회 눌러도 되고, 자유롭게 바꿔도 됨)
-    $('perRangeFrom').value = toISO(new Date(perCalYear, perCalMonth, 1));
-    $('perRangeTo').value = toISO(new Date(perCalYear, perCalMonth + 1, 0));
+function setPerRangePreset(kind) {
+  const today = new Date();
+  if (kind === 'month') {
+    $('perRangeFrom').value = toISO(new Date(today.getFullYear(), today.getMonth(), 1));
+    $('perRangeTo').value = toISO(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+  } else if (kind === '3m') {
+    $('perRangeFrom').value = toISO(today);
+    $('perRangeTo').value = toISO(new Date(today.getFullYear(), today.getMonth() + 3, today.getDate()));
   }
   loadPersonalOccurrences();
 }
@@ -314,20 +312,13 @@ async function loadPersonalOccurrences() {
   tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   const status = $('perStatusFilter').value;
   const member = $('perMemberFilter').value;
-  const rangeMode = $('perRangeFilter').value;
 
-  let from, to;
-  if (rangeMode === 'month') {
-    from = toISO(new Date(perCalYear, perCalMonth, 1));
-    to = toISO(new Date(perCalYear, perCalMonth + 1, 0));
-  } else if (rangeMode === 'custom') {
-    from = $('perRangeFrom').value || toISO(new Date(perCalYear, perCalMonth, 1));
-    to = $('perRangeTo').value || toISO(new Date(perCalYear, perCalMonth + 1, 0));
-  } else {
-    const today = new Date();
-    from = toISO(new Date(today.getFullYear() - 1, today.getMonth(), today.getDate()));
-    to = toISO(new Date(today.getFullYear() + 1, today.getMonth(), today.getDate()));
+  if (!$('perRangeFrom').value || !$('perRangeTo').value) {
+    setPerRangePreset('month'); // 기본값: 이번달 (재귀 호출로 이어서 조회됨)
+    return;
   }
+  const from = $('perRangeFrom').value;
+  const to = $('perRangeTo').value;
   try {
     let url = `${apiBase()}/api/personal_schedule?from=${from}&to=${to}&status=${status}`;
     if (member) url += `&member=${encodeURIComponent(member)}`;
