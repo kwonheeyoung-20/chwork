@@ -2,10 +2,21 @@
 
 function openSettingsModal() {
   updateThemeToggleUI();
+  initFontSelectUI();
   $('settingsModal').style.display = 'flex';
 }
 function closeSettingsModal() {
   $('settingsModal').style.display = 'none';
+}
+
+function applyFont(font) {
+  document.documentElement.setAttribute('data-font', font);
+  localStorage.setItem('chwork_font', font);
+}
+
+function initFontSelectUI() {
+  const sel = document.getElementById('fontSelect');
+  if (sel) sel.value = localStorage.getItem('chwork_font') || 'default';
 }
 
 function toggleTheme() {
