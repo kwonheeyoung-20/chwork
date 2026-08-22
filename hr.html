@@ -360,7 +360,8 @@
         <section class="panel" id="tab-pension" style="display:none;">
           <div class="panel-header">
             <h2>퇴직연금(DC) 현황 <span id="pensionCount" class="hr-count"></span></h2>
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">📤 데이터</span>
               <button class="secondary" onclick="downloadPensionExcel()">엑셀 다운로드</button>
               <button class="primary" onclick="openContribModal()">+ 불입 기록 추가</button>
             </div>
@@ -370,23 +371,32 @@
           </p>
 
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🔒 마감</span>
             <label style="font-size:13px; color:var(--text-secondary);">연도 마감:</label>
-            <select id="pensionLockYear" class="hr-input" style="width:100px;"></select>
-            <button class="secondary" onclick="lockPensionYear(true)">마감</button>
-            <button class="secondary" onclick="lockPensionYear(false)">마감해제</button>
+            <select id="pensionLockYear" class="hr-input" style="width:100px;" onchange="refreshPensionLockStatus()"></select>
+            <button class="secondary" id="pensionLockBtn" onclick="lockPensionYear(true)">마감</button>
+            <button class="secondary" id="pensionUnlockBtn" onclick="lockPensionYear(false)">마감해제</button>
             <span id="pensionLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
           </div>
 
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <label style="font-size:13px; color:var(--text-secondary);">기준일자(반기 마감일 등):</label>
-            <input id="pensionAsOf" type="date" class="hr-input" style="width:150px;">
-            <button class="secondary" onclick="loadPension()">조회</button>
-            <button class="secondary" onclick="$('pensionAsOf').value=''; loadPension();">초기화(오늘 기준)</button>
-            <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
-            <button class="secondary" onclick="fillBulkAmounts('accrual')">지정일자 미지급잔액으로 채우기</button>
-            <button class="secondary" onclick="fillBulkAmounts('balance')">오늘 기준 전체잔액으로 채우기</button>
-            <button class="secondary" onclick="fillBulkAmounts('clear')">비우기</button>
-            <button class="primary" onclick="saveBulkContributions()">입력된 금액을 기준일자로 일괄 저장</button>
+          <div style="padding:12px; background:var(--bg); border-radius:var(--radius-sm); margin-bottom:14px; display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🔍 조회</span>
+              <label style="font-size:13px; color:var(--text-secondary);">기준일자(반기 마감일 등):</label>
+              <input id="pensionAsOf" type="date" class="hr-input" style="width:150px;">
+              <button class="secondary" onclick="loadPension()">조회</button>
+              <button class="secondary" onclick="$('pensionAsOf').value=''; loadPension();">초기화(오늘 기준)</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:10px; border-top:0.5px solid var(--border);">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🧮 일괄 채우기</span>
+              <button class="secondary" onclick="fillBulkAmounts('accrual')">지정일자 미지급잔액으로 채우기</button>
+              <button class="secondary" onclick="fillBulkAmounts('balance')">오늘 기준 전체잔액으로 채우기</button>
+              <button class="secondary" onclick="fillBulkAmounts('clear')">비우기</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:10px; border-top:0.5px solid var(--border);">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">💾 저장</span>
+              <button class="primary" onclick="saveBulkContributions()">입력된 금액을 기준일자로 일괄 저장</button>
+            </div>
           </div>
 
           <div class="table-wrap">
