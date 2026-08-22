@@ -3181,7 +3181,7 @@ function renderContacts() {
       <td>${esc(c.fax || '-')}</td>
       <td>${esc(c.email || '-')}</td>
       <td>${esc(c.address || '-')}</td>
-      <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
+      <td style="font-size:12px; color:var(--text-secondary); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(c.note || '')}">${esc(c.note || '-')}</td>
       <td>
         <a class="hr-edit-link" onclick="editContact('${c.id}')">수정</a>
         <a class="hr-edit-link" onclick="deleteContact('${c.id}', '${esc(c.company_name)}')">삭제</a>
@@ -3421,9 +3421,9 @@ function renderDocFileLinks(files) {
   // 표 전체 줄 간격이 이상하게 벌어져 보이는 문제가 있어, 한 줄로 이어서 표시하고 필요하면 가로 스크롤로 보게 함.
   return files.map(f =>
     f.view_url
-      ? `<a href="${esc(f.view_url)}" target="_blank" rel="noopener" download="${esc(f.file_name || '')}" class="hr-edit-link">${esc(f.file_name || '보기')}</a>`
+      ? `<a href="${esc(f.view_url)}" target="_blank" rel="noopener" download="${esc(f.file_name || '')}" class="hr-file-link">📎 ${esc(f.file_name || '보기')}</a>`
       : `${esc(f.file_name || '')} (만료된 링크, 새로고침 필요)`
-  ).join(' · ');
+  ).join(' ');
 }
 
 function contractDocStatus(c) {
@@ -3472,7 +3472,7 @@ function renderContractDocs() {
   tbody.innerHTML = list.map(c => {
     const status = contractDocStatus(c);
     const noteText = status === 'terminated'
-      ? [c.note ? esc(c.note) : null, `해지일 ${esc(c.terminated_date)}${c.termination_note ? ' — ' + esc(c.termination_note) : ''}`].filter(Boolean).join('<br>')
+      ? [c.note ? esc(c.note) : null, `해지일 ${esc(c.terminated_date)}${c.termination_note ? ' — ' + esc(c.termination_note) : ''}`].filter(Boolean).join(' — ')
       : esc(c.note || '-');
     return `
     <tr>
@@ -3483,7 +3483,7 @@ function renderContractDocs() {
       <td>${contractDocStatusBadge(status)}</td>
       <td>${(c.contract_end_date && status !== 'terminated') ? cdDDayBadge(c.contract_end_date) : '-'}</td>
       <td>${renderDocFileLinks(c.files)}</td>
-      <td style="font-size:12px; color:var(--text-secondary);">${noteText}</td>
+      <td style="font-size:12px; color:var(--text-secondary); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(c.note || '')}">${noteText}</td>
       <td>
         <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap;">
           <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
@@ -3526,7 +3526,7 @@ function renderReferenceDocs() {
       <td>${esc(c.doc_type || '-')}</td>
       <td>${esc(c.contract_title || '-')}</td>
       <td>${renderDocFileLinks(c.files)}</td>
-      <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
+      <td style="font-size:12px; color:var(--text-secondary); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(c.note || '')}">${esc(c.note || '-')}</td>
       <td>
         <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
         <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || '서류')}')">삭제</a>
@@ -3557,7 +3557,7 @@ function renderFinancialDocs() {
   tbody.innerHTML = list.map(c => {
     const status = contractDocStatus(c);
     const noteText = status === 'terminated'
-      ? [c.note ? esc(c.note) : null, `해지일 ${esc(c.terminated_date)}${c.termination_note ? ' — ' + esc(c.termination_note) : ''}`].filter(Boolean).join('<br>')
+      ? [c.note ? esc(c.note) : null, `해지일 ${esc(c.terminated_date)}${c.termination_note ? ' — ' + esc(c.termination_note) : ''}`].filter(Boolean).join(' — ')
       : esc(c.note || '-');
     return `
     <tr>
@@ -3570,7 +3570,7 @@ function renderFinancialDocs() {
       <td>${contractDocStatusBadge(status)}</td>
       <td>${(c.contract_end_date && status !== 'terminated') ? cdDDayBadge(c.contract_end_date) : '-'}</td>
       <td>${renderDocFileLinks(c.files)}</td>
-      <td style="font-size:12px; color:var(--text-secondary);">${noteText}</td>
+      <td style="font-size:12px; color:var(--text-secondary); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(c.note || '')}">${noteText}</td>
       <td>
         <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap;">
           <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
