@@ -45,8 +45,9 @@
 @media print {
   body * { visibility: hidden; }
   #printArea, #printArea *, #payslipPrintArea, #payslipPrintArea *,
-  #registerPrintArea, #registerPrintArea * { visibility: visible; }
-  #printArea, #payslipPrintArea, #registerPrintArea {
+  #registerPrintArea, #registerPrintArea *, #pensionPrintArea, #pensionPrintArea *
+  { visibility: visible; }
+  #printArea, #payslipPrintArea, #registerPrintArea, #pensionPrintArea {
     position: absolute; top: 0; left: 0; width: 100%;
   }
   /* 모달(position:fixed)이 인쇄시 매 페이지마다 반복 출력되는 문제 방지 */

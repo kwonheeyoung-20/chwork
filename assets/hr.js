@@ -733,6 +733,8 @@ async function loadPension() {
 }
 
 function renderPension(list, asOf) {
+  pensionListCache = list;
+  pensionAsOfCache = asOf;
   $('pensionCount').textContent = `총 ${list.length}명`;
   $('asOfCumHeader').textContent = asOf ? `${asOf} 기준 누적추계액` : '지정일자 누적추계액';
   $('periodAccrualHeader').textContent = asOf ? `${asOf.slice(0,4)}년 1월~${asOf.slice(5)} 발생액` : '해당연도 1월~지정일 발생액';
@@ -1421,6 +1423,8 @@ async function loadPayrollPreview() {
 }
 
 let payrollCache = [];
+let pensionListCache = [];
+let pensionAsOfCache = '';
 
 function renderPayroll(list, savedMode) {
   payrollCache = list;
@@ -1771,7 +1775,10 @@ async function refreshOtherPayLockStatus() {
   const year = $('otherpayYear').value;
   const locks = await fetchLocks('/api/hr_other_payments');
   const current = locks.find(l => l.period_key === year);
-  $('otherpayLockStatus').textContent = current && current.locked ? `🔒 ${year}년 마감됨` : `${year}년 마감 전`;
+  const locked = current && current.locked;
+  $('otherpayLockStatus').textContent = locked ? `🔒 ${year}년 마감됨` : `${year}년 마감 전`;
+  $('otherpayLockBtn').style.display = locked ? 'none' : 'inline-flex';
+  $('otherpayUnlockBtn').style.display = locked ? 'inline-flex' : 'none';
 }
 
 /* ── 성과급/기타지급 ── */
@@ -2782,6 +2789,50 @@ function printPayslip() {
   document.head.appendChild(style);
   window.print();
   document.head.removeChild(style);
+}
+
+/* ── 퇴직연금(DC) 현황 대장 출력 ── */
+function printPensionRegister() {
+  if (!pensionListCache || pensionListCache.length === 0) {
+    alert('먼저 퇴직연금 현황을 조회해주세요.');
+    return;
+  }
+  const list = pensionListCache;
+  const asOf = pensionAsOfCache;
+  const positionOf = (id) => {
+    const emp = employeesCache.find(e => e.id === id);
+    return emp ? (emp.position || '-') : '-';
+  };
+  $('pension_print_date').textContent = asOf ? `기준일자: ${asOf}` : `기준일자: 오늘(${new Date().toISOString().slice(0,10)})`;
+  $('pension_print_tbody').innerHTML = list.map(p => `
+    <tr>
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.branch || '-')}</td>
+      <td>${esc(p.department || '-')}</td>
+      <td>${esc(positionOf(p.id))}</td>
+      <td>${esc(p.pension_enrollment_date || p.hire_date || '-')}</td>
+      <td class="num">${fmt(p.cumulative_estimate)}</td>
+      <td class="num">${fmt(p.total_contributed)}</td>
+      <td class="num">${fmt(p.balance)}</td>
+    </tr>
+  `).join('');
+
+  $('pensionPrintArea').style.display = 'block';
+  const landscapeStyle = document.createElement('style');
+  landscapeStyle.id = 'pensionLandscapeStyle';
+  landscapeStyle.textContent = `
+    @page { size: landscape; margin: 8mm; }
+    @media print {
+      #pensionPrintArea table { font-size: 9px; border-collapse: collapse; width: 100%; }
+      #pensionPrintArea th, #pensionPrintArea td { padding: 2px 4px; line-height: 1.25; }
+    }
+  `;
+  document.head.appendChild(landscapeStyle);
+
+  window.print();
+
+  document.head.removeChild(landscapeStyle);
+  $('pensionPrintArea').style.display = 'none';
 }
 
 /* ── 전 직원 급여 대장 출력 ── */
