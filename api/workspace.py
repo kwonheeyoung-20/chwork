@@ -690,6 +690,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._get_personal(qs)
             if resource == "timetable":
                 return self._get_timetable(qs)
+            if resource == "manuals":
+                return self._get_manuals(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -971,6 +973,10 @@ class handler(BaseHTTPRequestHandler):
                 return self._post_personal(payload)
             if resource == "timetable":
                 return self._post_timetable(payload)
+            if resource == "manuals":
+                if self._role() == "family":
+                    return self._send(403, {"error": "가족 계정은 접근할 수 없습니다"})
+                return self._post_manuals(payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -1771,6 +1777,32 @@ class handler(BaseHTTPRequestHandler):
     # ────────────────────────────────────────────────────────
     # timetable (학교 시간표)
     # ────────────────────────────────────────────────────────
+    # ────────────────────────────────────────────────────────
+    # 급여/퇴직급여 업무 매뉴얼
+    # ────────────────────────────────────────────────────────
+    def _get_manuals(self, qs):
+        module = qs.get("module", [None])[0]
+        if module:
+            if module not in ("payroll", "pension"):
+                return self._send(400, {"error": "module은 payroll 또는 pension이어야 합니다"})
+            rows = rest_request("GET", f"module_manuals?module=eq.{module}&select=*")
+            return self._send(200, {"manual": rows[0] if rows else None})
+        rows = rest_request("GET", "module_manuals?select=*&order=module.asc")
+        return self._send(200, {"manuals": rows})
+
+    def _post_manuals(self, payload):
+        module = payload.get("module")
+        content = payload.get("content")
+        if module not in ("payroll", "pension"):
+            return self._send(400, {"error": "module은 payroll 또는 pension이어야 합니다"})
+        if content is None:
+            return self._send(400, {"error": "content는 필수입니다"})
+        rest_request("PATCH", f"module_manuals?module=eq.{module}", body={
+            "content": content,
+            "updated_at": datetime.datetime.utcnow().isoformat(),
+        })
+        return self._send(200, {"ok": True})
+
     def _get_timetable(self, qs):
         child = qs.get("child", ["하진"])[0]
 
