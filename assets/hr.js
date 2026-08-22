@@ -117,6 +117,68 @@ const MENU_GROUPS = {
 };
 
 let currentMenuGroup = 'home';
+let currentManualModule = null;
+
+const MANUAL_TITLES = { payroll: '급여관리 매뉴얼', pension: '퇴직급여관리 매뉴얼' };
+
+async function openManualModal() {
+  if (!currentManualModule) return;
+  $('manualModalTitle').textContent = MANUAL_TITLES[currentManualModule];
+  $('manualViewBody').textContent = '불러오는 중…';
+  $('manualViewBody').style.display = 'block';
+  $('manualEditBody').style.display = 'none';
+  $('manualEditBtn').style.display = 'none';
+  $('manualSaveBtn').style.display = 'none';
+  $('manualCancelBtn').style.display = 'none';
+  $('manualUpdatedLabel').textContent = '';
+  $('manualModal').style.display = 'flex';
+  try {
+    const res = await fetch(`${apiBase()}/api/manuals?module=${currentManualModule}`, { headers: authHeaders() });
+    const data = await res.json();
+    const m = data.manual;
+    const content = (m && m.content) || '';
+    $('manualViewBody').innerHTML = content ? esc(content).replace(/\n/g, '<br>') : '<span style="color:var(--text-muted);">아직 작성된 매뉴얼이 없습니다. "수정" 버튼을 눌러 작성해주세요.</span>';
+    $('manualEditTextarea').value = content;
+    if (m && m.updated_at) {
+      $('manualUpdatedLabel').textContent = `마지막 수정: ${new Date(m.updated_at).toLocaleString('ko-KR')}`;
+    }
+    $('manualEditBtn').style.display = 'inline-flex';
+  } catch (e) {
+    $('manualViewBody').textContent = '불러오기 실패';
+  }
+}
+function closeManualModal() { $('manualModal').style.display = 'none'; }
+
+function startManualEdit() {
+  $('manualViewBody').style.display = 'none';
+  $('manualEditBody').style.display = 'block';
+  $('manualEditBtn').style.display = 'none';
+  $('manualSaveBtn').style.display = 'inline-flex';
+  $('manualCancelBtn').style.display = 'inline-flex';
+}
+function cancelManualEdit() {
+  $('manualViewBody').style.display = 'block';
+  $('manualEditBody').style.display = 'none';
+  $('manualEditBtn').style.display = 'inline-flex';
+  $('manualSaveBtn').style.display = 'none';
+  $('manualCancelBtn').style.display = 'none';
+}
+async function saveManual() {
+  const content = $('manualEditTextarea').value;
+  try {
+    const res = await fetch(`${apiBase()}/api/manuals`, {
+      method: 'POST', headers: authHeaders(true),
+      body: JSON.stringify({ module: currentManualModule, content }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || data.detail || `저장 실패 (상태코드 ${res.status})`);
+    }
+    openManualModal();
+  } catch (e) {
+    alert('저장 중 오류가 발생했습니다: ' + (e.message || ''));
+  }
+}
 
 function switchMenuGroup(group) {
   currentMenuGroup = group;
@@ -142,6 +204,10 @@ function switchMenuGroup(group) {
   const topText = TOPBAR_TEXT[group] || TOPBAR_TEXT.home;
   $('topbarTitle').textContent = topText.title;
   $('topbarDesc').textContent = topText.desc;
+
+  // 매뉴얼 버튼 — 급여/퇴직급여 화면에서만 표시
+  currentManualModule = (group === 'payroll') ? 'payroll' : (group === 'pension') ? 'pension' : null;
+  $('manualBtn').style.display = currentManualModule ? 'inline-flex' : 'none';
 
   // 상단 탭바 렌더링
   const bar = $('hrTabBar');
