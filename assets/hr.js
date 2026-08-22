@@ -301,8 +301,9 @@ function populateYearSelect(elId) {
 
 /* 페이지 로드시 이미 로그인된 세션이면 바로 목록 표시 */
 window.addEventListener('DOMContentLoaded', () => {
-  if (hrPassword() && sessionStorage.getItem('chwork_hr_role') !== 'family') showMain();
+  if (hrPassword() && sessionStorage.getItem('chwork_hr_role') !== 'family') { showMain(); }
   else if (hrPassword()) { window.location.href = 'personal.html'; return; }
+  else { $('loginPanel').style.display = 'block'; }
   $('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') hrLogin(); });
   refreshLastBackupLabel();
 });

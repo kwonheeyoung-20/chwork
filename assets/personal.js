@@ -73,7 +73,7 @@ function showMain() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  if (hrPassword()) showMain();
+  if (hrPassword()) { showMain(); } else { $('loginPanel').style.display = 'block'; }
   $('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') perLogin(); });
 });
 

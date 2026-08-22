@@ -69,8 +69,9 @@ function showMain() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-  if (hrPassword() && sessionStorage.getItem('chwork_hr_role') !== 'family') showMain();
+  if (hrPassword() && sessionStorage.getItem('chwork_hr_role') !== 'family') { showMain(); }
   else if (hrPassword()) { window.location.href = 'personal.html'; return; }
+  else { $('loginPanel').style.display = 'block'; }
   $('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') dashLogin(); });
   $('todoInput').addEventListener('keydown', e => { if (e.key === 'Enter') addTodo(); });
 });
