@@ -328,14 +328,15 @@ function openPerDayDetail(dateStr) {
   $('perDayDetailBody').innerHTML = items.map(o => {
     const task = o.personal_schedule_tasks || {};
     const color = memberColor(task.member_name);
-    const statusLabel = o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료');
+    const statusLabel = task.category !== '결제일' ? ''
+      : (o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료'));
     return `
       <div style="display:flex; align-items:flex-start; gap:8px; padding:10px 0; border-bottom:0.5px solid var(--border);">
         <span class="member-chip" style="background:${color}; font-size:11px; flex-shrink:0;">${esc(task.member_name || '-')}</span>
         <div style="flex:1; min-width:0;">
           <div style="font-weight:500;">${categoryEmoji(task.category)} ${esc(task.title || '-')}${task.is_private ? ' 🔒' : ''}</div>
           ${task.note ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">${esc(task.note)}</div>` : ''}
-          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${statusLabel}</div>
+          ${statusLabel ? `<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${statusLabel}</div>` : ''}
         </div>
         <a class="hr-edit-link" onclick="closePerDayDetail(); editPersonalTask('${o.task_id}')">수정</a>
       </div>
@@ -385,7 +386,8 @@ async function loadPersonalOccurrences() {
     tbody.innerHTML = list.map(o => {
       const task = o.personal_schedule_tasks || {};
       const color = memberColor(task.member_name);
-      const statusLabel = o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료');
+      const statusLabel = task.category !== '결제일' ? '-'
+        : (o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료'));
       const isFamily = sessionStorage.getItem('chwork_hr_role') === 'family';
       const lockedForFamily = isFamily && task.member_name === '나';
       const actionsHtml = lockedForFamily
