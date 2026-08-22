@@ -59,6 +59,7 @@ function showMain() {
   $('mainSidebar').style.display = '';
   $('loginPanel').style.display = 'none';
   $('dashMain').style.display = 'flex';
+  loadHrAlerts();
   loadScheduleAlerts();
   loadContractAlerts();
   loadPersonalAlerts();
@@ -73,6 +74,45 @@ window.addEventListener('DOMContentLoaded', () => {
   $('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') dashLogin(); });
   $('todoInput').addEventListener('keydown', e => { if (e.key === 'Enter') addTodo(); });
 });
+
+/* ── 인사/급여관리 알림 (수습 종료, 계약직 만료, 퇴직연금 가입 도래) ── */
+async function loadHrAlerts() {
+  const wrap = $('hrAlertWrap');
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees?upcoming=1`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    const data = await res.json();
+    const list = data.upcoming || [];
+    if (list.length === 0) {
+      wrap.innerHTML = `<div class="dash-empty">현재 알릴 인사/급여 항목이 없습니다.</div>`;
+      return;
+    }
+    const overdue = list.filter(x => x.days_left < 0);
+    const soon = list.filter(x => x.days_left >= 0);
+    let html = '';
+    if (overdue.length > 0) {
+      html += `<div class="sch-banner danger"><h3>⚠ 기한 지남 (${overdue.length}건)</h3>`;
+      html += overdue.slice(0, 5).map(x => `
+        <div class="sch-banner-row">
+          <a href="hr.html#home"><span class="sch-dday overdue">D+${Math.abs(x.days_left)}</span> ${esc(x.title)}</a>
+        </div>
+      `).join('');
+      html += `</div>`;
+    }
+    if (soon.length > 0) {
+      html += `<div class="sch-banner warn"><h3>🔔 다가오는 항목 (${soon.length}건)</h3>`;
+      html += soon.slice(0, 5).map(x => `
+        <div class="sch-banner-row">
+          <a href="hr.html#home"><span class="sch-dday soon">${x.days_left === 0 ? 'D-DAY' : 'D-' + x.days_left}</span> ${esc(x.title)}</a>
+        </div>
+      `).join('');
+      html += `</div>`;
+    }
+    wrap.innerHTML = html;
+  } catch (e) {
+    wrap.innerHTML = `<div class="dash-empty">불러오기 실패</div>`;
+  }
+}
 
 /* ── 업무 일정관리 알림 ── */
 async function loadScheduleAlerts() {
