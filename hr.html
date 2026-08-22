@@ -360,9 +360,12 @@
         <section class="panel" id="tab-pension" style="display:none;">
           <div class="panel-header">
             <h2>퇴직연금(DC) 현황 <span id="pensionCount" class="hr-count"></span></h2>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">📤 데이터</span>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">📤 내보내기</span>
               <button class="secondary" onclick="downloadPensionExcel()">엑셀 다운로드</button>
+              <button class="secondary" onclick="printPensionRegister()">🖨 인쇄</button>
+              <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 4px;"></span>
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">✏️ 입력</span>
               <button class="primary" onclick="openContribModal()">+ 불입 기록 추가</button>
             </div>
           </div>
@@ -500,19 +503,24 @@
           </p>
 
           <!-- 작업 영역 -->
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <input id="payrollMonth" type="month" class="hr-input" style="width:150px;">
-            <button class="secondary" onclick="loadPayrollPreview()">조회</button>
-            <button class="primary" onclick="generatePayroll()">이 달 급여명세 생성/저장</button>
-            <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
-            <button class="secondary" id="lockBtn" onclick="lockPayrollMonth(true)">이 달 마감</button>
-            <button class="secondary" id="unlockBtn" onclick="lockPayrollMonth(false)" style="display:none;">마감해제</button>
-            <span id="payrollLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
+          <div style="padding:12px; background:var(--bg); border-radius:var(--radius-sm); margin-bottom:14px; display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🔍 조회/생성</span>
+              <input id="payrollMonth" type="month" class="hr-input" style="width:150px;">
+              <button class="secondary" onclick="loadPayrollPreview()">조회</button>
+              <button class="primary" onclick="generatePayroll()">이 달 급여명세 생성/저장</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:10px; border-top:0.5px solid var(--border);">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🔒 마감</span>
+              <button class="secondary" id="lockBtn" onclick="lockPayrollMonth(true)">이 달 마감</button>
+              <button class="secondary" id="unlockBtn" onclick="lockPayrollMonth(false)" style="display:none;">마감해제</button>
+              <span id="payrollLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
+            </div>
           </div>
 
           <!-- 출력 영역 -->
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--surface); border:0.5px solid var(--border); border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <span style="font-size:12px; color:var(--text-muted);">출력:</span>
+            <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">📤 출력</span>
             <button class="secondary" onclick="downloadPayrollExcel()">엑셀 다운로드</button>
             <button class="secondary" onclick="printPayrollRegister()">전 직원 대장 출력</button>
           </div>
@@ -637,7 +645,8 @@
         <section class="panel" id="tab-otherpay" style="display:none;">
           <div class="panel-header">
             <h2>성과급/기타지급 <span id="otherpayCount" class="hr-count"></span></h2>
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">📤 데이터</span>
               <button class="secondary" onclick="downloadOtherPaymentsExcel()">엑셀 다운로드</button>
               <button class="primary" onclick="openOtherPayModal()">+ 지급 내역 추가</button>
             </div>
@@ -647,7 +656,8 @@
           </p>
 
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <label style="font-size:13px; color:var(--text-secondary);">일괄 입력 — 지급유형:</label>
+            <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">✏️ 일괄 입력</span>
+            <label style="font-size:13px; color:var(--text-secondary);">지급유형:</label>
             <select id="bulkOpType" class="hr-input" style="width:130px;" onchange="toggleBulkLeaveAsOfField()">
               <option value="성과급1차">성과급1차</option>
               <option value="성과급2차">성과급2차</option>
@@ -687,14 +697,18 @@
           <div style="display:flex; align-items:center; gap:8px; margin:20px 0 14px; padding-top:16px; border-top:0.5px solid var(--border);">
             <h3 style="font-size:13px; margin:0;">지급 내역 조회</h3>
           </div>
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <label style="font-size:13px; color:var(--text-secondary);">조회 연도:</label>
-            <select id="otherpayYear" class="hr-input" style="width:100px;" onchange="loadOtherPayments()"></select>
-            <span style="border-left:1px solid var(--border); height:20px; margin:0 4px;"></span>
-            <label style="font-size:13px; color:var(--text-secondary);">연도 마감:</label>
-            <button class="secondary" onclick="lockOtherPayYear(true)">마감</button>
-            <button class="secondary" onclick="lockOtherPayYear(false)">마감해제</button>
-            <span id="otherpayLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
+          <div style="padding:12px; background:var(--bg); border-radius:var(--radius-sm); margin-bottom:14px; display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🔍 조회</span>
+              <label style="font-size:13px; color:var(--text-secondary);">조회 연도:</label>
+              <select id="otherpayYear" class="hr-input" style="width:100px;" onchange="loadOtherPayments(); refreshOtherPayLockStatus();"></select>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:10px; border-top:0.5px solid var(--border);">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🔒 마감</span>
+              <button class="secondary" id="otherpayLockBtn" onclick="lockOtherPayYear(true)">마감</button>
+              <button class="secondary" id="otherpayUnlockBtn" onclick="lockOtherPayYear(false)" style="display:none;">마감해제</button>
+              <span id="otherpayLockStatus" style="font-size:12px; color:var(--text-muted);"></span>
+            </div>
           </div>
 
           <div class="table-wrap">
@@ -1388,6 +1402,20 @@
     <h3 style="font-size:14px; margin-bottom:8px;">급여 조정자 내역</h3>
     <div id="reg_adjust_list" style="font-size:12px;"></div>
   </div>
+</div>
+
+<div id="pensionPrintArea" style="display:none;">
+  <h2 style="margin-bottom:4px;">퇴직연금(DC) 현황 대장</h2>
+  <p id="pension_print_date" style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;"></p>
+  <table class="table" style="width:100%; font-size:11px;">
+    <thead>
+      <tr>
+        <th>이름</th><th>지사</th><th>부서</th><th>직급</th><th>가입일</th>
+        <th class="num">누적추계액</th><th class="num">실불입액 합계</th><th class="num">잔액</th>
+      </tr>
+    </thead>
+    <tbody id="pension_print_tbody"></tbody>
+  </table>
 </div>
 
 <!-- 개인별 급여명세서 출력 모달 -->
