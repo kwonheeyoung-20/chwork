@@ -1733,7 +1733,10 @@ async function refreshPensionLockStatus() {
   const year = $('pensionLockYear').value;
   const locks = await fetchLocks('/api/hr_pension');
   const current = locks.find(l => l.period_key === year);
-  $('pensionLockStatus').textContent = current && current.locked ? `🔒 ${year}년 마감됨` : `${year}년 마감 전`;
+  const locked = current && current.locked;
+  $('pensionLockStatus').textContent = locked ? `🔒 ${year}년 마감됨` : `${year}년 마감 전`;
+  $('pensionLockBtn').style.display = locked ? 'none' : 'inline-flex';
+  $('pensionUnlockBtn').style.display = locked ? 'inline-flex' : 'none';
 }
 
 /* ── 급여 월 마감 ── */
