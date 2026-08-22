@@ -183,8 +183,12 @@
       .table th, .table td { padding:6px 8px !important; font-size:12px !important; line-height:1.4 !important; }
       .table-wrap { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
       .table { white-space:nowrap; }
+      .dash-alert-grid { grid-template-columns: 1fr !important; }
       .table td .hr-edit-link { white-space:normal; }
       .tt-table th, .tt-table td { padding:4px 6px !important; }
+    }
+    @media (min-width: 821px) and (max-width: 1200px) {
+      .dash-alert-grid { grid-template-columns: 1fr 1fr !important; }
     }
     /* 필터 영역: 라벨+입력을 하나의 상자로 묶어서 보여줌 */
     .sch-filter-bar { display:flex; align-items:center; gap:8px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap; }
@@ -258,7 +262,15 @@
         <div id="yearEndReminderWrap"></div>
 
         <!-- 알림 모음 -->
-        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;">
+        <div class="dash-alert-grid" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:16px;">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>👥 인사/급여관리</h2>
+            </div>
+            <div id="hrAlertWrap"><div class="dash-empty">불러오는 중…</div></div>
+            <a class="dash-card-link" href="hr.html#home">전체 직원 보러가기 →</a>
+          </section>
+
           <section class="panel">
             <div class="panel-header">
               <h2>📅 업무 일정관리</h2>
