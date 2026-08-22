@@ -223,8 +223,11 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
-        <button class="secondary" id="manualBtn" style="display:none;" onclick="openManualModal()">📖 매뉴얼</button>
-        <button class="secondary" onclick="downloadFullBackup()" id="backupBtn">전체 데이터 백업</button>
+        <div style="display:flex; align-items:center; gap:6px; background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px;">
+          <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🛠 도구</span>
+          <button class="secondary" id="manualBtn" style="display:none;" onclick="openManualModal()">📖 매뉴얼</button>
+          <button class="secondary" onclick="downloadFullBackup()" id="backupBtn">전체 데이터 백업</button>
+        </div>
         <span id="lastBackupLabel" style="font-size:12px; color:var(--text-muted);"></span>
         <!-- pill removed -->
       </div>
