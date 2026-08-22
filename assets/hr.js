@@ -133,7 +133,7 @@ async function openManualModal() {
   $('manualUpdatedLabel').textContent = '';
   $('manualModal').style.display = 'flex';
   try {
-    const res = await fetch(`${apiBase()}/api/manuals?module=${currentManualModule}`, { headers: authHeaders() });
+    const res = await fetch(`${apiBase()}/api/manuals?module=${currentManualModule}`, { headers: { 'X-HR-Password': hrPassword() } });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error(data.error || data.detail || `불러오기 실패 (상태코드 ${res.status})`);
@@ -171,7 +171,7 @@ async function saveManual() {
   const content = $('manualEditTextarea').value;
   try {
     const res = await fetch(`${apiBase()}/api/manuals`, {
-      method: 'POST', headers: authHeaders(true),
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
       body: JSON.stringify({ module: currentManualModule, content }),
     });
     if (!res.ok) {
