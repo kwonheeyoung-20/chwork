@@ -98,18 +98,18 @@ const MENU_GROUPS = {
   payroll: {
     label: '급여관리',
     tabs: [
-      { id: 'payroll', label: '월별 급여명세' },
-      { id: 'otherpay', label: '성과급/기타지급' },
-      { id: 'annual', label: '직원별 연간 급여 종합' },
-      { id: 'contracts', label: '연봉계약서' },
-      { id: 'promotions', label: '인사기록보고서' },
+      { id: 'payroll', label: '월별 급여명세', group: '입력' },
+      { id: 'otherpay', label: '성과급/기타지급', group: '입력' },
+      { id: 'annual', label: '직원별 연간 급여 종합', group: '자료' },
+      { id: 'contracts', label: '연봉계약서', group: '자료' },
+      { id: 'promotions', label: '인사기록보고서', group: '자료' },
     ],
   },
   pension: {
     label: '퇴직급여관리',
     tabs: [
-      { id: 'pension', label: '퇴직연금 현황' },
-      { id: 'settlement', label: '퇴사자 정산' },
+      { id: 'pension', label: '퇴직연금 현황', group: '입력' },
+      { id: 'settlement', label: '퇴사자 정산', group: '자료' },
     ],
   },
   contacts: { label: null, tabs: [{ id: 'contacts', label: '거래처 연락처' }] },
@@ -213,15 +213,23 @@ function switchMenuGroup(group) {
   currentManualModule = (group === 'payroll') ? 'payroll' : (group === 'pension') ? 'pension' : null;
   $('manualBtn').style.display = currentManualModule ? 'inline-flex' : 'none';
 
-  // 상단 탭바 렌더링
+  // 상단 탭바 렌더링 — "입력" 그룹과 "자료(조회)" 그룹 사이에 라벨+구분선을 넣어 구분
   const bar = $('hrTabBar');
   if (g.tabs.length <= 1) {
     bar.style.display = 'none';
   } else {
     bar.style.display = 'flex';
-    bar.innerHTML = g.tabs.map((t, i) => `
-      <button class="tab-btn${i === 0 ? ' active' : ''}" data-tab="${t.id}" onclick="switchHrTab('${t.id}')">${t.label}</button>
-    `).join('');
+    bar.style.alignItems = 'center';
+    let lastGroup = null;
+    bar.innerHTML = g.tabs.map((t, i) => {
+      let prefix = '';
+      if (t.group && t.group !== lastGroup) {
+        if (lastGroup !== null) prefix += `<span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 8px;"></span>`;
+        prefix += `<span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:6px; white-space:nowrap;">${t.group === '입력' ? '✏️ 입력' : '📊 조회'}</span>`;
+        lastGroup = t.group;
+      }
+      return `${prefix}<button class="tab-btn${i === 0 ? ' active' : ''}" data-tab="${t.id}" onclick="switchHrTab('${t.id}')">${t.label}</button>`;
+    }).join('');
   }
 
   switchHrTab(g.tabs[0].id);
