@@ -223,11 +223,33 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
+        <button class="secondary" id="manualBtn" style="display:none;" onclick="openManualModal()">📖 매뉴얼</button>
         <button class="secondary" onclick="downloadFullBackup()" id="backupBtn">전체 데이터 백업</button>
         <span id="lastBackupLabel" style="font-size:12px; color:var(--text-muted);"></span>
         <!-- pill removed -->
       </div>
     </header>
+
+    <!-- 급여/퇴직급여 매뉴얼 모달 -->
+    <div id="manualModal" class="hr-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeManualModal()">
+      <div class="hr-modal" style="width:600px; max-height:82vh; overflow-y:auto;">
+        <h2 id="manualModalTitle">매뉴얼</h2>
+        <div id="manualUpdatedLabel" style="font-size:11px; color:var(--text-muted); margin-top:-8px; margin-bottom:8px;"></div>
+        <div id="manualViewBody" style="white-space:pre-wrap; line-height:1.7; font-size:13px;"></div>
+        <div id="manualEditBody" style="display:none;">
+          <textarea id="manualEditTextarea" style="width:100%; min-height:400px; font-size:13px; line-height:1.6; padding:12px; border:0.5px solid var(--border-strong); border-radius:var(--radius-sm); background:var(--bg); color:var(--text-primary); font-family:inherit;"></textarea>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:16px;">
+          <span style="font-size:11px; color:var(--text-muted);">계산 방식이나 절차가 바뀌면 이곳도 함께 업데이트해주세요.</span>
+          <div style="display:flex; gap:8px;">
+            <button class="secondary" id="manualEditBtn" style="display:none;" onclick="startManualEdit()">수정</button>
+            <button class="secondary" id="manualCancelBtn" style="display:none;" onclick="cancelManualEdit()">취소</button>
+            <button class="primary" id="manualSaveBtn" style="display:none;" onclick="saveManual()">저장</button>
+            <button class="secondary" onclick="closeManualModal()">닫기</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="content">
 
