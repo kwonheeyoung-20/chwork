@@ -90,6 +90,7 @@
     { "src": "/api/annual_leave_calc", "dest": "api/workspace.py?resource=annualleave" },
     { "src": "/api/personal_schedule", "dest": "api/workspace.py?resource=personal" },
     { "src": "/api/timetable", "dest": "api/workspace.py?resource=timetable" },
+    { "src": "/api/manuals", "dest": "api/workspace.py?resource=manuals" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
