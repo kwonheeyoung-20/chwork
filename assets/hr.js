@@ -134,6 +134,10 @@ async function openManualModal() {
   $('manualModal').style.display = 'flex';
   try {
     const res = await fetch(`${apiBase()}/api/manuals?module=${currentManualModule}`, { headers: authHeaders() });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || data.detail || `불러오기 실패 (상태코드 ${res.status})`);
+    }
     const data = await res.json();
     const m = data.manual;
     const content = (m && m.content) || '';
@@ -144,7 +148,7 @@ async function openManualModal() {
     }
     $('manualEditBtn').style.display = 'inline-flex';
   } catch (e) {
-    $('manualViewBody').textContent = '불러오기 실패';
+    $('manualViewBody').textContent = '불러오기 실패: ' + (e.message || '');
   }
 }
 function closeManualModal() { $('manualModal').style.display = 'none'; }
