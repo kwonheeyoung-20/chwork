@@ -128,11 +128,108 @@ class handler(BaseHTTPRequestHandler):
             self.send_header(k, v)
         self.end_headers()
 
+    def _get_hr_alerts(self):
+        """대시보드용 인사/급여관리 알림:
+        1) 수습기간 종료 임박 (정규직 전환 예정일 기준)
+        2) 계약직 계약만료 임박
+        3) 퇴직연금(DC) 미가입 + 입사 1년 도래(법정 가입기한)
+        """
+        import datetime
+        today = datetime.date.today()
+
+        emps = rest_request(
+            "GET",
+            "employees?select=id,name,branch,department,hire_date,pension_enrolled,status&status=eq." + quote("재직"),
+        ) or []
+        emp_map = {e["id"]: e for e in emps}
+
+        try:
+            type_rows = rest_request("POST", "rpc/employees_current_employment_types", body={}) or []
+        except SupabaseError:
+            type_rows = []
+        type_map = {r["employee_id"]: r for r in type_rows}
+
+        alerts = []
+
+        # 1) 수습기간 종료 임박 — payroll_settings_history에 저장된 "수습→정규직 전환" 예정일 기준
+        probation_emp_ids = [
+            eid for eid, info in type_map.items()
+            if info.get("current_employment_type") == "수습" and eid in emp_map
+        ]
+        if probation_emp_ids:
+            id_list = ",".join(probation_emp_ids)
+            rows = rest_request(
+                "GET",
+                "payroll_settings_history?select=employee_id,effective_month"
+                f"&employee_id=in.({id_list})&employment_type=eq." + quote("정규직")
+                + "&note=like.*" + quote("수습기간 종료") + "*&order=effective_month.asc",
+            ) or []
+            seen = set()
+            for r in rows:
+                eid = r["employee_id"]
+                if eid in seen:
+                    continue
+                seen.add(eid)
+                emp = emp_map.get(eid)
+                if not emp or not r.get("effective_month"):
+                    continue
+                end_date = datetime.date.fromisoformat(r["effective_month"][:10])
+                days_left = (end_date - today).days
+                if days_left <= 30:
+                    alerts.append({
+                        "kind": "수습종료",
+                        "days_left": days_left,
+                        "title": f"👤 {emp['name']}({emp.get('branch') or '-'}/{emp.get('department') or '-'}) — 수습기간 {end_date.isoformat()} 종료 예정(정규직 전환)",
+                    })
+
+        # 2) 계약직 계약만료 임박
+        for eid, info in type_map.items():
+            if info.get("current_employment_type") != "계약직":
+                continue
+            emp = emp_map.get(eid)
+            end = info.get("current_contract_end_date")
+            if not emp or not end:
+                continue
+            end_date = datetime.date.fromisoformat(end[:10])
+            days_left = (end_date - today).days
+            if days_left <= 30:
+                alerts.append({
+                    "kind": "계약만료",
+                    "days_left": days_left,
+                    "title": f"📄 {emp['name']}({emp.get('branch') or '-'}/{emp.get('department') or '-'}) — 계약 {end_date.isoformat()} 만료 예정",
+                })
+
+        # 3) 퇴직연금(DC) 미가입 + 입사 1년 도래(30일 전부터 알림, 지나면 계속 경고)
+        for emp in emps:
+            if emp.get("pension_enrolled"):
+                continue
+            hire = emp.get("hire_date")
+            if not hire:
+                continue
+            hire_date = datetime.date.fromisoformat(hire[:10])
+            try:
+                one_year_mark = hire_date.replace(year=hire_date.year + 1)
+            except ValueError:
+                one_year_mark = hire_date.replace(year=hire_date.year + 1, day=28)
+            days_left = (one_year_mark - today).days
+            if days_left <= 30:
+                alerts.append({
+                    "kind": "퇴직연금",
+                    "days_left": days_left,
+                    "title": f"🏦 {emp['name']}({emp.get('branch') or '-'}/{emp.get('department') or '-'}) — 입사 1년 {one_year_mark.isoformat()} 도래, 퇴직연금(DC) 가입 필요",
+                })
+
+        alerts.sort(key=lambda a: a["days_left"])
+        return self._send(200, {"upcoming": alerts})
+
     def do_GET(self):
         try:
             if not self._authorized():
                 return self._send(401, {"error": "unauthorized"})
             qs = parse_qs(urlparse(self.path).query)
+
+            if qs.get("upcoming", ["0"])[0] == "1":
+                return self._get_hr_alerts()
 
             if qs.get("contract_expiring", ["0"])[0] == "1":
                 rows = rest_request("POST", "rpc/contract_expiring_employees", body={"p_within_days": 30})
