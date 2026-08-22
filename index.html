@@ -183,7 +183,8 @@
       .table th, .table td { padding:6px 8px !important; font-size:12px !important; line-height:1.4 !important; }
       .table-wrap { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
       .table { white-space:nowrap; }
-      .dash-alert-grid { grid-template-columns: 1fr !important; }
+      .dash-alert-grid { grid-template-columns: 1fr 1fr !important; gap:10px !important; }
+      .dash-alert-grid .panel { padding:12px !important; }
       .table td .hr-edit-link { white-space:normal; }
       .tt-table th, .tt-table td { padding:4px 6px !important; }
     }
@@ -273,18 +274,18 @@
 
           <section class="panel">
             <div class="panel-header">
-              <h2>📅 업무 일정관리</h2>
-            </div>
-            <div id="scheduleAlertWrap"><div class="dash-empty">불러오는 중…</div></div>
-            <a class="dash-card-link" href="schedule.html">전체 일정 보러가기 →</a>
-          </section>
-
-          <section class="panel">
-            <div class="panel-header">
               <h2>📁 계약/증빙관리</h2>
             </div>
             <div id="contractAlertWrap"><div class="dash-empty">불러오는 중…</div></div>
             <a class="dash-card-link" href="hr.html#contractdocs">전체 서류 보러가기 →</a>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>📅 업무 일정관리</h2>
+            </div>
+            <div id="scheduleAlertWrap"><div class="dash-empty">불러오는 중…</div></div>
+            <a class="dash-card-link" href="schedule.html">전체 일정 보러가기 →</a>
           </section>
 
           <section class="panel">
