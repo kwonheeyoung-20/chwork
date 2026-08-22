@@ -390,10 +390,10 @@ async function loadPersonalOccurrences() {
       const lockedForFamily = isFamily && task.member_name === '나';
       const actionsHtml = lockedForFamily
         ? `<span style="color:var(--text-muted); font-size:12px;">🔒 수정 불가</span>`
-        : `${(o.status === 'pending' && task.category === '결제일') ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> · <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> · ` : ''}
+        : `${(o.status === 'pending' && task.category === '결제일') ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> ` : ''}
             <a class="hr-edit-link" onclick="editPersonalTask('${o.task_id}')">수정</a>
-            · <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">이 날짜만 삭제</a>
-            · <a class="hr-edit-link" onclick="deletePersonalTaskDirect('${o.task_id}')" style="color:var(--red);">전체 삭제</a>`;
+            <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">이 날짜만 삭제</a>
+            <a class="hr-edit-link" onclick="deletePersonalTaskDirect('${o.task_id}')" style="color:var(--red);">전체 삭제</a>`;
       return `
         <tr>
           <td>${esc(o.due_date)}${task.date_type === 'lunar' ? ' <span style="font-size:10px; color:var(--accent);">(음력)</span>' : ''}</td>
@@ -749,7 +749,7 @@ function renderPeriodList(periods) {
       <td>${esc(p.period_label)}</td>
       <td>${esc((p.start_time||'').slice(0,5))}~${esc((p.end_time||'').slice(0,5))}</td>
       <td>${p.sort_order}</td>
-      <td><a class="hr-edit-link" onclick="editPeriod('${p.id}')">수정</a> · <a class="hr-edit-link" onclick="quickDeletePeriod('${p.id}')">삭제</a></td>
+      <td><a class="hr-edit-link" onclick="editPeriod('${p.id}')">수정</a> <a class="hr-edit-link" onclick="quickDeletePeriod('${p.id}')">삭제</a></td>
     </tr>
   `).join('');
 }
@@ -1083,7 +1083,7 @@ async function loadTeachers() {
         <td style="font-size:12px; color:var(--text-secondary);">${esc(t.note || '-')}</td>
         <td>
           <a class="hr-edit-link" onclick="editTeacher('${t.id}')">수정</a>
-          · <a class="hr-edit-link" onclick="deleteTeacher('${t.id}')">삭제</a>
+          <a class="hr-edit-link" onclick="deleteTeacher('${t.id}')">삭제</a>
         </td>
       </tr>
     `).join('');

@@ -233,7 +233,7 @@ function renderOccurrences(list) {
       <td style="font-size:12px; color:var(--text-secondary);">${[task.note ? esc(task.note) : null, o.completed_note ? '완료메모: ' + esc(o.completed_note) : null].filter(Boolean).join('<br>') || '-'}</td>
       <td>${statusBadge(o.status)}</td>
       <td>
-        ${o.status === 'pending' ? `<a class="hr-edit-link" onclick="skipOccurrence('${o.id}')">건너뛰기</a> · ` : ''}
+        ${o.status === 'pending' ? `<a class="hr-edit-link" onclick="skipOccurrence('${o.id}')">건너뛰기</a> ` : ''}
         <a class="hr-edit-link" onclick="deleteOccurrence('${o.id}')">삭제</a>
       </td>
     </tr>
@@ -379,8 +379,8 @@ function renderTasks() {
       <td style="font-size:12px; color:var(--text-secondary);">${esc(t.note || '-')}</td>
       <td>
         <a class="hr-edit-link" onclick="editTask('${t.id}')">수정</a>
-        · <a class="hr-edit-link" onclick="toggleTaskActive('${t.id}', ${!t.active})">${t.active ? '중지' : '재개'}</a>
-        · <a class="hr-edit-link" onclick="deleteTask('${t.id}', '${esc(t.title)}')">삭제</a>
+        <a class="hr-edit-link" onclick="toggleTaskActive('${t.id}', ${!t.active})">${t.active ? '중지' : '재개'}</a>
+        <a class="hr-edit-link" onclick="deleteTask('${t.id}', '${esc(t.title)}')">삭제</a>
       </td>
     </tr>
   `).join('');

@@ -20,8 +20,12 @@
 .hr-badge.retired { background: var(--bg); color: var(--text-muted); }
 .hr-badge.yes { background: var(--accent-light); color: var(--accent); }
 .hr-badge.no { background: var(--bg); color: var(--text-muted); }
-.hr-edit-link { font-size: 12px; color: var(--accent); cursor: pointer; text-decoration: none; }
-.hr-edit-link:hover { text-decoration: underline; }
+.hr-edit-link {
+  font-size: 11px; color: var(--text-secondary); cursor: pointer; text-decoration: none;
+  display: inline-block; background: var(--surface); border: 1px solid var(--border-strong);
+  border-radius: 20px; padding: 3px 10px; margin: 1px 0; transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.hr-edit-link:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent-mid); text-decoration: none; }
 .tab-btn {
   background: none; border: none; padding: 10px 16px; font-size: 13px;
   color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
@@ -91,7 +95,7 @@
   .hr-modal { padding: 18px 16px; width: 100%; max-width: 100vw; max-height: 92vh; border-radius: var(--radius-md); }
   .hr-modal h2 { font-size: 14px; }
   .hr-input { font-size: 16px; padding: 9px 10px; } /* 16px 이상이어야 iOS에서 확대 안 됨 */
-  .hr-edit-link { font-size: 13px; padding: 2px 0; display: inline-block; } /* 탭하기 쉽게 */
+  .hr-edit-link { font-size: 12px; padding: 4px 10px; display: inline-block; } /* 탭하기 쉽게 */
   .settle-row { font-size: 12.5px; }
   .settle-row b { font-size: 13px; }
   /* 상단 백업버튼/배지 줄이 좁은 화면에서 겹치지 않게 */

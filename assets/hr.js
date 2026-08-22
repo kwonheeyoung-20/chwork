@@ -389,7 +389,7 @@ function renderEmployees(list) {
       <td>${esc(emp.current_employment_type || '-')}${emp.current_pay_rate != null && emp.current_pay_rate != 1 ? ` (${Math.round(emp.current_pay_rate*100)}%)` : ''}</td>
       <td class="num">${fmt(emp.current_salary_thousand)}</td>
       <td><span class="hr-badge ${emp.pension_enrolled ? 'yes' : 'no'}">${emp.pension_enrolled ? '가입' : '미가입'}</span></td>
-      <td><a class="hr-edit-link" onclick="openEditModal('${emp.id}')">수정</a> · <a class="hr-edit-link" onclick="deleteEmployee('${emp.id}', '${esc(emp.name)}')">삭제</a></td>
+      <td><a class="hr-edit-link" onclick="openEditModal('${emp.id}')">수정</a> <a class="hr-edit-link" onclick="deleteEmployee('${emp.id}', '${esc(emp.name)}')">삭제</a></td>
     </tr>
   `).join('');
 
@@ -1437,7 +1437,7 @@ function renderPayroll(list, savedMode) {
       <td class="num">${fmt(p.total_pay)}</td>
       <td class="num">${savedMode ? (retro ? fmt(retro) : '') : '-'}</td>
       <td class="num">${savedMode ? fmt(finalTotal) : '-'}</td>
-      <td><a class="hr-edit-link" onclick="openPayslipModal(${idx})">명세서</a>${savedMode ? ` · <a class="hr-edit-link" onclick="deletePayrollRecord('${p.id}', '${esc(p.name)}')">삭제</a>` : ''}</td>
+      <td><a class="hr-edit-link" onclick="openPayslipModal(${idx})">명세서</a>${savedMode ? ` <a class="hr-edit-link" onclick="deletePayrollRecord('${p.id}', '${esc(p.name)}')">삭제</a>` : ''}</td>
     </tr>
   `;
   }).join('');
@@ -3184,7 +3184,7 @@ function renderContacts() {
       <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
       <td>
         <a class="hr-edit-link" onclick="editContact('${c.id}')">수정</a>
-        · <a class="hr-edit-link" onclick="deleteContact('${c.id}', '${esc(c.company_name)}')">삭제</a>
+        <a class="hr-edit-link" onclick="deleteContact('${c.id}', '${esc(c.company_name)}')">삭제</a>
       </td>
     </tr>
   `).join('');
@@ -3487,16 +3487,16 @@ function renderContractDocs() {
       <td>
         <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap;">
           <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
-          <span style="color:var(--border-strong);">|</span>
+         
           <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || c.vendor_name || '서류')}')">삭제</a>
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap; margin-top:4px;">
           ${status === 'terminated'
             ? `<a class="hr-edit-link" onclick="reactivateContractDoc('${c.id}')">해지취소</a>`
             : `<a class="hr-edit-link" onclick="openRenewModal('${c.id}')">연장</a>
-               <span style="color:var(--border-strong);">|</span>
+              
                <a class="hr-edit-link" onclick="openTerminateModal('${c.id}')">해지</a>`}
-          <span style="color:var(--border-strong);">|</span>
+         
           <a class="hr-edit-link" onclick="openRenewHistoryModal('${c.id}', '${esc(c.contract_title || c.vendor_name || '서류')}')">이력</a>
         </div>
       </td>
@@ -3529,7 +3529,7 @@ function renderReferenceDocs() {
       <td style="font-size:12px; color:var(--text-secondary);">${esc(c.note || '-')}</td>
       <td>
         <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
-        · <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || '서류')}')">삭제</a>
+        <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || '서류')}')">삭제</a>
       </td>
     </tr>
   `).join('');
@@ -3574,16 +3574,16 @@ function renderFinancialDocs() {
       <td>
         <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap;">
           <a class="hr-edit-link" onclick="editContractDoc('${c.id}')">수정</a>
-          <span style="color:var(--border-strong);">|</span>
+         
           <a class="hr-edit-link" onclick="deleteContractDoc('${c.id}', '${esc(c.contract_title || c.vendor_name || '금융상품')}')">삭제</a>
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; white-space:nowrap; margin-top:4px;">
           ${status === 'terminated'
             ? `<a class="hr-edit-link" onclick="reactivateContractDoc('${c.id}')">해지취소</a>`
             : `<a class="hr-edit-link" onclick="openRenewModal('${c.id}')">연장</a>
-               <span style="color:var(--border-strong);">|</span>
+              
                <a class="hr-edit-link" onclick="openTerminateModal('${c.id}')">해지</a>`}
-          <span style="color:var(--border-strong);">|</span>
+         
           <a class="hr-edit-link" onclick="openRenewHistoryModal('${c.id}', '${esc(c.contract_title || c.vendor_name || '금융상품')}')">이력</a>
         </div>
       </td>
@@ -4107,8 +4107,8 @@ async function loadPromotionReportList() {
         <td style="font-size:12px; color:var(--text-secondary);">${esc(r.note || '-')}</td>
         <td>
           <a class="hr-edit-link" onclick="viewPromotionReport('${r.id}')">보기</a>
-          · <a class="hr-edit-link" onclick="downloadPromotionReportExcel('${r.id}')">엑셀</a>
-          · <a class="hr-edit-link" onclick="deletePromotionReport('${r.id}')">삭제</a>
+          <a class="hr-edit-link" onclick="downloadPromotionReportExcel('${r.id}')">엑셀</a>
+          <a class="hr-edit-link" onclick="deletePromotionReport('${r.id}')">삭제</a>
         </td>
       </tr>
     `).join('');
@@ -4238,7 +4238,7 @@ async function loadEmployeePositionHistory() {
         <td style="font-size:12px; color:var(--text-secondary);">${esc(h.note || '-')}</td>
         <td>
           <a class="hr-edit-link" onclick="openApplyStandardModal('${employeeId}', '${esc(h.position)}')">급여반영</a>
-          · <a class="hr-edit-link" onclick="deletePositionHistory('${h.id}')">삭제</a>
+          <a class="hr-edit-link" onclick="deletePositionHistory('${h.id}')">삭제</a>
         </td>
       </tr>
     `).join('');
@@ -4348,7 +4348,7 @@ async function loadPositionStandards() {
         <td style="font-size:12px; color:var(--text-secondary);">${esc(s.note || '-')}</td>
         <td>
           <a class="hr-edit-link" onclick="editPositionStandard('${esc(s.position)}')">수정</a>
-          · <a class="hr-edit-link" onclick="deletePositionStandard('${s.id}')">삭제</a>
+          <a class="hr-edit-link" onclick="deletePositionStandard('${s.id}')">삭제</a>
         </td>
       </tr>
     `).join('');
