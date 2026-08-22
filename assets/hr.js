@@ -1169,8 +1169,10 @@ async function openHistoryModal(employeeId, name) {
           <td class="hview">${esc(c.note || '-')}</td>
           <td class="hview">
             ${editable ? `
-              <a class="hr-edit-link" onclick="editContributionRow(this)">수정</a>
-              <a class="hr-edit-link" style="margin-left:8px;" onclick="deleteContribution('${c.id}', '${employeeId}', '${esc(name)}')">삭제</a>
+              <div style="display:flex; gap:6px; white-space:nowrap;">
+                <a class="hr-edit-link" onclick="editContributionRow(this)">수정</a>
+                <a class="hr-edit-link" onclick="deleteContribution('${c.id}', '${employeeId}', '${esc(name)}')">삭제</a>
+              </div>
             ` : `<span style="color:var(--text-muted); font-size:11px;">2025년 이전 확정자료</span>`}
           </td>
         </tr>
