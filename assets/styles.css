@@ -98,8 +98,23 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD G
 .table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .table th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: var(--bg); }
 .table td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-primary); }
-.table td:last-child:not(.num) { border-left: 1px solid var(--border); background: var(--bg); }
-.table th:last-child:not(.num) { border-left: 1px solid var(--border); }
+/* 마지막 칸(수정/삭제 등 액션 버튼)을 표 본문과 완전히 분리된 하나의 사각 박스로 감싸기 */
+.table th:last-child:not(.num), .table td:last-child:not(.num) {
+  border-left: 1px solid var(--border-strong) !important;
+  border-right: 1px solid var(--border-strong) !important;
+  border-bottom: none !important;
+  background: var(--bg);
+}
+.table thead th:last-child:not(.num) {
+  border-top: 1px solid var(--border-strong) !important;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+.table tbody tr:last-child td:last-child:not(.num) {
+  border-bottom: 1px solid var(--border-strong) !important;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+}
 .table tbody tr:hover { background: var(--bg); }
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .table .positive { color: var(--green); font-weight: 500; }
