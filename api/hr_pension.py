@@ -140,25 +140,145 @@ class handler(BaseHTTPRequestHandler):
                 )
                 return self._send(200, {"contributions": items})
 
+            if qs.get("print_installment", ["0"])[0] == "1":
+                return self._get_pension_print_installment(qs)
+
+            if qs.get("installment_list", ["0"])[0] == "1":
+                return self._get_installment_list()
+
             data = rest_request("GET", "pension_status?select=*")
             if not isinstance(data, list):
                 return self._send(502, {"error": "unexpected_response", "detail": str(data)})
 
-            if as_of:
-                as_of_data = rpc("pension_status_as_of", {"p_as_of": as_of}) or []
-                as_of_map = {row["id"]: row for row in as_of_data}
-                for emp in data:
-                    extra = as_of_map.get(emp["id"], {})
+            # 지정일자(as_of)를 안 골라도, "당해년도 발생액/불입액 합계"는 항상 오늘 기준으로 기본 표시됨
+            import datetime
+            kst_today = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date()
+            effective_as_of = as_of or kst_today.isoformat()
+            year_start = f"{effective_as_of[:4]}-01-01"
+            view_year = int(effective_as_of[:4])
+
+            # 퇴사한 해까지는 목록에 계속 남고, 그 다음 연도부터는 자동으로 목록에서 빠짐
+            emp_status_rows = rest_request("GET", "employees?select=id,status,retire_date") or []
+            exclude_ids = {
+                e["id"] for e in emp_status_rows
+                if e.get("status") == "퇴사" and e.get("retire_date") and int(e["retire_date"][:4]) < view_year
+            }
+            if exclude_ids:
+                data = [emp for emp in data if emp["id"] not in exclude_ids]
+
+            as_of_data = rpc("pension_status_as_of", {"p_as_of": effective_as_of}) or []
+            as_of_map = {row["id"]: row for row in as_of_data}
+
+            # 당해년도 발생액 = (오늘/지정일 기준 누적추계액) - (작년 12/31 기준 누적추계액)
+            # — 기존에 쓰던 필드(period_accrual)가 값이 안 채워지는 경우가 있어, 더 확실하게 직접 차이로 계산
+            year_start_prev = f"{view_year - 1}-12-31"
+            as_of_data_start = rpc("pension_status_as_of", {"p_as_of": year_start_prev}) or []
+            start_map = {row["id"]: row for row in as_of_data_start}
+
+            ytd_contribs = rest_request(
+                "GET",
+                f"pension_contributions?contribution_date=gte.{year_start}&contribution_date=lte.{effective_as_of}&select=employee_id,amount",
+            ) or []
+            ytd_paid_map = {}
+            for c in ytd_contribs:
+                eid = c["employee_id"]
+                ytd_paid_map[eid] = ytd_paid_map.get(eid, 0) + (c.get("amount") or 0)
+
+            for emp in data:
+                extra = as_of_map.get(emp["id"], {})
+                now_cum = extra.get("as_of_cumulative_estimate", 0) or 0
+                start_cum = start_map.get(emp["id"], {}).get("as_of_cumulative_estimate", 0) or 0
+                emp["ytd_accrual"] = round(now_cum - start_cum)  # 당해년도(1월~기준일) 발생액 — 항상 계산됨
+                emp["ytd_paid"] = ytd_paid_map.get(emp["id"], 0)  # 당해년도(1월~기준일) 불입액 합계 — 항상 계산됨
+                if as_of:  # 사용자가 지정일자를 직접 고른 경우에만 아래 3개도 채워짐(기존 동작 유지)
                     emp["as_of_cumulative_estimate"] = extra.get("as_of_cumulative_estimate", 0)
                     emp["period_accrual"] = extra.get("period_accrual", 0)
                     emp["as_of_paid"] = extra.get("as_of_paid", 0)
                     emp["as_of_balance"] = extra.get("as_of_balance", 0)
 
-            return self._send(200, {"pension": data})
+            return self._send(200, {"pension": data, "ytd_as_of": effective_as_of})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
         except Exception as e:
             return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
+
+    def _get_installment_list(self):
+        """지금까지 저장된 불입 기록을 지급일자(차수) 기준으로 묶어서 보여줌 —
+        '발생 및 불입 입력' 화면에서 지금까지 몇 차수를, 언제, 몇 명에게, 얼마씩 지급했는지 한눈에 보기 위함."""
+        rows = rest_request(
+            "GET", "pension_contributions?select=contribution_date,employee_id,amount,note&order=contribution_date.desc"
+        ) or []
+        grouped = {}
+        for r in rows:
+            d = r["contribution_date"]
+            g = grouped.setdefault(d, {"date": d, "employee_ids": set(), "total_amount": 0, "notes": set()})
+            g["employee_ids"].add(r["employee_id"])
+            g["total_amount"] += r.get("amount") or 0
+            if r.get("note"):
+                g["notes"].add(r["note"])
+        installments = [
+            {
+                "date": g["date"],
+                "employee_count": len(g["employee_ids"]),
+                "total_amount": g["total_amount"],
+                "notes": sorted(g["notes"])[:3],
+            }
+            for g in grouped.values()
+        ]
+        installments.sort(key=lambda x: x["date"], reverse=True)
+        return self._send(200, {"installments": installments})
+
+    def _get_pension_print_installment(self, qs):
+        """인쇄용: 선택한 차수(기간) 지급액 + 당해년도 발생액/불입액 합계를 함께 반환.
+        예) 2026년 상반기 불입분만 인쇄하고 싶을 때 from~to로 그 기간을 지정."""
+        from_date = qs.get("from", [None])[0]
+        to_date = qs.get("to", [None])[0]
+        if not from_date or not to_date:
+            return self._send(400, {"error": "from, to는 필수입니다"})
+
+        import datetime
+        kst_today = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date()
+        today_str = kst_today.isoformat()
+        year_start = f"{kst_today.year}-01-01"
+
+        base = rest_request("GET", "pension_status?select=id,name,branch,department") or []
+
+        range_contribs = rest_request(
+            "GET",
+            f"pension_contributions?contribution_date=gte.{from_date}&contribution_date=lte.{to_date}&select=employee_id,amount,contribution_date,note",
+        ) or []
+        installment_map = {}
+        for c in range_contribs:
+            eid = c["employee_id"]
+            installment_map[eid] = installment_map.get(eid, 0) + (c.get("amount") or 0)
+
+        ytd_contribs = rest_request(
+            "GET",
+            f"pension_contributions?contribution_date=gte.{year_start}&contribution_date=lte.{today_str}&select=employee_id,amount",
+        ) or []
+        ytd_paid_map = {}
+        for c in ytd_contribs:
+            eid = c["employee_id"]
+            ytd_paid_map[eid] = ytd_paid_map.get(eid, 0) + (c.get("amount") or 0)
+
+        as_of_data = rpc("pension_status_as_of", {"p_as_of": today_str}) or []
+        accrual_map = {row["id"]: row.get("period_accrual", 0) for row in as_of_data}
+
+        rows = []
+        for emp in base:
+            eid = emp["id"]
+            if eid not in installment_map and eid not in ytd_paid_map:
+                continue
+            rows.append({
+                "id": eid,
+                "name": emp.get("name"),
+                "branch": emp.get("branch"),
+                "department": emp.get("department"),
+                "installment_amount": installment_map.get(eid, 0),
+                "ytd_accrual": accrual_map.get(eid, 0),
+                "ytd_paid": ytd_paid_map.get(eid, 0),
+            })
+        return self._send(200, {"rows": rows, "from": from_date, "to": to_date, "as_of": today_str})
 
     def _build_yearly_for_employee(self, employee_id):
         import datetime
