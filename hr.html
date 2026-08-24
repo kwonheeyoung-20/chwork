@@ -390,10 +390,6 @@
         <section class="panel" id="tab-pension_input" style="display:none;">
           <div class="panel-header">
             <h2>퇴직연금 발생 및 불입 입력 <span id="pensionInputCount" class="hr-count"></span></h2>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">✏️ 입력</span>
-              <button class="primary" onclick="openContribModal()">+ 불입 기록 추가</button>
-            </div>
           </div>
           <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
             누적추계액은 연봉 이력을 기준으로 매번 자동 계산됩니다 (별도 고정 작업 불필요). 전체 현황·인쇄는 "퇴직연금 현황" 탭에서 확인하세요.
@@ -428,20 +424,27 @@
           <div style="padding:12px; background:var(--bg); border-radius:var(--radius-sm); margin-bottom:14px; display:flex; flex-direction:column; gap:10px;">
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🔍 조회</span>
-              <label style="font-size:13px; color:var(--text-secondary);">기준일자(반기 마감일 등):</label>
+              <label style="font-size:13px; color:var(--text-secondary);">지급일자(반기 마감일 등):</label>
               <input id="pensionAsOf" type="date" class="hr-input" style="width:150px;">
               <button class="secondary" onclick="loadPension()">조회</button>
               <button class="secondary" onclick="$('pensionAsOf').value=''; loadPension();">초기화(오늘 기준)</button>
+              <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 2px;"></span>
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">✏️ 입력</span>
+              <button class="primary" onclick="openContribModal()">+ 불입 기록 추가</button>
             </div>
+            <p style="font-size:11px; color:var(--text-muted); margin:-4px 0 0;">
+              이 지급일자 기준으로 미지급잔액을 조회하고, 아래 "일괄 저장" 시 이 날짜가 불입 기록의 지급일자로 저장됩니다.
+              (퇴사자 정산의 "정산지급일", 불입 기록 추가의 "지급일자"와 같은 개념이에요.)
+            </p>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:10px; border-top:0.5px solid var(--border);">
               <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🧮 일괄 채우기</span>
-              <button class="secondary" onclick="fillBulkAmounts('accrual')">지정일자 미지급잔액으로 채우기</button>
+              <button class="secondary" onclick="fillBulkAmounts('accrual')">지급일자 미지급잔액으로 채우기</button>
               <button class="secondary" onclick="fillBulkAmounts('balance')">오늘 기준 전체잔액으로 채우기</button>
               <button class="secondary" onclick="fillBulkAmounts('clear')">비우기</button>
             </div>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:10px; border-top:0.5px solid var(--border);">
               <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">💾 저장</span>
-              <button class="primary" onclick="saveBulkContributions()">입력된 금액을 기준일자로 일괄 저장</button>
+              <button class="primary" onclick="saveBulkContributions()">입력된 금액을 지급일자로 일괄 저장</button>
             </div>
           </div>
 
@@ -455,9 +458,9 @@
                   <th class="num">잔액</th>
                   <th class="num" id="ytdAccrualHeader" style="background:var(--accent-light);">당해년도 발생액</th>
                   <th class="num" id="ytdPaidHeader" style="background:var(--accent-light);">당해년도 불입액 합계</th>
-                  <th class="num" id="asOfCumHeader">지정일자 누적추계액</th>
-                  <th class="num" id="periodAccrualHeader">해당연도 1월~지정일 발생액</th>
-                  <th class="num" id="asOfBalanceHeader">지정일자 기준 미지급잔액</th>
+                  <th class="num" id="asOfCumHeader">지급일자 누적추계액</th>
+                  <th class="num" id="periodAccrualHeader">해당연도 1월~지급일자 발생액</th>
+                  <th class="num" id="asOfBalanceHeader">지급일자 기준 미지급잔액</th>
                   <th class="num">이번 불입액(입력)</th>
                   <th style="white-space:nowrap; min-width:150px;"></th>
                 </tr>
@@ -1196,7 +1199,7 @@
       <label>직원
         <select id="c_employee_id" class="hr-input"></select>
       </label>
-      <label>입금일 <input id="c_date" type="date" class="hr-input"></label>
+      <label>지급일자 <input id="c_date" type="date" class="hr-input"></label>
       <label>금액(원) <input id="c_amount" type="number" class="hr-input"></label>
       <label>비고 <input id="c_note" class="hr-input" placeholder="예: 2026년 상반기"></label>
     </div>
@@ -1364,7 +1367,7 @@
     <h3 style="font-size:13px; margin-bottom:8px;">불입 기록</h3>
     <div class="table-wrap">
       <table class="table" id="contribHistoryTable">
-        <thead><tr><th>입금일</th><th class="num">금액</th><th>비고</th><th style="white-space:nowrap; min-width:100px;"></th></tr></thead>
+        <thead><tr><th>지급일자</th><th class="num">금액</th><th>비고</th><th style="white-space:nowrap; min-width:100px;"></th></tr></thead>
         <tbody id="contribHistoryTbody"></tbody>
       </table>
     </div>
