@@ -249,7 +249,8 @@ function switchHrTab(name) {
   $('tab-promotions').style.display = name === 'promotions' ? 'block' : 'none';
   $('tab-contacts').style.display = name === 'contacts' ? 'block' : 'none';
   $('tab-contractdocs').style.display = name === 'contractdocs' ? 'block' : 'none';
-  if (name === 'pension' || name === 'pension_input') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
+  if (name === 'pension') { loadPensionStatus(); }
+  if (name === 'pension_input') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); loadPensionInstallmentList(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
   if (name === 'payroll') {
     if (!$('payrollMonth').value) {
@@ -735,6 +736,36 @@ async function loadPension() {
   }
 }
 
+/* ── 퇴직연금 현황(자료) 탭 전용 — 항상 "오늘" 기준, 입력 탭의 기준일자와 완전히 무관 ── */
+let pensionStatusListCache = [];
+async function loadPensionStatus() {
+  const tbody = $('pensionStatusTbody');
+  tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if ($('pensionStatusTodayLabel')) $('pensionStatusTodayLabel').textContent = todayStr;
+  try {
+    // as_of 파라미터를 절대 붙이지 않음 — 서버가 항상 "오늘"을 기본값으로 계산하게 함
+    const res = await fetch(`${apiBase()}/api/hr_pension`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (res.status === 401) {
+      sessionStorage.removeItem('chwork_hr_pw');
+      $('loginPanel').style.display = 'block';
+      $('hrMain').style.display = 'none';
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      return;
+    }
+    pensionStatusListCache = data.pension || [];
+    renderPensionStatus(pensionStatusListCache);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
 function renderPensionStatus(list) {
   $('pensionStatusCount').textContent = `총 ${list.length}명`;
   const tbody = $('pensionStatusTbody');
@@ -780,7 +811,6 @@ function renderPension(list, asOf) {
   pensionListCache = list;
   pensionAsOfCache = asOf;
   $('pensionInputCount').textContent = `총 ${list.length}명`;
-  renderPensionStatus(list);
   $('asOfCumHeader').textContent = asOf ? `${asOf} 기준 누적추계액` : '지정일자 누적추계액';
   $('periodAccrualHeader').textContent = asOf ? `${asOf.slice(0,4)}년 1월~${asOf.slice(5)} 발생액` : '해당연도 1월~지정일 발생액';
   const tbody = $('pensionTbody');
@@ -2850,10 +2880,65 @@ function printPayslip() {
   document.head.removeChild(style);
 }
 
+/* ── 불입 차수(지급일자별) 목록 — '발생 및 불입 입력' 탭 ── */
+async function loadPensionInstallmentList() {
+  const wrap = $('pensionInstallmentList');
+  wrap.innerHTML = `<div class="dash-empty" style="padding:12px;">불러오는 중…</div>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension?installment_list=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      wrap.innerHTML = `<div class="dash-empty" style="padding:12px; color:var(--red);">${esc(data.detail || '불러오기 실패')}</div>`;
+      return;
+    }
+    const list = data.installments || [];
+    if (list.length === 0) {
+      wrap.innerHTML = `<div class="dash-empty" style="padding:12px;">아직 저장된 불입 기록이 없습니다.</div>`;
+      return;
+    }
+    const thisYear = String(new Date().getFullYear());
+    const currentYearList = list.filter(it => (it.date || '').slice(0, 4) === thisYear);
+    const olderList = list.filter(it => (it.date || '').slice(0, 4) !== thisYear);
+
+    const rowHtml = (it) => `
+      <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:13px;">
+        <b style="min-width:100px;">${esc(it.date)}</b>
+        <span style="color:var(--text-secondary);">${it.employee_count}명</span>
+        <span style="font-weight:600;">${fmt(it.total_amount)}원</span>
+        ${it.notes && it.notes.length ? `<span style="color:var(--text-muted); font-size:11px;">${it.notes.map(esc).join(', ')}</span>` : ''}
+        <button class="secondary" style="margin-left:auto; font-size:11px; padding:3px 8px;" onclick="printPensionInstallment('${it.date}','${it.date}')">이 차수 인쇄</button>
+      </div>
+    `;
+
+    let html = '';
+    if (currentYearList.length === 0) {
+      html += `<div class="dash-empty" style="padding:8px 12px;">${thisYear}년 불입 기록이 아직 없습니다.</div>`;
+    } else {
+      html += currentYearList.map(rowHtml).join('');
+    }
+    if (olderList.length > 0) {
+      html += `
+        <div id="pensionInstallmentOlder" style="display:none; flex-direction:column; gap:6px; margin-top:6px;">
+          ${olderList.map(rowHtml).join('')}
+        </div>
+        <button class="secondary" style="align-self:flex-start; font-size:12px; margin-top:4px;" id="pensionInstallmentMoreBtn"
+          onclick="const el=$('pensionInstallmentOlder'); const show = el.style.display==='none'; el.style.display = show?'flex':'none'; $('pensionInstallmentMoreBtn').textContent = show ? '▲ 이전 연도 접기' : '▼ 이전 연도 더보기 (${olderList.length}건)';">
+          ▼ 이전 연도 더보기 (${olderList.length}건)
+        </button>
+      `;
+    }
+    wrap.innerHTML = html;
+  } catch (e) {
+    wrap.innerHTML = `<div class="dash-empty" style="padding:12px; color:var(--red);">불러오기 실패</div>`;
+  }
+}
+
 /* ── 퇴직연금(DC) 차수별 불입 보고서 인쇄 (선택한 기간 지급액 + 당해년도 발생액/불입액 합계) ── */
-async function printPensionInstallment() {
-  const from = $('pensionInstallFrom').value;
-  const to = $('pensionInstallTo').value;
+async function printPensionInstallment(fromArg, toArg) {
+  const from = fromArg || ($('pensionInstallFrom') ? $('pensionInstallFrom').value : '');
+  const to = toArg || ($('pensionInstallTo') ? $('pensionInstallTo').value : '');
   if (!from || !to) {
     alert('불입 기간(차수)의 시작일과 종료일을 먼저 선택해주세요.');
     return;
@@ -2921,17 +3006,16 @@ async function printPensionInstallment() {
 
 /* ── 퇴직연금(DC) 현황 대장 출력 ── */
 function printPensionRegister() {
-  if (!pensionListCache || pensionListCache.length === 0) {
-    alert('먼저 퇴직연금 현황을 조회해주세요.');
+  if (!pensionStatusListCache || pensionStatusListCache.length === 0) {
+    alert('먼저 퇴직연금 현황이 로딩될 때까지 기다려주세요.');
     return;
   }
-  const list = pensionListCache;
-  const asOf = pensionAsOfCache;
+  const list = pensionStatusListCache;
   const positionOf = (id) => {
     const emp = employeesCache.find(e => e.id === id);
     return emp ? (emp.position || '-') : '-';
   };
-  $('pension_print_date').textContent = asOf ? `기준일자: ${asOf}` : `기준일자: 오늘(${new Date().toISOString().slice(0,10)})`;
+  $('pension_print_date').textContent = `기준일자: 오늘(${new Date().toISOString().slice(0,10)})`;
   $('pension_print_tbody').innerHTML = list.map(p => `
     <tr>
       <td>${esc(p.name)}</td>
@@ -2942,6 +3026,8 @@ function printPensionRegister() {
       <td class="num">${fmt(p.cumulative_estimate)}</td>
       <td class="num">${fmt(p.total_contributed)}</td>
       <td class="num">${fmt(p.balance)}</td>
+      <td class="num">${fmt(p.ytd_accrual)}</td>
+      <td class="num">${fmt(p.ytd_paid)}</td>
     </tr>
   `).join('');
 
