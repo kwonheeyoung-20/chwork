@@ -65,6 +65,11 @@ def check_password(candidate: str) -> bool:
     return candidate == HR_PASSWORD
 
 
+def is_period_locked(year_str):
+    rows = rest_request("GET", f"period_locks?module=eq.pension&period_key=eq.{year_str}&select=locked") or []
+    return bool(rows) and rows[0].get("locked", False)
+
+
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
@@ -198,13 +203,38 @@ class handler(BaseHTTPRequestHandler):
                 "note": payload.get("note"),
             }
             created = rest_request("POST", "pension_settlements", body=body, prefer="return=representation")
+            settlement = created[0] if created else None
 
             # 정산 확정 시 직원 재직상태도 자동으로 '퇴사' 처리
             rest_request("PATCH", f"employees?id=eq.{payload['employee_id']}", body={
                 "status": "퇴사", "retire_date": payload["retire_date"],
             })
 
-            return self._send(201, {"settlement": created[0] if created else None})
+            # 추가불입액이 있으면 불입 기록에도 자동 등록하고, 이 정산 건과 확실히 연결해둠
+            # (나중에 정산을 되돌릴 때 이 기록도 같이 정확하게 지우기 위함)
+            contrib_warning = None
+            add = payload["additional_payment"]
+            if add and add > 0 and settlement:
+                pay_date = payload.get("pay_date") or payload["retire_date"]
+                pay_year = pay_date[:4] if pay_date else None
+                if pay_year and is_period_locked(pay_year):
+                    contrib_warning = f"{pay_year}년 퇴직연금이 마감되어 있어 불입기록이 자동등록되지 않았습니다. 마감해제 후 '발생 및 불입 입력' 탭에서 직접 추가해주세요."
+                else:
+                    try:
+                        rest_request("POST", "pension_contributions", body={
+                            "employee_id": payload["employee_id"],
+                            "contribution_date": pay_date,
+                            "amount": add,
+                            "note": "퇴사자 정산 - 추가불입액(자동기록)",
+                            "settlement_id": settlement["id"],
+                        })
+                    except SupabaseError:
+                        contrib_warning = "불입기록 자동등록 중 오류가 발생했습니다. '발생 및 불입 입력' 탭에서 직접 추가해주세요."
+
+            result = {"settlement": settlement}
+            if contrib_warning:
+                result["contrib_warning"] = contrib_warning
+            return self._send(201, result)
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
         except Exception as e:
@@ -220,6 +250,19 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "id는 필수입니다"})
 
             existing = rest_request("GET", f"pension_settlements?id=eq.{settlement_id}&select=employee_id")
+
+            # 이 정산 건에서 자동 등록됐던 불입기록도 같이 삭제 (마감된 연도면 건너뛰고 안내)
+            linked = rest_request(
+                "GET", f"pension_contributions?settlement_id=eq.{settlement_id}&select=id,contribution_date"
+            ) or []
+            skipped_locked = []
+            for c in linked:
+                year = c["contribution_date"][:4] if c.get("contribution_date") else None
+                if year and is_period_locked(year):
+                    skipped_locked.append(year)
+                    continue
+                rest_request("DELETE", f"pension_contributions?id=eq.{c['id']}")
+
             rest_request("DELETE", f"pension_settlements?id=eq.{settlement_id}")
 
             # 되돌리기: 다른 확정 정산 기록이 더 없으면 재직 상태로 복구
@@ -231,7 +274,10 @@ class handler(BaseHTTPRequestHandler):
                         "status": "재직", "retire_date": None,
                     })
 
-            return self._send(200, {"ok": True})
+            result = {"ok": True}
+            if skipped_locked:
+                result["warning"] = f"{', '.join(sorted(set(skipped_locked)))}년이 마감되어 있어 연동된 불입기록은 삭제하지 못했습니다. 마감해제 후 직접 삭제해주세요."
+            return self._send(200, result)
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
         except Exception as e:
