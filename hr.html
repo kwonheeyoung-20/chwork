@@ -408,6 +408,16 @@
             누적추계액은 연봉 이력을 기준으로 매번 자동 계산됩니다 (별도 고정 작업 불필요). 전체 현황·인쇄는 "퇴직연금 현황" 탭에서 확인하세요.
           </p>
 
+          <div style="margin-bottom:14px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">📋 지금까지의 불입 차수(지급일자별)</span>
+              <button class="secondary" onclick="loadPensionInstallmentList()" style="font-size:11px; padding:3px 8px;">새로고침</button>
+            </div>
+            <div id="pensionInstallmentList" style="display:flex; flex-direction:column; gap:4px;">
+              <div class="dash-empty" style="padding:12px;">불러오는 중…</div>
+            </div>
+          </div>
+
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
             <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🔒 마감</span>
             <label style="font-size:13px; color:var(--text-secondary);">연도 마감:</label>
@@ -484,6 +494,11 @@
             <div class="settle-row"><span>누적추계액 (퇴사일 기준)</span><b id="s_cum">-</b></div>
             <div class="settle-row"><span>기 불입액 (퇴사일까지)</span><b id="s_paid">-</b></div>
             <div class="settle-row highlight"><span>추가불입(정산)액</span><b id="s_add">-</b></div>
+
+            <label style="display:block; margin-top:12px; font-size:13px; color:var(--text-secondary);">
+              정산지급일 (이 금액을 실제로 입금하는 날짜 — 불입 이력·퇴직연금 현황에 이 날짜로 자동 기록됩니다)
+              <input id="s_pay_date" type="date" class="hr-input" style="margin-top:4px;">
+            </label>
 
             <div class="hr-form-grid" style="margin-top:16px; border-top:0.5px solid var(--border); padding-top:16px;">
               <label>공제금액 합계 <input id="s_deduction" type="number" class="hr-input" value="0" oninput="calcNet()"></label>
