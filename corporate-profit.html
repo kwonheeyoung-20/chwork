@@ -250,17 +250,37 @@
               </label>
             </div>
 
-            <button class="primary" id="mcGenerateBtn" onclick="runMonthlyClosing()">월결산서 생성</button>
+            <button class="primary" id="mcGenerateBtn" onclick="runMonthlyClosing()">① 미리보기 생성</button>
             <div class="status" id="mcStatus"></div>
-            <div id="mcDownloadWrap" style="display:none; margin-top:12px;">
-              <a id="mcDownloadBtn" class="secondary" href="#">📥 생성된 월결산서 다운로드</a>
+          </div>
+
+          <div class="panel" id="mcPreviewPanel" style="display:none;">
+            <div class="panel-header"><h2 style="font-size:16px; margin-bottom:12px;">🔍 미리보기</h2></div>
+
+            <div class="kpi-grid" id="mcKpiGrid" style="margin-bottom:18px;"></div>
+
+            <div id="mcDownloadWrap" style="margin-bottom:18px;">
+              <a id="mcDownloadBtn" class="secondary" href="#">📥 미리보기 파일 다운로드 (아직 확정 전)</a>
             </div>
+
+            <h3 style="font-size:14px; margin-bottom:6px;">📝 재무상태표(내역) 비고 수정</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+              계정과목별 비고는 여기서 고치시면 저장되고, 다음 달 생성할 때도 자동으로 이어서 반영돼요. 확정 전까지는 몇 번이든 고치셔도 됩니다.
+            </p>
+            <div id="mcRemarksTable" style="max-height:360px; overflow-y:auto; border:0.5px solid var(--border); border-radius:var(--radius-sm);">
+              <div class="dash-empty" style="padding:12px;">불러오는 중…</div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+              <button class="primary" id="mcFinalizeBtn" onclick="finalizeMonthlyClosing()">✅ 확정(마감) — 목록에 저장</button>
+            </div>
+            <div class="status" id="mcFinalizeStatus"></div>
           </div>
 
           <div class="panel">
-            <div class="panel-header"><h2 style="font-size:16px; margin-bottom:12px;">🗓 저장된 월결산서 목록</h2></div>
+            <div class="panel-header"><h2 style="font-size:16px; margin-bottom:12px;">🗓 저장된 월결산서 목록 (확정본)</h2></div>
             <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
-              지금까지 생성한 월결산서가 여기 월별로 쌓여요. 같은 달을 다시 생성하면 최신 파일로 교체됩니다.
+              "확정(마감)"까지 완료한 보고서만 여기 월별로 쌓여요. 같은 달을 다시 확정하면 최신 파일로 교체됩니다.
             </p>
             <div id="mcReportList" style="display:flex; flex-direction:column; gap:6px;">
               <div class="dash-empty">불러오는 중…</div>
