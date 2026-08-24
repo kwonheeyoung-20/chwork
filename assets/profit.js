@@ -39,7 +39,7 @@ function switchTab(name) {
 
 /* ── 업로드 카드 파일명 표시 ── */
 function initUploadCards() {
-  ['glFile','tbFile','deptFile','extraFile'].forEach(id => {
+  ['glFile','tbFile','deptFile','extraFile','mcBsFile','mcIsFile','mcPlCurrentFile','mcPlPriorFile'].forEach(id => {
     const input = $(id);
     if (!input) return;
     input.addEventListener('change', () => {
@@ -370,10 +370,114 @@ function deleteHistory(idx) {
   renderHistory();
 }
 
+/* ── 월결산서 생성 ── */
+async function runMonthlyClosing() {
+  const baseDate = $('mcBaseDate').value;
+  if (!baseDate) {
+    showMcStatus('기준일자를 먼저 선택해주세요.', 'error');
+    return;
+  }
+  const files = {
+    bs_file: $('mcBsFile').files[0],
+    is_file: $('mcIsFile').files[0],
+    pl_current_file: $('mcPlCurrentFile').files[0],
+    pl_prior_file: $('mcPlPriorFile').files[0],
+  };
+  if (!files.bs_file && !files.is_file && !files.pl_current_file && !files.pl_prior_file) {
+    showMcStatus('백데이터 파일을 최소 1개 이상 업로드해주세요.', 'error');
+    return;
+  }
+
+  const btn = $('mcGenerateBtn');
+  if (btn) btn.disabled = true;
+  showMcStatus('서버로 전송 중…', 'running');
+  $('mcDownloadWrap').style.display = 'none';
+
+  const fd = new FormData();
+  fd.append('base_date', baseDate);
+  Object.entries(files).forEach(([key, file]) => { if (file) fd.append(key, file); });
+
+  try {
+    const apiBase = getApiBase();
+    const res = await fetch(apiBase + '/api/monthly_closing', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (btn) btn.disabled = false;
+    if (!data.ok) { showMcStatus('오류: ' + data.message, 'error'); return; }
+
+    showMcStatus('생성 완료 ✓ 엑셀을 열면 자동으로 수식이 재계산됩니다.' + (data.save_warning ? ' (' + data.save_warning + ')' : ' 목록에도 저장했어요.'), data.save_warning ? 'error' : 'success');
+    const blob = b64toBlob(data.xlsx_b64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const url = URL.createObjectURL(blob);
+    const dl = $('mcDownloadBtn');
+    dl.href = url;
+    dl.download = data.filename || '월결산서.xlsx';
+    $('mcDownloadWrap').style.display = 'block';
+    loadMonthlyClosingList();
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    showMcStatus('서버 연결 실패: ' + e.message, 'error');
+  }
+}
+
+function showMcStatus(msg, type = '') {
+  const el = $('mcStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'status' + (type ? ' ' + type : '');
+}
+
+/* ── 저장된 월별 목록 ── */
+async function loadMonthlyClosingList() {
+  const wrap = $('mcReportList');
+  if (!wrap) return;
+  wrap.innerHTML = `<div class="dash-empty">불러오는 중…</div>`;
+  try {
+    const apiBase = getApiBase();
+    const res = await fetch(apiBase + '/api/monthly_closing?list=1');
+    const data = await res.json();
+    if (!data.ok) {
+      wrap.innerHTML = `<div class="dash-empty" style="color:var(--red);">${data.message || '불러오기 실패'}</div>`;
+      return;
+    }
+    const list = data.reports || [];
+    if (list.length === 0) {
+      wrap.innerHTML = `<div class="dash-empty">아직 저장된 월결산서가 없습니다.</div>`;
+      return;
+    }
+    wrap.innerHTML = list.map(r => `
+      <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:13px;">
+        <b style="min-width:90px;">${r.period_key}</b>
+        <span style="color:var(--text-secondary);">기준일 ${r.base_date}</span>
+        <span style="color:var(--text-muted); font-size:11px; margin-left:auto;">
+          ${r.updated_at ? new Date(r.updated_at).toLocaleString('ko-KR') : ''}
+        </span>
+        <button class="secondary" style="font-size:11px; padding:3px 10px;" onclick="openMonthlyClosingReport('${r.period_key}')">열기</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    wrap.innerHTML = `<div class="dash-empty" style="color:var(--red);">불러오기 실패</div>`;
+  }
+}
+
+async function openMonthlyClosingReport(periodKey) {
+  try {
+    const apiBase = getApiBase();
+    const res = await fetch(apiBase + '/api/monthly_closing?period_key=' + encodeURIComponent(periodKey));
+    const data = await res.json();
+    if (!data.ok) { alert('오류: ' + data.message); return; }
+    window.open(data.url, '_blank');
+  } catch (e) {
+    alert('열기 실패: ' + e.message);
+  }
+}
+
 /* ── 초기화 ── */
 document.addEventListener('DOMContentLoaded', () => {
   loadApiBase();
   initUploadCards();
   renderHistory();
   switchTab('summary');
+  if ($('mcBaseDate') && !$('mcBaseDate').value) {
+    $('mcBaseDate').value = new Date().toISOString().slice(0, 10);
+  }
+  loadMonthlyClosingList();
 });
