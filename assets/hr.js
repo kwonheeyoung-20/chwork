@@ -108,7 +108,8 @@ const MENU_GROUPS = {
   pension: {
     label: '퇴직급여관리',
     tabs: [
-      { id: 'pension', label: '퇴직연금 현황', group: '입력' },
+      { id: 'pension', label: '퇴직연금 현황', group: '자료' },
+      { id: 'pension_input', label: '퇴직연금 발생 및 불입 입력', group: '입력' },
       { id: 'settlement', label: '퇴사자 정산', group: '자료' },
     ],
   },
@@ -239,6 +240,7 @@ function switchHrTab(name) {
   document.querySelectorAll('#hrTabBar .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   $('tab-employees').style.display = name === 'employees' ? 'block' : 'none';
   $('tab-pension').style.display = name === 'pension' ? 'block' : 'none';
+  $('tab-pension_input').style.display = name === 'pension_input' ? 'block' : 'none';
   $('tab-settlement').style.display = name === 'settlement' ? 'block' : 'none';
   $('tab-payroll').style.display = name === 'payroll' ? 'block' : 'none';
   $('tab-otherpay').style.display = name === 'otherpay' ? 'block' : 'none';
@@ -247,7 +249,7 @@ function switchHrTab(name) {
   $('tab-promotions').style.display = name === 'promotions' ? 'block' : 'none';
   $('tab-contacts').style.display = name === 'contacts' ? 'block' : 'none';
   $('tab-contractdocs').style.display = name === 'contractdocs' ? 'block' : 'none';
-  if (name === 'pension') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
+  if (name === 'pension' || name === 'pension_input') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
   if (name === 'payroll') {
     if (!$('payrollMonth').value) {
@@ -709,7 +711,7 @@ async function saveEmployee() {
 /* ── 퇴직연금 현황 ── */
 async function loadPension() {
   const tbody = $('pensionTbody');
-  tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   const asOf = $('pensionAsOf').value;
   try {
     const url = `${apiBase()}/api/hr_pension${asOf ? `?as_of=${asOf}` : ''}`;
@@ -724,7 +726,7 @@ async function loadPension() {
     }
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
       return;
     }
     renderPension(data.pension || [], asOf);
@@ -733,15 +735,57 @@ async function loadPension() {
   }
 }
 
+function renderPensionStatus(list) {
+  $('pensionStatusCount').textContent = `총 ${list.length}명`;
+  const tbody = $('pensionStatusTbody');
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
+    return;
+  }
+  const sum = (arr, key) => arr.reduce((s, p) => s + (Number(p[key]) || 0), 0);
+  const positionOf = (id) => {
+    const emp = employeesCache.find(e => e.id === id);
+    return emp ? (emp.position || '-') : '-';
+  };
+  let html = list.map(p => `
+    <tr>
+      <td>${esc(p.name)}</td>
+      <td>${esc(p.branch || '-')}</td>
+      <td>${esc(p.department || '-')}</td>
+      <td>${esc(positionOf(p.id))}</td>
+      <td>${esc(p.pension_enrollment_date || p.hire_date || '-')}</td>
+      <td class="num">${fmt(p.cumulative_estimate)}</td>
+      <td class="num">${fmt(p.total_contributed)}</td>
+      <td class="num ${p.balance > 0 ? 'negative' : ''}">${fmt(p.balance)}</td>
+      <td class="num" style="background:var(--accent-light);">${fmt(p.ytd_accrual)}</td>
+      <td class="num" style="background:var(--accent-light);">${fmt(p.ytd_paid)}</td>
+      <td><a class="hr-edit-link" onclick="openHistoryModal('${p.id}', '${esc(p.name)}')">이력/보정</a></td>
+    </tr>
+  `).join('');
+  html += `
+    <tr class="hr-total-row">
+      <td colspan="5">전체 합계 (${list.length}명)</td>
+      <td class="num">${fmt(sum(list,'cumulative_estimate'))}</td>
+      <td class="num">${fmt(sum(list,'total_contributed'))}</td>
+      <td class="num">${fmt(sum(list,'balance'))}</td>
+      <td class="num" style="background:var(--accent-light);">${fmt(sum(list,'ytd_accrual'))}</td>
+      <td class="num" style="background:var(--accent-light);">${fmt(sum(list,'ytd_paid'))}</td>
+      <td></td>
+    </tr>
+  `;
+  tbody.innerHTML = html;
+}
+
 function renderPension(list, asOf) {
   pensionListCache = list;
   pensionAsOfCache = asOf;
-  $('pensionCount').textContent = `총 ${list.length}명`;
+  $('pensionInputCount').textContent = `총 ${list.length}명`;
+  renderPensionStatus(list);
   $('asOfCumHeader').textContent = asOf ? `${asOf} 기준 누적추계액` : '지정일자 누적추계액';
   $('periodAccrualHeader').textContent = asOf ? `${asOf.slice(0,4)}년 1월~${asOf.slice(5)} 발생액` : '해당연도 1월~지정일 발생액';
   const tbody = $('pensionTbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
     return;
   }
 
@@ -760,6 +804,8 @@ function renderPension(list, asOf) {
       <td class="num">${fmt(p.cumulative_estimate)}</td>
       <td class="num">${fmt(p.total_contributed)}</td>
       <td class="num ${p.balance > 0 ? 'negative' : ''}">${fmt(p.balance)}</td>
+      <td class="num" style="background:var(--accent-light);">${fmt(p.ytd_accrual)}</td>
+      <td class="num" style="background:var(--accent-light);">${fmt(p.ytd_paid)}</td>
       <td class="num">${asOf ? fmt(p.as_of_cumulative_estimate) : '-'}</td>
       <td class="num">${asOf ? fmt(p.period_accrual) : '-'}</td>
       <td class="num ${asOf && p.as_of_balance > 0 ? 'negative' : ''}">${asOf ? fmt(p.as_of_balance) : '-'}</td>
@@ -773,6 +819,8 @@ function renderPension(list, asOf) {
       <td class="num">${fmt(sum(arr,'cumulative_estimate'))}</td>
       <td class="num">${fmt(sum(arr,'total_contributed'))}</td>
       <td class="num">${fmt(sum(arr,'balance'))}</td>
+      <td class="num" style="background:var(--accent-light);">${fmt(sum(arr,'ytd_accrual'))}</td>
+      <td class="num" style="background:var(--accent-light);">${fmt(sum(arr,'ytd_paid'))}</td>
       <td class="num">${asOf ? fmt(sum(arr,'as_of_cumulative_estimate')) : '-'}</td>
       <td class="num">${asOf ? fmt(sum(arr,'period_accrual')) : '-'}</td>
       <td class="num">${asOf ? fmt(sum(arr,'as_of_balance')) : '-'}</td>
@@ -800,6 +848,8 @@ function renderPension(list, asOf) {
       <td class="num">${fmt(sum(list,'cumulative_estimate'))}</td>
       <td class="num">${fmt(sum(list,'total_contributed'))}</td>
       <td class="num">${fmt(sum(list,'balance'))}</td>
+      <td class="num" style="background:var(--accent-light);">${fmt(sum(list,'ytd_accrual'))}</td>
+      <td class="num" style="background:var(--accent-light);">${fmt(sum(list,'ytd_paid'))}</td>
       <td class="num">${asOf ? fmt(sum(list,'as_of_cumulative_estimate')) : '-'}</td>
       <td class="num">${asOf ? fmt(sum(list,'period_accrual')) : '-'}</td>
       <td class="num">${asOf ? fmt(sum(list,'as_of_balance')) : '-'}</td>
@@ -1384,7 +1434,7 @@ async function loadPayrollPreview() {
   const ym = payrollYearMonthDate();
   if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
   const tbody = $('payrollTbody');
-  tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   $('retroAdjHeader').textContent = '소급인상분';
   $('finalTotalHeader').textContent = '최종 지급액';
   try {
@@ -1413,7 +1463,7 @@ async function loadPayrollPreview() {
     });
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; color:var(--red); padding:24px;">${esc(data.detail || '불러오기 실패')}</td></tr>`;
       return;
     }
     renderPayroll(data.payroll || [], false);
@@ -2790,6 +2840,75 @@ function printPayslip() {
   document.head.appendChild(style);
   window.print();
   document.head.removeChild(style);
+}
+
+/* ── 퇴직연금(DC) 차수별 불입 보고서 인쇄 (선택한 기간 지급액 + 당해년도 발생액/불입액 합계) ── */
+async function printPensionInstallment() {
+  const from = $('pensionInstallFrom').value;
+  const to = $('pensionInstallTo').value;
+  if (!from || !to) {
+    alert('불입 기간(차수)의 시작일과 종료일을 먼저 선택해주세요.');
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension?print_installment=1&from=${from}&to=${to}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert('불러오기 실패: ' + (data.error || data.detail || `상태코드 ${res.status}`));
+      return;
+    }
+    const rows = data.rows || [];
+    if (rows.length === 0) {
+      alert('선택한 기간에 저장된 불입 기록이 없습니다.');
+      return;
+    }
+    $('pension_install_print_range').textContent = `대상 차수: ${from} ~ ${to} 불입분`;
+    $('pension_install_print_asof').textContent = `당해년도 발생액·불입액 합계 기준일: ${data.as_of}`;
+
+    let sumInstall = 0, sumAccrual = 0, sumPaid = 0;
+    $('pension_install_print_tbody').innerHTML = rows.map(r => {
+      sumInstall += r.installment_amount || 0;
+      sumAccrual += r.ytd_accrual || 0;
+      sumPaid += r.ytd_paid || 0;
+      return `
+        <tr>
+          <td>${esc(r.name)}</td>
+          <td>${esc(r.branch || '-')}</td>
+          <td>${esc(r.department || '-')}</td>
+          <td class="num">${fmt(r.installment_amount)}</td>
+          <td class="num">${fmt(r.ytd_accrual)}</td>
+          <td class="num">${fmt(r.ytd_paid)}</td>
+        </tr>
+      `;
+    }).join('');
+    $('pension_install_print_tfoot').innerHTML = `
+      <tr class="hr-total-row">
+        <td colspan="3">합계 (${rows.length}명)</td>
+        <td class="num">${fmt(sumInstall)}</td>
+        <td class="num">${fmt(sumAccrual)}</td>
+        <td class="num">${fmt(sumPaid)}</td>
+      </tr>
+    `;
+
+    $('pensionInstallPrintArea').style.display = 'block';
+    const landscapeStyle = document.createElement('style');
+    landscapeStyle.id = 'pensionInstallLandscapeStyle';
+    landscapeStyle.textContent = `
+      @page { size: landscape; margin: 10mm; }
+      @media print {
+        #pensionInstallPrintArea table { font-size: 10px; border-collapse: collapse; width: 100%; }
+        #pensionInstallPrintArea th, #pensionInstallPrintArea td { padding: 3px 5px; line-height: 1.3; }
+      }
+    `;
+    document.head.appendChild(landscapeStyle);
+    window.print();
+    document.head.removeChild(landscapeStyle);
+    $('pensionInstallPrintArea').style.display = 'none';
+  } catch (e) {
+    alert('인쇄 준비 중 오류가 발생했습니다: ' + (e.message || ''));
+  }
 }
 
 /* ── 퇴직연금(DC) 현황 대장 출력 ── */
