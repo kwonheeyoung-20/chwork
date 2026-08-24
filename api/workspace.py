@@ -27,6 +27,15 @@ import urllib.request
 import urllib.error
 from urllib.parse import urlparse, parse_qs, quote
 
+
+def kst_today():
+    """서버(Vercel)는 UTC 기준으로 동작하는데, 한국은 UTC+9시간이라
+    kst_today()를 그냥 쓰면 한국시간 새벽 0시~오전 9시 사이에
+    "오늘"이 하루 전날짜로 잘못 계산되는 문제가 있었음(D-day 알림 등에 영향).
+    항상 한국시간 기준 오늘 날짜를 반환하도록 보정."""
+    return (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date()
+
+
 # ── 음력 변환 (korean_lunar_calendar 0.4.0, MIT License, usingsky@gmail.com) ──
 # 외부 pip 설치에 의존하지 않도록 라이브러리 전체를 직접 포함시켰습니다.
 # -*- coding: utf-8 -*-
@@ -199,7 +208,7 @@ class KoreanLunarCalendar(object) :
         self.__cumulativeSolarDays = {}
 
         # Default to today's solar date until an explicit date is set.
-        today = datetime.date.today()
+        today = kst_today()
         self.setSolarDate(today.year, today.month, today.day)
 
 
@@ -709,7 +718,7 @@ class handler(BaseHTTPRequestHandler):
             return self._send(200, {"tasks": tasks})
 
         if qs.get("upcoming", ["0"])[0] == "1":
-            today = datetime.date.today()
+            today = kst_today()
             days_override = qs.get("days", [None])[0]
             lookahead = int(days_override) if days_override else 60
             horizon = (today + datetime.timedelta(days=lookahead)).isoformat()
@@ -737,7 +746,7 @@ class handler(BaseHTTPRequestHandler):
                     })
             return self._send(200, {"upcoming": result})
 
-        today = datetime.date.today()
+        today = kst_today()
         default_from = (today.replace(day=1) - datetime.timedelta(days=31)).replace(day=1).isoformat()
         default_to = (today + datetime.timedelta(days=90)).isoformat()
         from_date = qs.get("from", [None])[0] or default_from
@@ -770,7 +779,7 @@ class handler(BaseHTTPRequestHandler):
             return self._send(200, {"renewals": rows})
 
         if qs.get("upcoming", ["0"])[0] == "1":
-            today = datetime.date.today()
+            today = kst_today()
             rows = rest_request(
                 "GET",
                 "contract_documents?alert_dismissed=eq.false&contract_end_date=not.is.null"
@@ -805,7 +814,7 @@ class handler(BaseHTTPRequestHandler):
         return self._send(200, {"documents": rows})
 
     def _get_todos(self, qs):
-        date_str = qs.get("date", [None])[0] or datetime.date.today().isoformat()
+        date_str = qs.get("date", [None])[0] or kst_today().isoformat()
         rows = rest_request(
             "GET", f"daily_todos?todo_date=eq.{date_str}&select=*&order=created_at.asc"
         )
@@ -820,7 +829,7 @@ class handler(BaseHTTPRequestHandler):
         (base_pay_before/meal_allowance_before가 저장되어 있으면) 그 "조정 전 정상 금액"을
         우선 사용합니다 — 연차수당은 정상 통상임금 기준이어야 하므로.
         연차수당 = 잔여일수 × 통상시급 × 8시간, 백원단위 올림은 화면(hr.js)에서 처리."""
-        as_of_str = qs.get("asof", [None])[0] or datetime.date.today().isoformat()
+        as_of_str = qs.get("asof", [None])[0] or kst_today().isoformat()
         include_all = qs.get("all", ["0"])[0] == "1"
 
         emp_path = "employees?select=id,name,branch,department&order=hire_date.asc"
@@ -936,7 +945,7 @@ class handler(BaseHTTPRequestHandler):
             return self._send(200, {"history": rows})
 
         # 미리보기(라이브 계산, 저장 안 됨)
-        as_of_str = qs.get("asof", [None])[0] or datetime.date.today().isoformat()
+        as_of_str = qs.get("asof", [None])[0] or kst_today().isoformat()
         as_of = datetime.date.fromisoformat(as_of_str)
         prior_year_end = datetime.date(as_of.year - 1, 12, 31)
         include_all = qs.get("all", ["0"])[0] == "1"
@@ -1095,7 +1104,7 @@ class handler(BaseHTTPRequestHandler):
             doc_id = payload.get("id")
             if not doc_id:
                 return self._send(400, {"error": "id는 필수입니다"})
-            terminated_date = payload.get("terminated_date") or datetime.date.today().isoformat()
+            terminated_date = payload.get("terminated_date") or kst_today().isoformat()
             rest_request("PATCH", f"contract_documents?id=eq.{doc_id}", body={
                 "terminated_date": terminated_date,
                 "termination_note": payload.get("note"),
@@ -1191,7 +1200,7 @@ class handler(BaseHTTPRequestHandler):
 
     def _post_todos(self, payload):
         content = payload.get("content")
-        todo_date = payload.get("todo_date") or datetime.date.today().isoformat()
+        todo_date = payload.get("todo_date") or kst_today().isoformat()
         if not content:
             return self._send(400, {"error": "content는 필수입니다"})
 
@@ -1349,7 +1358,7 @@ class handler(BaseHTTPRequestHandler):
 
         rest_request("PATCH", f"tax_schedule_tasks?id=eq.{task_id}", body=update_fields)
 
-        today = datetime.date.today().isoformat()
+        today = kst_today().isoformat()
         rest_request(
             "DELETE",
             f"tax_schedule_occurrences?task_id=eq.{task_id}&status=eq.pending&due_date=gte.{today}",
@@ -1528,7 +1537,7 @@ class handler(BaseHTTPRequestHandler):
         ) or []
         if not tasks:
             return
-        today = datetime.date.today()
+        today = kst_today()
         horizon_year = (today + datetime.timedelta(days=400)).year
         for t in tasks:
             if t.get("lunar_month") is None or t.get("lunar_day") is None:
@@ -1565,7 +1574,7 @@ class handler(BaseHTTPRequestHandler):
             return self._send(200, {"tasks": rows})
 
         if qs.get("upcoming", ["0"])[0] == "1":
-            today = datetime.date.today()
+            today = kst_today()
             horizon = (today + datetime.timedelta(days=60)).isoformat()
             rows = rest_request(
                 "GET",
@@ -1592,7 +1601,7 @@ class handler(BaseHTTPRequestHandler):
                     })
             return self._send(200, {"upcoming": result})
 
-        today = datetime.date.today()
+        today = kst_today()
         default_from = (today.replace(day=1) - datetime.timedelta(days=31)).replace(day=1).isoformat()
         default_to = (today + datetime.timedelta(days=90)).isoformat()
         from_date = qs.get("from", [None])[0] or default_from
@@ -1744,7 +1753,7 @@ class handler(BaseHTTPRequestHandler):
             return self._send(400, {"error": "수정할 항목이 없습니다"})
 
         rest_request("PATCH", f"personal_schedule_tasks?id=eq.{task_id}", body=update_fields)
-        today = datetime.date.today().isoformat()
+        today = kst_today().isoformat()
         rest_request(
             "DELETE",
             f"personal_schedule_occurrences?task_id=eq.{task_id}&status=eq.pending&due_date=gte.{today}",

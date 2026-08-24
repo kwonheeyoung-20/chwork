@@ -135,7 +135,8 @@ class handler(BaseHTTPRequestHandler):
         3) 퇴직연금(DC) 미가입 + 입사 1년 도래(법정 가입기한)
         """
         import datetime
-        today = datetime.date.today()
+        # 서버(UTC)와 한국(UTC+9) 시차 보정 — 새벽~오전 시간대 D-day 오차 방지
+        today = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date()
 
         emps = rest_request(
             "GET",

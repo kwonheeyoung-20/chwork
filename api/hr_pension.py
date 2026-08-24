@@ -162,13 +162,14 @@ class handler(BaseHTTPRequestHandler):
 
     def _build_yearly_for_employee(self, employee_id):
         import datetime
+        _kst_today = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date()
         emp = rest_request("GET", f"employees?id=eq.{employee_id}&select=hire_date,retire_date")
         if not emp:
             return []
         hire_date = emp[0]["hire_date"]
         retire_date = emp[0].get("retire_date")
         hire_year = int(hire_date[:4])
-        end_year = int(retire_date[:4]) if retire_date else datetime.date.today().year
+        end_year = int(retire_date[:4]) if retire_date else _kst_today.year
 
         history = rest_request(
             "GET", f"pension_cumulative_history?employee_id=eq.{employee_id}&select=year,cumulative_estimate"
@@ -177,7 +178,7 @@ class handler(BaseHTTPRequestHandler):
         earliest_known_year = min(history_by_year.keys()) if history_by_year else 2026
 
         start_year = max(hire_year, earliest_known_year)
-        today = datetime.date.today().isoformat()
+        today = _kst_today.isoformat()
 
         rows = []
         for y in range(start_year, end_year + 1):

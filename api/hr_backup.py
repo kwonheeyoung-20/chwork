@@ -133,7 +133,7 @@ class handler(BaseHTTPRequestHandler):
             if errors:
                 backup["_errors"] = errors
 
-            filename = f"chwork_backup_{datetime.date.today().isoformat()}.json"
+            filename = f"chwork_backup_{(datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date().isoformat()}.json"
             body = json.dumps(backup, ensure_ascii=False, default=str, indent=2).encode("utf-8")
 
             self.send_response(200)
