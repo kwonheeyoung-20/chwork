@@ -204,7 +204,7 @@
       <a href="schedule.html">📅 업무 일정관리</a>
       <a id="navContractDocs" href="hr.html#contractdocs" onclick="switchMenuGroup('contractdocs'); return false;">📁 계약/증빙관리</a>
       <a id="navContacts" href="hr.html#contacts" onclick="switchMenuGroup('contacts'); return false;">📇 거래처 연락처</a>
-      <a href="corporate-profit.html">📊 법인 손익 분석</a>
+      <a href="corporate-profit.html">📊 분석및보고</a>
       <div class="nav-personal-divider"></div>
       <a href="personal.html"><span class="nav-personal-dot"></span>👨‍👩‍👧 개인 일정관리</a>
       <div class="nav-personal-divider"></div>
@@ -363,19 +363,11 @@
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
               <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">📤 내보내기</span>
               <button class="secondary" onclick="downloadPensionExcel()">엑셀 다운로드</button>
-              <button class="secondary" onclick="printPensionRegister()">🖨 인쇄(전체 현황)</button>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:10px; border-top:0.5px solid var(--border);">
-              <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🖨 차수별 보고서</span>
-              <label style="font-size:12px; color:var(--text-secondary);">불입 기간(차수)</label>
-              <input id="pensionInstallFrom" type="date" class="hr-input" style="width:150px;">
-              <span>~</span>
-              <input id="pensionInstallTo" type="date" class="hr-input" style="width:150px;">
-              <button class="primary" onclick="printPensionInstallment()">🖨 이 차수 인쇄 (당해년도 합계 포함)</button>
+              <button class="secondary" onclick="printPensionRegister()">🖨 인쇄</button>
             </div>
           </div>
           <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
-            현재 기준 전체 발생·불입 현황입니다. 불입 기록 입력·마감 관리는 "퇴직연금 발생 및 불입 입력" 탭에서 하세요.
+            항상 <b id="pensionStatusTodayLabel">오늘</b> 기준 전체 발생·불입 현황입니다. 불입 기록 입력·마감 관리, 차수별 보고서 인쇄는 "퇴직연금 발생 및 불입 입력" 탭에서 하세요.
           </p>
 
           <div class="table-wrap">
@@ -415,6 +407,13 @@
             </div>
             <div id="pensionInstallmentList" style="display:flex; flex-direction:column; gap:4px;">
               <div class="dash-empty" style="padding:12px;">불러오는 중…</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:8px; padding-top:8px; border-top:0.5px solid var(--border);">
+              <span style="font-size:11px; color:var(--text-muted);">여러 차수를 합쳐서 인쇄:</span>
+              <input id="pensionInstallFrom" type="date" class="hr-input" style="width:140px; font-size:12px;">
+              <span style="font-size:12px;">~</span>
+              <input id="pensionInstallTo" type="date" class="hr-input" style="width:140px; font-size:12px;">
+              <button class="secondary" style="font-size:11px; padding:3px 8px;" onclick="printPensionInstallment()">🖨 인쇄</button>
             </div>
           </div>
 
@@ -1464,6 +1463,7 @@
       <tr>
         <th>이름</th><th>지사</th><th>부서</th><th>직급</th><th>가입일</th>
         <th class="num">누적추계액</th><th class="num">실불입액 합계</th><th class="num">잔액</th>
+        <th class="num">당해년도 발생액</th><th class="num">당해년도 불입액 합계</th>
       </tr>
     </thead>
     <tbody id="pension_print_tbody"></tbody>
