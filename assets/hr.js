@@ -110,7 +110,7 @@ const MENU_GROUPS = {
     tabs: [
       { id: 'pension', label: '퇴직연금 현황', group: '자료' },
       { id: 'pension_input', label: '퇴직연금 발생 및 불입 입력', group: '입력' },
-      { id: 'settlement', label: '퇴사자 정산', group: '자료' },
+      { id: 'settlement', label: '퇴사자 정산', group: '입력' },
     ],
   },
   contacts: { label: null, tabs: [{ id: 'contacts', label: '거래처 연락처' }] },
@@ -940,6 +940,7 @@ async function calcSettlement() {
     $('s_cum').textContent = fmt(data.cumulative_estimate) + '원';
     $('s_paid').textContent = fmt(data.total_contributed) + '원';
     $('s_add').textContent = fmt(data.additional_payment) + '원';
+    if (!$('s_pay_date').value) $('s_pay_date').value = retireDate;
     $('settlementResult').dataset.cum = data.cumulative_estimate;
     $('settlementResult').dataset.paid = data.total_contributed;
     $('settlementResult').dataset.add = data.additional_payment;
@@ -984,6 +985,7 @@ async function saveSettlement() {
   const other = Number($('s_other').value || 0);
   const add = Number(r.dataset.add || 0);
   const net = add - deduction + refund + other;
+  const payDate = $('s_pay_date').value || $('s_retire_date').value;
 
   const payload = {
     employee_id: $('s_employee_id').value,
@@ -1007,10 +1009,35 @@ async function saveSettlement() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('save failed');
+
+    // 추가불입액이 있으면(0보다 크면) 자동으로 불입 기록에도 등록 — 발생및불입입력을 따로 안 해도 되게
+    let contribWarning = '';
+    if (add > 0) {
+      try {
+        const cRes = await fetch(`${apiBase()}/api/hr_pension`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+          body: JSON.stringify({
+            employee_id: payload.employee_id,
+            contribution_date: payDate,
+            amount: add,
+            note: '퇴사자 정산 - 추가불입액(자동기록)',
+          }),
+        });
+        if (!cRes.ok) {
+          const cData = await cRes.json().catch(() => ({}));
+          contribWarning = ' (단, 불입기록 자동등록 실패: ' + (cData.error || cData.detail || '') + ' — "발생 및 불입 입력" 탭에서 직접 추가해주세요.)';
+        }
+      } catch (ce) {
+        contribWarning = ' (단, 불입기록 자동등록 중 오류가 발생했습니다 — "발생 및 불입 입력" 탭에서 직접 추가해주세요.)';
+      }
+    }
+
     $('settlementMsg').textContent = '';
-    $('settlementMsg').className = 'hr-msg success';
-    $('settlementMsg').textContent = '정산이 확정 저장되었습니다.';
+    $('settlementMsg').className = contribWarning ? 'hr-msg' : 'hr-msg success';
+    $('settlementMsg').textContent = '정산이 확정 저장되었습니다.' + contribWarning;
     loadSettlementHistory();
+    loadPension(); // 퇴직연금 현황·발생및불입입력 탭도 함께 최신화
   } catch (e) {
     $('settlementMsg').className = 'hr-msg';
     $('settlementMsg').textContent = '저장 중 오류가 발생했습니다.';
