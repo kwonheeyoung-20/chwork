@@ -1890,11 +1890,14 @@ class handler(BaseHTTPRequestHandler):
     def _patch_timetable(self, item_id, payload):
         kind = payload.get("type")
         if kind == "teacher":
-            fields = ("teacher_name", "teacher_phone", "note")
+            fields = ("subject_name", "teacher_name", "teacher_phone", "note")
             update_fields = {k: payload[k] for k in fields if k in payload}
             if not update_fields:
                 return self._send(400, {"error": "수정할 항목이 없습니다"})
-            rest_request("PATCH", f"timetable_teachers?id=eq.{item_id}", body=update_fields)
+            try:
+                rest_request("PATCH", f"timetable_teachers?id=eq.{item_id}", body=update_fields)
+            except SupabaseError as e:
+                return self._send(409, {"error": f"저장 실패: {e.body}"})
             return self._send(200, {"ok": True})
 
         if kind == "period":
