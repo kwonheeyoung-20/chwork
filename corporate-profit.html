@@ -51,18 +51,20 @@
   <div class="mobile-sidebar-overlay" id="mobileSidebarOverlay" onclick="toggleMobileSidebar()"></div>
   <div class="layout">
     <aside class="sidebar" id="mainSidebar">
-      <div style="padding:0 20px 16px;">
-        <div style="font-size:17px; font-weight:700;">창현 Dashboard</div>
-        <div style="font-size:11px; color:var(--text-muted);">관리부 · 경영관리 · 재무보고</div>
-      </div>
-      <nav class="nav" style="display:flex; flex-direction:column; gap:2px; padding:0 12px;">
+      <div class="brand">창현 Dashboard</div>
+      <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
+      <nav class="nav">
         <a href="index.html">🏠 대시보드</a>
         <div class="nav-personal-divider"></div>
         <a href="hr.html#home">👥 인사/급여관리</a>
+        <div class="nav-sub">
+          <a href="hr.html#payroll">💰 급여관리</a>
+          <a href="hr.html#pension">🏦 퇴직급여관리</a>
+        </div>
         <a href="schedule.html">📅 업무 일정관리</a>
         <a href="hr.html#contractdocs">📁 계약/증빙관리</a>
         <a href="hr.html#contacts">📇 거래처 연락처</a>
-        <a href="corporate-profit.html" style="font-weight:700; color:var(--accent);">📊 분석및보고</a>
+        <a class="active" href="corporate-profit.html">📊 분석및보고</a>
         <div class="nav-personal-divider"></div>
         <a href="personal.html">👨‍👩‍👧 개인 일정관리</a>
         <div class="nav-personal-divider"></div>
