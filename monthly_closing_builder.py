@@ -9,6 +9,11 @@
 매달 할 일은: 백데이터 시트 4개의 "내용"만 새로 업로드된 파일로 교체하고,
 각 행마다 있는 매칭용 키 수식(과목명 정제 + 중복순번)을 새 행 개수에 맞게 다시 세팅하는 것.
 보고서 시트는 손대지 않으므로 수기로 입력해둔 "내역"(비고) 칸도 그대로 보존된다.
+
+업로드되는 백데이터는 최신 엑셀(.xlsx)뿐 아니라 회계프로그램에서 바로 내보낸
+예전 방식(.xls)도 그대로 받을 수 있어야 하고, 계정과목 유무에 따라 행/열 개수가
+매달 달라질 수 있으므로(예: 상반기만 있으면 8열, 연말이면 14열) 항상 "지금 실제
+채워진 만큼만" 읽어서 처리한다.
 """
 from __future__ import annotations
 from io import BytesIO
@@ -25,7 +30,56 @@ RAW_SHEET_CONFIG = {
 }
 
 
-def _clear_and_fill(dst_ws, cfg, src_ws):
+def _load_rows(file_obj) -> list[list]:
+    """업로드된 백데이터 파일을 읽어서 2차원 리스트(행렬)로 반환.
+    최신 엑셀(.xlsx, PK로 시작하는 zip 포맷)과 예전 엑셀(.xls, OLE2 포맷) 둘 다 지원.
+    각 행의 길이는 원본 그대로(짧을 수 있음) — 컬럼이 모자란 부분은 나중에 None 처리."""
+    if hasattr(file_obj, "read"):
+        data = file_obj.read()
+        try:
+            file_obj.seek(0)
+        except Exception:
+            pass
+    else:
+        with open(file_obj, "rb") as f:
+            data = f.read()
+
+    if data[:2] == b"PK":
+        # 최신 엑셀(.xlsx)
+        wb = openpyxl.load_workbook(BytesIO(data), data_only=True)
+        ws = wb.worksheets[0]
+        rows = []
+        for row in ws.iter_rows():
+            rows.append([c.value for c in row])
+        return rows
+
+    # 예전 엑셀(.xls) — 회계프로그램(더존 등)에서 바로 내보낸 형식
+    import xlrd
+    wb = xlrd.open_workbook(file_contents=data)
+    ws = wb.sheet_by_index(0)
+    rows = []
+    for r in range(ws.nrows):
+        row = []
+        for c in range(ws.ncols):
+            v = ws.cell_value(r, c)
+            row.append(None if v == "" else v)
+        rows.append(row)
+    return rows
+
+
+def _cell(rows: list[list], row_1idx: int, col_1idx: int):
+    """1-indexed 행/열로 rows(0-indexed 행렬)에서 값 가져오기. 범위를 벗어나면 None."""
+    r = row_1idx - 1
+    c = col_1idx - 1
+    if r < 0 or r >= len(rows):
+        return None
+    line = rows[r]
+    if c < 0 or c >= len(line):
+        return None
+    return line[c]
+
+
+def _clear_and_fill(dst_ws, cfg, src_rows: list[list]):
     start_row = cfg['start_row']
     start_col = column_index_from_string(cfg['data_start_col'])
     end_col = column_index_from_string(cfg['data_end_col'])
@@ -43,19 +97,20 @@ def _clear_and_fill(dst_ws, cfg, src_ws):
         dst_ws.cell(row=r, column=key_col).value = None
 
     # 2) 새 파일의 값을 그대로 복사 + 이름/키 수식 재생성
-    src_max_row = src_ws.max_row
+    # (실제 업로드 파일의 행/열 개수는 계정과목 유무에 따라 매달 달라질 수 있어
+    #  항상 그 파일에 실제로 들어있는 만큼만 읽는다 — _cell()이 범위 밖이면 None을 반환)
+    src_max_row = len(src_rows)
     out_row = start_row
     for r in range(start_row, src_max_row + 1):
         row_has_value = any(
-            src_ws.cell(row=r, column=c).value not in (None, '')
+            _cell(src_rows, r, c) not in (None, '')
             for c in range(start_col, end_col + 1)
         )
         if not row_has_value:
-            # 원본에서도 완전 빈 행은 건너뛰지 않고 그대로 유지(행 정렬 보존을 위해 값만 비움)
             out_row += 1
             continue
         for c in range(start_col, end_col + 1):
-            dst_ws.cell(row=out_row, column=c).value = src_ws.cell(row=r, column=c).value
+            dst_ws.cell(row=out_row, column=c).value = _cell(src_rows, r, c)
         dst_ws.cell(row=out_row, column=name_col).value = (
             f'=IF({a_letter}{out_row}="","",SUBSTITUTE({a_letter}{out_row}," ",""))'
         )
@@ -74,7 +129,7 @@ def build_monthly_closing(
 ) -> bytes:
     """
     uploaded_files: {"재무상태표": <파일경로 or BytesIO>, "손익계산서": ..., "기간별손익계산서": ..., "기간별손익계산서(전년동기)": ...}
-    없는 키는 건너뛰고 기존 데이터를 그대로 둔다.
+    없는 키는 건너뛰고 기존 데이터를 그대로 둔다. 파일은 .xlsx/.xls 둘 다 가능.
 
     base_date: 결산기준일 — 이 월의 실적을 다루는지(예: 2026-07-31)
     prepared_date: 작성일자 — 실제로 이 보고서를 작성/보고한 날짜(예: 2026-09-05, 기준일자와 다를 수 있음)
@@ -85,10 +140,9 @@ def build_monthly_closing(
     for sheet_name, cfg in RAW_SHEET_CONFIG.items():
         if sheet_name not in uploaded_files or uploaded_files[sheet_name] is None:
             continue
-        src_wb = openpyxl.load_workbook(uploaded_files[sheet_name], data_only=True)
-        src_ws = src_wb.worksheets[0]
+        src_rows = _load_rows(uploaded_files[sheet_name])
         dst_ws = wb[sheet_name]
-        _clear_and_fill(dst_ws, cfg, src_ws)
+        _clear_and_fill(dst_ws, cfg, src_rows)
 
     # 기준일 갱신 — 이 값 하나로 인덱스/요약/재무상태표(내역)/매출액대비 비율분석/전월대비증감의
     # 모든 기간 문구가 자동으로 바뀜
@@ -145,7 +199,7 @@ def apply_remarks_to_bs_naeyeok(wb, remarks_map: dict) -> None:
             ws.cell(row=r, column=4).value = remarks_map[key] or None
 
 
-# 미리보기용 핵심지표 — 라이브러리(LibreOffice) 없이도 바로 계산해서 보여주기 위해
+# 미리보기/보고서용 핵심지표 — 라이브러리(LibreOffice) 없이도 바로 계산해서 보여주기 위해
 # 백데이터 파일을 직접 읽어서 계정명으로 찾음 (엑셀 수식과 동일한 매칭 방식)
 _IS_TARGETS = {
     "매출액": "Ⅰ.매출액",
@@ -193,19 +247,55 @@ def _first_nonzero(*values):
 def _scan_raw_sheet_for_targets(file_obj, targets: dict, value_cols=(2, 3)) -> dict:
     """file_obj: 업로드된 원본 파일(재무상태표 또는 손익계산서 형식, A=과목, B/C 또는 지정된 컬럼이 당기 금액).
     targets: {친숙한이름: 정규화된 계정명}"""
-    wb = openpyxl.load_workbook(file_obj, data_only=True)
-    ws = wb.worksheets[0]
+    src_rows = _load_rows(file_obj)
     key_to_friendly = {v: k for k, v in targets.items()}
     result = {}
-    for row in ws.iter_rows():
-        label = row[0].value if row else None
+    for row in src_rows:
+        label = row[0] if row else None
         if not label:
             continue
         key = normalize_key(label)
         if key in key_to_friendly:
-            b = row[value_cols[0] - 1].value if len(row) >= value_cols[0] else None
-            c = row[value_cols[1] - 1].value if len(row) >= value_cols[1] else None
+            b = row[value_cols[0] - 1] if len(row) >= value_cols[0] else None
+            c = row[value_cols[1] - 1] if len(row) >= value_cols[1] else None
             result[key_to_friendly[key]] = _first_nonzero(b, c)
+    return result
+
+
+def _scan_col_b(file_obj, targets: dict) -> dict:
+    """기간별손익계산서류 파일에서 B열(계, =채워진 월들의 합계)을 계정명으로 찾아서 가져옴."""
+    src_rows = _load_rows(file_obj)
+    key_to_friendly = {v: k for k, v in targets.items()}
+    result = {}
+    for row in src_rows:
+        label = row[0] if row else None
+        if not label:
+            continue
+        key = normalize_key(label)
+        if key in key_to_friendly:
+            b = row[1] if len(row) > 1 else None
+            result[key_to_friendly[key]] = _to_number(b) or 0
+    return result
+
+
+def _monthly_trend(file_obj, label_targets=("매출액", "영업이익")) -> dict:
+    """기간별손익계산서(당해)에서 월별(C~N열, 1~12월) 매출액/영업이익 추이를 뽑아옴.
+    실제 채워진 달만큼만 값이 들어오고 나머지는 None(회계연도 진행 중이면 당연히 그럼)."""
+    targets = {"매출액": "Ⅰ.매출액", "영업이익": "Ⅴ.영업이익"}
+    src_rows = _load_rows(file_obj)
+    key_to_friendly = {v: k for k, v in targets.items() if k in label_targets}
+    result = {k: [None] * 12 for k in label_targets}
+    for row in src_rows:
+        label = row[0] if row else None
+        if not label:
+            continue
+        key = normalize_key(label)
+        if key in key_to_friendly:
+            friendly = key_to_friendly[key]
+            for m in range(12):
+                col_idx = 2 + m  # 0-index: C열=index2 → 1월
+                v = row[col_idx] if len(row) > col_idx else None
+                result[friendly][m] = _to_number(v)
     return result
 
 
@@ -223,3 +313,45 @@ def compute_preview_summary(uploaded_files: dict) -> dict:
         except Exception:
             pass
     return summary
+
+
+def compute_full_report_summary(uploaded_files: dict) -> dict:
+    """인쇄용 보고서에 필요한 전체 요약(당기/전년동기/전기 손익 + 재무상태 + 월별추이)을 계산.
+    엑셀 수식과 동일한 계정명 매칭 방식을 그대로 파이썬으로 재현 — LibreOffice 재계산 불필요."""
+    result = {"income": {}, "balance": {}, "trend": {}}
+
+    if uploaded_files.get("손익계산서"):
+        try:
+            cur = _scan_raw_sheet_for_targets(uploaded_files["손익계산서"], _IS_TARGETS, value_cols=(2, 3))
+            prev_year = _scan_raw_sheet_for_targets(uploaded_files["손익계산서"], _IS_TARGETS, value_cols=(4, 5))
+            for k in _IS_TARGETS:
+                result["income"].setdefault(k, {})["당기"] = cur.get(k, 0)
+                result["income"].setdefault(k, {})["전기"] = prev_year.get(k, 0)
+        except Exception:
+            pass
+
+    if uploaded_files.get("기간별손익계산서(전년동기)"):
+        try:
+            same_period_last_year = _scan_col_b(uploaded_files["기간별손익계산서(전년동기)"], _IS_TARGETS)
+            for k, v in same_period_last_year.items():
+                result["income"].setdefault(k, {})["전년동기"] = v
+        except Exception:
+            pass
+
+    if uploaded_files.get("재무상태표"):
+        try:
+            cur = _scan_raw_sheet_for_targets(uploaded_files["재무상태표"], _BS_TARGETS, value_cols=(2, 3))
+            prev = _scan_raw_sheet_for_targets(uploaded_files["재무상태표"], _BS_TARGETS, value_cols=(4, 5))
+            for k in _BS_TARGETS:
+                result["balance"].setdefault(k, {})["당기"] = cur.get(k, 0)
+                result["balance"].setdefault(k, {})["전기"] = prev.get(k, 0)
+        except Exception:
+            pass
+
+    if uploaded_files.get("기간별손익계산서"):
+        try:
+            result["trend"] = _monthly_trend(uploaded_files["기간별손익계산서"])
+        except Exception:
+            pass
+
+    return result

@@ -17,6 +17,8 @@
       --text-primary: #eaeaea; --text-secondary: #b0b0b0; --text-muted: #808080;
     }
     body { background: var(--bg); }
+    .nav-personal-divider { border-top: 0.5px solid var(--border); margin: 10px 10px 6px; }
+    html[data-theme="dark"] .nav-personal-divider { border-color:#ffffff; }
     .hidden { display: none !important; }
     .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
     .kpi-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; }
@@ -82,11 +84,11 @@
       </div>
 
       <div class="tabs" id="mainSectionTabBar" style="padding:0 28px; margin-top:10px;">
-        <button class="tab-btn active" data-section="branch_profit" onclick="switchMainSection('branch_profit')">지사별손익자료</button>
-        <button class="tab-btn" data-section="monthly_closing" onclick="switchMainSection('monthly_closing')">월결산서</button>
+        <button class="tab-btn active" data-section="monthly_closing" onclick="switchMainSection('monthly_closing')">월결산서</button>
+        <button class="tab-btn" data-section="branch_profit" onclick="switchMainSection('branch_profit')">지사별손익자료</button>
       </div>
 
-      <div id="section-branch_profit" class="main-section">
+      <div id="section-branch_profit" class="main-section" style="display:none;">
       <div class="content" style="display:flex; flex-direction:column; gap:18px; padding:20px 28px;">
         <div class="panel">
           <div class="panel-header"><h2 style="font-size:16px; margin-bottom:12px;">📤 파일 업로드</h2></div>
@@ -199,7 +201,7 @@
       </div>
       </div>
 
-      <div id="section-monthly_closing" class="main-section" style="display:none;">
+      <div id="section-monthly_closing" class="main-section">
         <div class="content" style="display:flex; flex-direction:column; gap:18px; padding:20px 28px;">
           <div class="panel">
             <div class="panel-header"><h2 style="font-size:16px; margin-bottom:12px;">📋 월결산서 생성</h2></div>
@@ -259,8 +261,9 @@
 
             <div class="kpi-grid" id="mcKpiGrid" style="margin-bottom:18px;"></div>
 
-            <div id="mcDownloadWrap" style="margin-bottom:18px;">
-              <a id="mcDownloadBtn" class="secondary" href="#">📥 미리보기 파일 다운로드 (아직 확정 전)</a>
+            <div id="mcDownloadWrap" style="margin-bottom:18px; display:flex; gap:10px; flex-wrap:wrap;">
+              <a id="mcDownloadBtn" class="secondary" href="#">📥 미리보기 엑셀 다운로드 (백데이터용, 아직 확정 전)</a>
+              <button class="secondary" onclick="printMonthlyClosingReport()">🖨 보고서 인쇄 (보고용 요약)</button>
             </div>
 
             <h3 style="font-size:14px; margin-bottom:6px;">📝 재무상태표(내역) 비고 수정</h3>
@@ -289,6 +292,50 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <div id="mcPrintArea" style="display:none;">
+    <h2 id="mc_print_title" style="margin-bottom:4px;">월차 결산 보고서</h2>
+    <p id="mc_print_sub" style="font-size:13px; color:var(--text-secondary); margin-bottom:6px;"></p>
+    <table style="border-collapse:collapse; margin-bottom:20px;">
+      <tr>
+        <td style="border:1px solid #999; padding:6px 16px; text-align:center; font-size:12px;">담당</td>
+        <td style="border:1px solid #999; padding:6px 16px; text-align:center; font-size:12px;">이사</td>
+        <td style="border:1px solid #999; padding:6px 16px; text-align:center; font-size:12px;">임원</td>
+        <td style="border:1px solid #999; padding:6px 16px; text-align:center; font-size:12px;">사장</td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #999; height:50px;"></td>
+        <td style="border:1px solid #999;"></td>
+        <td style="border:1px solid #999;"></td>
+        <td style="border:1px solid #999;"></td>
+      </tr>
+    </table>
+
+    <h3 style="font-size:14px; margin-bottom:8px;">■ 손익 요약 (단위: 원)</h3>
+    <table class="table" style="width:100%; font-size:12px; margin-bottom:20px;">
+      <thead>
+        <tr>
+          <th>구분</th><th class="num">당기</th><th class="num">전년동기</th>
+          <th class="num">증감액</th><th class="num">증감률</th><th class="num">전기(연간)</th>
+        </tr>
+      </thead>
+      <tbody id="mc_print_income_tbody"></tbody>
+    </table>
+
+    <h3 style="font-size:14px; margin-bottom:8px;">■ 재무상태 요약 (단위: 원)</h3>
+    <table class="table" style="width:100%; font-size:12px; margin-bottom:20px;">
+      <thead>
+        <tr><th>구분</th><th class="num">당기</th><th class="num">전기</th><th class="num">증감액</th><th class="num">증감률</th></tr>
+      </thead>
+      <tbody id="mc_print_balance_tbody"></tbody>
+    </table>
+
+    <h3 style="font-size:14px; margin-bottom:8px;">■ 월별 추이 (단위: 원)</h3>
+    <table class="table" style="width:100%; font-size:11px;">
+      <thead><tr id="mc_print_trend_thead"></tr></thead>
+      <tbody id="mc_print_trend_tbody"></tbody>
+    </table>
   </div>
 
   <div id="settingsModal" class="hr-modal-backdrop" style="display:none;">
