@@ -180,6 +180,15 @@ class handler(BaseHTTPRequestHandler):
             self._json(400, {"ok": False, "message": "기준일자 형식이 올바르지 않습니다 (YYYY-MM-DD)."})
             return
 
+        prepared_date_str = fs.getvalue("prepared_date")
+        prepared_date = None
+        if prepared_date_str:
+            try:
+                prepared_date = datetime.date.fromisoformat(prepared_date_str)
+            except ValueError:
+                self._json(400, {"ok": False, "message": "작성일자 형식이 올바르지 않습니다 (YYYY-MM-DD)."})
+                return
+
         if not uploaded:
             self._json(400, {"ok": False, "message": "최소 1개 이상의 백데이터 파일을 업로드해주세요."})
             return
@@ -193,7 +202,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             sys.path.insert(0, str(ROOT))
             from monthly_closing_builder import build_monthly_closing
-            result_bytes = build_monthly_closing(str(TEMPLATE_PATH), uploaded, base_date)
+            result_bytes = build_monthly_closing(str(TEMPLATE_PATH), uploaded, base_date, prepared_date)
             output_path.write_bytes(result_bytes)
         except Exception as exc:
             self._json(500, {"ok": False, "message": f"보고서 생성 실패: {exc}"})
@@ -216,6 +225,7 @@ class handler(BaseHTTPRequestHandler):
                 body={
                     "period_key": period_key,
                     "base_date": base_date.isoformat(),
+                    "prepared_date": (prepared_date or datetime.date.today()).isoformat(),
                     "file_name": filename,
                     "storage_path": storage_path,
                     "updated_at": datetime.datetime.utcnow().isoformat(),
