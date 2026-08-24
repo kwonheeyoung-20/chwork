@@ -2921,7 +2921,7 @@ async function loadPensionInstallmentList() {
         <span style="color:var(--text-secondary);">${it.employee_count}명</span>
         <span style="font-weight:600;">${fmt(it.total_amount)}원</span>
         ${it.notes && it.notes.length ? `<span style="color:var(--text-muted); font-size:11px;">${it.notes.map(esc).join(', ')}</span>` : ''}
-        <button class="secondary" style="margin-left:auto; font-size:11px; padding:3px 8px;" onclick="printPensionInstallment('${it.date}','${it.date}')">이 차수 인쇄</button>
+        <button class="secondary" style="margin-left:auto; font-size:11px; padding:3px 8px;" onclick="printPensionInstallment('${String(it.date).slice(0,10)}','${String(it.date).slice(0,10)}')">이 차수 인쇄</button>
       </div>
     `;
 
@@ -2982,8 +2982,8 @@ async function printPensionInstallment(fromArg, toArg) {
         <tr>
           <td>${esc(r.name)}</td>
           <td>${esc(r.branch || '-')}</td>
-          <td style="border-right:1.5px solid #333;">${esc(r.department || '-')}</td>
-          <td class="num" style="border-right:1.5px solid #333;">${fmt(r.installment_amount)}</td>
+          <td>${esc(r.department || '-')}</td>
+          <td class="num">${fmt(r.installment_amount)}</td>
           <td class="num">${fmt(r.ytd_accrual)}</td>
           <td class="num">${fmt(r.ytd_paid)}</td>
         </tr>
@@ -2991,8 +2991,8 @@ async function printPensionInstallment(fromArg, toArg) {
     }).join('');
     $('pension_install_print_tfoot').innerHTML = `
       <tr class="hr-total-row">
-        <td colspan="3" style="border-right:1.5px solid #333;">합계 (${rows.length}명)</td>
-        <td class="num" style="border-right:1.5px solid #333;">${fmt(sumInstall)}</td>
+        <td colspan="3">합계 (${rows.length}명)</td>
+        <td class="num">${fmt(sumInstall)}</td>
         <td class="num">${fmt(sumAccrual)}</td>
         <td class="num">${fmt(sumPaid)}</td>
       </tr>
@@ -3038,7 +3038,7 @@ function printPensionRegister() {
       <td>${esc(p.pension_enrollment_date || p.hire_date || '-')}</td>
       <td class="num">${fmt(p.cumulative_estimate)}</td>
       <td class="num">${fmt(p.total_contributed)}</td>
-      <td class="num" style="border-right:1.5px solid #333;">${fmt(p.balance)}</td>
+      <td class="num">${fmt(p.balance)}</td>
       <td class="num">${fmt(p.ytd_accrual)}</td>
       <td class="num">${fmt(p.ytd_paid)}</td>
     </tr>

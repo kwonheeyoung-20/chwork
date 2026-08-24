@@ -684,22 +684,25 @@ function renderTimetable(periods, entries) {
         cells += `<td><span class="tt-cell-empty-add" onclick="openTimetableEntryModal('${p.period_label}', ${wd})">+ 등록</span></td>`;
         continue;
       }
-      // 병합 대상: 0교시/점심시간처럼 "요일 공통" 칸만 병합. 그 외(정규수업/방과후/학원)는
-      // 요일마다 각각 독립된 칸으로 보여줌 — 과목이 같아도 합치지 않음.
-      const mergeable = WHOLE_ROW_PERIODS.includes(p.period_label);
+      // 가로 병합(여러 요일에 걸쳐 합치기): 0교시/점심시간처럼 "요일 공통" 칸만.
+      // 세로 병합(같은 요일 연속 교시가 같은 과목이면 합치기): 요일공통칸 + 방과후/학원도 허용.
+      // 정규수업(regular)만 세로 병합도 하지 않고 요일마다 독립된 칸으로 보여줌.
+      const isWholeRowPeriod = WHOLE_ROW_PERIODS.includes(p.period_label);
+      const colspanMergeable = isWholeRowPeriod;
+      const rowspanMergeable = isWholeRowPeriod || e.subject_type === 'afterschool' || e.subject_type === 'academy';
 
       // 가로 병합 범위 계산
       let colspan = 1;
-      if (mergeable) {
+      if (colspanMergeable) {
         while (wd + colspan <= 5) {
           const nextE = entryMap[`${p.period_label}__${wd + colspan}`];
           if (nextE && nextE.subject_name === e.subject_name && (nextE.note||'') === (e.note||'')) colspan++;
           else break;
         }
       }
-      // 세로 병합도 "요일 공통" 칸일 때만
+      // 세로 병합은 가로 병합이 안 일어났을 때만(1칸 너비일 때만) 시도
       let rowspan = 1;
-      if (mergeable && colspan === 1) {
+      if (rowspanMergeable && colspan === 1) {
         let nextIdx = periodIdx + 1;
         while (nextIdx < periods.length) {
           const nextP = periods[nextIdx];
@@ -1071,10 +1074,12 @@ const SUBJECT_TYPE_BADGE = {
 
 function subjectTypeBadge(subjectName) {
   // 시간표(entriesCache)에 등록된 과목명과 대조해서, 그 과목이 정규/방과후/학원 중 뭘로
-  // 등록되어 있는지 자동으로 찾아 배지로 보여줌. 여러 요일에 걸쳐 있으면 첫 번째 걸 기준으로.
-  const match = (entriesCache || []).find(e => e.subject_name === subjectName);
-  if (!match || !match.subject_type) return '';
-  const info = SUBJECT_TYPE_BADGE[match.subject_type];
+  // 등록되어 있는지 자동으로 찾아 배지로 보여줌. 같은 과목명이 여러 요일에 걸쳐 있을 때,
+  // 방과후/학원으로 등록된 게 하나라도 있으면 그걸 우선 표시(정규가 섞여있어도 안 흔들리게).
+  const matches = (entriesCache || []).filter(e => e.subject_name === subjectName && e.subject_type);
+  if (matches.length === 0) return '';
+  const chosen = matches.find(e => e.subject_type !== 'regular') || matches[0];
+  const info = SUBJECT_TYPE_BADGE[chosen.subject_type];
   if (!info) return '';
   return `<span style="display:inline-block; font-size:10px; padding:1px 6px; border-radius:8px; background:${info.color}; color:${info.text}; margin-left:4px; vertical-align:middle;">${info.label}</span>`;
 }
