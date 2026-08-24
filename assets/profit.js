@@ -370,7 +370,9 @@ function deleteHistory(idx) {
   renderHistory();
 }
 
-/* ── 월결산서 생성 ── */
+/* ── 월결산서 생성 (① 미리보기 → 내역 수정 → ② 확정) ── */
+let mcPreviewFiles = null; // 확정 단계에서 같은 파일을 다시 보내야 하므로 보관
+
 async function runMonthlyClosing() {
   const baseDate = $('mcBaseDate').value;
   if (!baseDate) {
@@ -387,13 +389,15 @@ async function runMonthlyClosing() {
     showMcStatus('백데이터 파일을 최소 1개 이상 업로드해주세요.', 'error');
     return;
   }
+  mcPreviewFiles = files;
 
   const btn = $('mcGenerateBtn');
   if (btn) btn.disabled = true;
   showMcStatus('서버로 전송 중…', 'running');
-  $('mcDownloadWrap').style.display = 'none';
+  $('mcPreviewPanel').style.display = 'none';
 
   const fd = new FormData();
+  fd.append('mode', 'preview');
   fd.append('base_date', baseDate);
   const preparedDate = $('mcPreparedDate').value;
   if (preparedDate) fd.append('prepared_date', preparedDate);
@@ -406,22 +410,133 @@ async function runMonthlyClosing() {
     if (btn) btn.disabled = false;
     if (!data.ok) { showMcStatus('오류: ' + data.message, 'error'); return; }
 
-    showMcStatus('생성 완료 ✓ 엑셀을 열면 자동으로 수식이 재계산됩니다.' + (data.save_warning ? ' (' + data.save_warning + ')' : ' 목록에도 저장했어요.'), data.save_warning ? 'error' : 'success');
+    showMcStatus('미리보기 생성 완료 ✓ 아래에서 확인·수정 후 확정해주세요. (아직 목록에 저장 안 됨)', 'success');
+    renderMcKpi(data.summary || {});
+
     const blob = b64toBlob(data.xlsx_b64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     const url = URL.createObjectURL(blob);
     const dl = $('mcDownloadBtn');
     dl.href = url;
-    dl.download = data.filename || '월결산서.xlsx';
-    $('mcDownloadWrap').style.display = 'block';
-    loadMonthlyClosingList();
+    dl.download = data.filename || '월결산서_미리보기.xlsx';
+
+    $('mcPreviewPanel').style.display = 'block';
+    loadMcRemarks();
   } catch (e) {
     if (btn) btn.disabled = false;
     showMcStatus('서버 연결 실패: ' + e.message, 'error');
   }
 }
 
+function renderMcKpi(summary) {
+  const labels = [
+    ['매출액', '매출액'], ['영업이익', '영업이익'], ['당기순이익', '당기순이익'],
+    ['자산총계', '자산총계'], ['부채총계', '부채총계'], ['자본총계', '자본총계'],
+  ];
+  const grid = $('mcKpiGrid');
+  const usable = labels.filter(([k]) => typeof summary[k] === 'number');
+  if (usable.length === 0) {
+    grid.innerHTML = `<div class="dash-empty">핵심지표를 계산할 데이터가 없습니다 (손익계산서·재무상태표 백데이터를 업로드하면 표시돼요).</div>`;
+    return;
+  }
+  grid.innerHTML = usable.map(([key, label]) => `
+    <div class="kpi-card">
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-value">${summary[key].toLocaleString('ko-KR')}</div>
+    </div>
+  `).join('');
+}
+
+function mcEsc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function loadMcRemarks() {
+  const wrap = $('mcRemarksTable');
+  wrap.innerHTML = `<div class="dash-empty" style="padding:12px;">불러오는 중…</div>`;
+  try {
+    const apiBase = getApiBase();
+    const res = await fetch(apiBase + '/api/monthly_closing?remarks=1');
+    const data = await res.json();
+    if (!data.ok) {
+      wrap.innerHTML = `<div class="dash-empty" style="padding:12px; color:var(--red);">${data.message || '불러오기 실패'}</div>`;
+      return;
+    }
+    const list = data.remarks || [];
+    wrap.innerHTML = `
+      <table class="table" style="width:100%;">
+        <thead><tr><th style="white-space:nowrap;">계정과목</th><th>내역(비고)</th></tr></thead>
+        <tbody>
+          ${list.map(r => `
+            <tr>
+              <td style="white-space:nowrap;">${mcEsc(r.account_label)}</td>
+              <td><input type="text" class="hr-input mc-remark-input" data-key="${mcEsc(r.account_key)}" data-label="${mcEsc(r.account_label)}" value="${mcEsc(r.note || '')}" style="width:100%;"></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (e) {
+    wrap.innerHTML = `<div class="dash-empty" style="padding:12px; color:var(--red);">불러오기 실패</div>`;
+  }
+}
+
+async function finalizeMonthlyClosing() {
+  if (!mcPreviewFiles) {
+    alert('먼저 "① 미리보기 생성"을 실행해주세요.');
+    return;
+  }
+  const baseDate = $('mcBaseDate').value;
+  const preparedDate = $('mcPreparedDate').value;
+
+  const remarksList = Array.from(document.querySelectorAll('.mc-remark-input')).map(input => ({
+    account_key: input.dataset.key,
+    account_label: input.dataset.label,
+    note: input.value.trim() || null,
+  }));
+
+  if (!confirm('이 내용으로 확정(마감)하시겠습니까? 확정하면 저장 목록에 등록됩니다.')) return;
+
+  const btn = $('mcFinalizeBtn');
+  if (btn) btn.disabled = true;
+  showMcFinalizeStatus('확정 처리 중…', 'running');
+
+  const fd = new FormData();
+  fd.append('mode', 'finalize');
+  fd.append('base_date', baseDate);
+  if (preparedDate) fd.append('prepared_date', preparedDate);
+  fd.append('remarks_json', JSON.stringify(remarksList));
+  Object.entries(mcPreviewFiles).forEach(([key, file]) => { if (file) fd.append(key, file); });
+
+  try {
+    const apiBase = getApiBase();
+    const res = await fetch(apiBase + '/api/monthly_closing', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (btn) btn.disabled = false;
+    if (!data.ok) { showMcFinalizeStatus('오류: ' + data.message, 'error'); return; }
+
+    showMcFinalizeStatus('확정 완료 ✓' + (data.save_warning ? ' (' + data.save_warning + ')' : ' 목록에 저장했어요.'), data.save_warning ? 'error' : 'success');
+    const blob = b64toBlob(data.xlsx_b64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    const url = URL.createObjectURL(blob);
+    const dl = $('mcDownloadBtn');
+    dl.href = url;
+    dl.download = data.filename || '월결산서.xlsx';
+    loadMonthlyClosingList();
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    showMcFinalizeStatus('서버 연결 실패: ' + e.message, 'error');
+  }
+}
+
 function showMcStatus(msg, type = '') {
   const el = $('mcStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'status' + (type ? ' ' + type : '');
+}
+
+function showMcFinalizeStatus(msg, type = '') {
+  const el = $('mcFinalizeStatus');
   if (!el) return;
   el.textContent = msg;
   el.className = 'status' + (type ? ' ' + type : '');
