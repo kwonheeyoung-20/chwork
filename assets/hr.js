@@ -250,6 +250,7 @@ function switchHrTab(name) {
   $('tab-contacts').style.display = name === 'contacts' ? 'block' : 'none';
   $('tab-contractdocs').style.display = name === 'contractdocs' ? 'block' : 'none';
   if (name === 'pension' || name === 'pension_input') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
+  if (name === 'pension_input') { loadPensionInstallmentList(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
   if (name === 'payroll') {
     if (!$('payrollMonth').value) {
@@ -730,6 +731,7 @@ async function loadPension() {
       return;
     }
     renderPension(data.pension || [], asOf);
+    if ($('pensionInstallmentList')) loadPensionInstallmentList();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
@@ -990,6 +992,7 @@ async function saveSettlement() {
   const payload = {
     employee_id: $('s_employee_id').value,
     retire_date: $('s_retire_date').value,
+    pay_date: payDate,
     cumulative_estimate: Number(r.dataset.cum),
     total_contributed: Number(r.dataset.paid),
     additional_payment: add,
@@ -1000,7 +1003,7 @@ async function saveSettlement() {
     note: $('s_note').value.trim() || null,
   };
 
-  if (!confirm('정산을 확정하시겠습니까? 저장 후 해당 직원은 "퇴사" 상태로 자동 변경됩니다.')) return;
+  if (!confirm('정산을 확정하시겠습니까? 저장 후 해당 직원은 "퇴사" 상태로 자동 변경되고, 추가불입액은 불입 기록에도 자동 등록됩니다.')) return;
 
   try {
     const res = await fetch(`${apiBase()}/api/hr_settlement`, {
@@ -1008,39 +1011,17 @@ async function saveSettlement() {
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error('save failed');
-
-    // 추가불입액이 있으면(0보다 크면) 자동으로 불입 기록에도 등록 — 발생및불입입력을 따로 안 해도 되게
-    let contribWarning = '';
-    if (add > 0) {
-      try {
-        const cRes = await fetch(`${apiBase()}/api/hr_pension`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-          body: JSON.stringify({
-            employee_id: payload.employee_id,
-            contribution_date: payDate,
-            amount: add,
-            note: '퇴사자 정산 - 추가불입액(자동기록)',
-          }),
-        });
-        if (!cRes.ok) {
-          const cData = await cRes.json().catch(() => ({}));
-          contribWarning = ' (단, 불입기록 자동등록 실패: ' + (cData.error || cData.detail || '') + ' — "발생 및 불입 입력" 탭에서 직접 추가해주세요.)';
-        }
-      } catch (ce) {
-        contribWarning = ' (단, 불입기록 자동등록 중 오류가 발생했습니다 — "발생 및 불입 입력" 탭에서 직접 추가해주세요.)';
-      }
-    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || data.detail || 'save failed');
 
     $('settlementMsg').textContent = '';
-    $('settlementMsg').className = contribWarning ? 'hr-msg' : 'hr-msg success';
-    $('settlementMsg').textContent = '정산이 확정 저장되었습니다.' + contribWarning;
+    $('settlementMsg').className = data.contrib_warning ? 'hr-msg' : 'hr-msg success';
+    $('settlementMsg').textContent = '정산이 확정 저장되었습니다.' + (data.contrib_warning ? ' (' + data.contrib_warning + ')' : '');
     loadSettlementHistory();
     loadPension(); // 퇴직연금 현황·발생및불입입력 탭도 함께 최신화
   } catch (e) {
     $('settlementMsg').className = 'hr-msg';
-    $('settlementMsg').textContent = '저장 중 오류가 발생했습니다.';
+    $('settlementMsg').textContent = '저장 중 오류가 발생했습니다: ' + (e.message || '');
   }
 }
 
@@ -1076,19 +1057,21 @@ async function loadSettlementHistory() {
 }
 
 async function revertSettlement(id, name) {
-  if (!confirm(`${name}님의 정산 확정을 되돌리시겠습니까?\n이 정산 기록이 삭제되고, 해당 직원은 다시 "재직" 상태로 복구됩니다.`)) return;
+  if (!confirm(`${name}님의 정산 확정을 되돌리시겠습니까?\n이 정산 기록과, 이때 자동 등록됐던 불입 기록이 함께 삭제되고, 해당 직원은 다시 "재직" 상태로 복구됩니다.`)) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_settlement?id=${id}`, {
       method: 'DELETE',
       headers: { 'X-HR-Password': hrPassword() },
     });
-    if (!res.ok) throw new Error('revert failed');
-    alert('되돌렸습니다.');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || data.detail || 'revert failed');
+    alert('되돌렸습니다.' + (data.warning ? '\n\n⚠ ' + data.warning : ''));
     loadSettlementHistory();
+    loadPension(); // 퇴직연금 현황·발생및불입입력 탭도 함께 최신화
     $('s_employee_id').dataset.loaded = '0';
     populateSettlementEmployeeSelect();
   } catch (e) {
-    alert('되돌리는 중 오류가 발생했습니다.');
+    alert('되돌리는 중 오류가 발생했습니다: ' + (e.message || ''));
   }
 }
 
@@ -2867,6 +2850,38 @@ function printPayslip() {
   document.head.appendChild(style);
   window.print();
   document.head.removeChild(style);
+}
+
+/* ── 불입 차수(지급일자별) 목록 — '발생 및 불입 입력' 탭 ── */
+async function loadPensionInstallmentList() {
+  const wrap = $('pensionInstallmentList');
+  wrap.innerHTML = `<div class="dash-empty" style="padding:12px;">불러오는 중…</div>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension?installment_list=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      wrap.innerHTML = `<div class="dash-empty" style="padding:12px; color:var(--red);">${esc(data.detail || '불러오기 실패')}</div>`;
+      return;
+    }
+    const list = data.installments || [];
+    if (list.length === 0) {
+      wrap.innerHTML = `<div class="dash-empty" style="padding:12px;">아직 저장된 불입 기록이 없습니다.</div>`;
+      return;
+    }
+    wrap.innerHTML = list.map(it => `
+      <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:13px;">
+        <b style="min-width:100px;">${esc(it.date)}</b>
+        <span style="color:var(--text-secondary);">${it.employee_count}명</span>
+        <span style="font-weight:600;">${fmt(it.total_amount)}원</span>
+        ${it.notes && it.notes.length ? `<span style="color:var(--text-muted); font-size:11px;">${it.notes.map(esc).join(', ')}</span>` : ''}
+        <button class="secondary" style="margin-left:auto; font-size:11px; padding:3px 8px;" onclick="$('pensionInstallFrom').value='${it.date}'; $('pensionInstallTo').value='${it.date}'; switchHrTab('pension'); printPensionInstallment();">이 차수 인쇄</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    wrap.innerHTML = `<div class="dash-empty" style="padding:12px; color:var(--red);">불러오기 실패</div>`;
+  }
 }
 
 /* ── 퇴직연금(DC) 차수별 불입 보고서 인쇄 (선택한 기간 지급액 + 당해년도 발생액/불입액 합계) ── */
