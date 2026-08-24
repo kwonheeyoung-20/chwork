@@ -21,7 +21,6 @@ TEMPLATE_PATH = ROOT / "monthly_closing_template.xlsx"
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
-HR_PASSWORD = os.environ.get("HR_PASSWORD", "")
 BUCKET = "contracts"  # 계약서류와 같은 버킷을 재사용, monthly_closing/ 하위 경로만 다르게
 
 SHEET_FIELD_MAP = {
@@ -91,22 +90,44 @@ def storage_sign_url(path, expires_in=3600):
         return None
 
 
-def check_password(candidate: str) -> bool:
-    if not HR_PASSWORD:
-        return False
-    return candidate == HR_PASSWORD
-
-
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, X-HR-Password",
+        "Access-Control-Allow-Headers": "Content-Type",
         "Content-Type": "application/json",
     }
 
 
+def _get_saved_remarks_map():
+    """DB에 저장된 최신 내역(비고) 값들을 {account_key: note} 형태로 가져옴"""
+    rows = rest_request("GET", "monthly_closing_remarks?select=account_key,note") or []
+    return {r["account_key"]: r.get("note") for r in rows}
+
+
+def _save_remarks_map(remarks_list):
+    """remarks_list: [{account_key, account_label, note}, ...] — DB에 upsert"""
+    if not remarks_list:
+        return
+    body = [
+        {
+            "account_key": r["account_key"],
+            "account_label": r.get("account_label") or r["account_key"],
+            "note": r.get("note") or None,
+            "updated_at": datetime.datetime.utcnow().isoformat(),
+        }
+        for r in remarks_list
+        if r.get("account_key")
+    ]
+    if body:
+        rest_request(
+            "POST", "monthly_closing_remarks?on_conflict=account_key",
+            body=body, prefer="resolution=merge-duplicates",
+        )
+
+
 class handler(BaseHTTPRequestHandler):
+
     def do_OPTIONS(self):
         self.send_response(200)
         for k, v in _cors_headers().items():
@@ -123,6 +144,18 @@ class handler(BaseHTTPRequestHandler):
                 ) or []
                 return self._json(200, {"ok": True, "reports": rows})
 
+            if qs.get("remarks", ["0"])[0] == "1":
+                sys.path.insert(0, str(ROOT))
+                from monthly_closing_builder import extract_bs_naeyeok_remarks
+                if not TEMPLATE_PATH.exists():
+                    return self._json(500, {"ok": False, "message": "템플릿 파일을 찾을 수 없습니다."})
+                base_remarks = extract_bs_naeyeok_remarks(str(TEMPLATE_PATH))
+                saved_map = _get_saved_remarks_map()
+                for r in base_remarks:
+                    if r["account_key"] in saved_map:
+                        r["note"] = saved_map[r["account_key"]]
+                return self._json(200, {"ok": True, "remarks": base_remarks})
+
             period_key = qs.get("period_key", [None])[0]
             if period_key:
                 rows = rest_request(
@@ -135,7 +168,7 @@ class handler(BaseHTTPRequestHandler):
                     return self._json(500, {"ok": False, "message": "다운로드 링크 생성 실패"})
                 return self._json(200, {"ok": True, "url": signed, "file_name": rows[0]["file_name"]})
 
-            return self._json(400, {"ok": False, "message": "list=1 또는 period_key 파라미터가 필요합니다."})
+            return self._json(400, {"ok": False, "message": "list=1, remarks=1 또는 period_key 파라미터가 필요합니다."})
         except SupabaseError as e:
             return self._json(502, {"ok": False, "message": f"supabase_error: {e.body}"})
         except Exception as exc:
@@ -189,6 +222,19 @@ class handler(BaseHTTPRequestHandler):
                 self._json(400, {"ok": False, "message": "작성일자 형식이 올바르지 않습니다 (YYYY-MM-DD)."})
                 return
 
+        mode = fs.getvalue("mode") or "preview"  # "preview" 또는 "finalize"
+
+        # finalize일 때만 수정된 내역(비고)을 함께 전달받음: JSON 문자열
+        # [{"account_key":..., "account_label":..., "note":...}, ...]
+        remarks_list = None
+        remarks_raw = fs.getvalue("remarks_json")
+        if remarks_raw:
+            try:
+                remarks_list = json.loads(remarks_raw)
+            except Exception:
+                self._json(400, {"ok": False, "message": "remarks_json 형식이 올바르지 않습니다."})
+                return
+
         if not uploaded:
             self._json(400, {"ok": False, "message": "최소 1개 이상의 백데이터 파일을 업로드해주세요."})
             return
@@ -197,22 +243,49 @@ class handler(BaseHTTPRequestHandler):
             self._json(500, {"ok": False, "message": "월결산서 템플릿 파일을 찾을 수 없습니다."})
             return
 
-        output_path = TMP / f"chwork_monthly_closing_{uuid.uuid4().hex}.xlsx"
-
         try:
             sys.path.insert(0, str(ROOT))
-            from monthly_closing_builder import build_monthly_closing
-            result_bytes = build_monthly_closing(str(TEMPLATE_PATH), uploaded, base_date, prepared_date)
-            output_path.write_bytes(result_bytes)
+            from monthly_closing_builder import build_monthly_closing, compute_preview_summary
+
+            # finalize 단계에서 사용자가 수정한 내역을 먼저 DB에 저장해두고,
+            # 그 값(=최신 내역)을 이번 생성에도 그대로 반영
+            if mode == "finalize" and remarks_list:
+                _save_remarks_map(remarks_list)
+
+            remarks_override = _get_saved_remarks_map()
+
+            result_bytes = build_monthly_closing(
+                str(TEMPLATE_PATH), uploaded, base_date, prepared_date, remarks_override,
+            )
+
+            summary = {}
+            if uploaded:
+                # 업로드 파일 포인터가 이미 소비됐을 수 있어 다시 열어서 계산
+                summary_files = {}
+                for sheet_name, path_str in uploaded.items():
+                    if sheet_name in ("손익계산서", "재무상태표"):
+                        summary_files[sheet_name] = path_str
+                summary = compute_preview_summary(summary_files)
         except Exception as exc:
             self._json(500, {"ok": False, "message": f"보고서 생성 실패: {exc}"})
             return
 
         filename = f"월결산서_{base_date.isoformat()}.xlsx"
         period_key = f"{base_date.year:04d}-{base_date.month:02d}"
+        xlsx_b64 = base64.b64encode(result_bytes).decode()
 
-        # 같은 달 보고서가 이미 있으면 스토리지의 예전 파일은 남아있어도 무해(경로가 새 uuid라 안 겹침),
-        # DB 레코드만 upsert로 최신 파일 경로를 가리키게 갱신
+        if mode == "preview":
+            self._json(200, {
+                "ok": True,
+                "message": "미리보기 생성 완료",
+                "xlsx_b64": xlsx_b64,
+                "filename": filename,
+                "period_key": period_key,
+                "summary": summary,
+            })
+            return
+
+        # mode == "finalize" — 저장소에 업로드 + 목록에 등록(확정)
         save_warning = None
         try:
             storage_path = f"monthly_closing/{uuid.uuid4()}.xlsx"
@@ -233,15 +306,15 @@ class handler(BaseHTTPRequestHandler):
                 prefer="resolution=merge-duplicates",
             )
         except Exception as exc:
-            save_warning = f"생성은 됐지만 목록 저장에 실패했습니다: {exc}"
+            save_warning = f"파일은 생성됐지만 목록 확정 저장에 실패했습니다: {exc}"
 
-        xlsx_b64 = base64.b64encode(result_bytes).decode()
         result = {
             "ok": True,
-            "message": "생성 완료",
+            "message": "확정 완료",
             "xlsx_b64": xlsx_b64,
             "filename": filename,
             "period_key": period_key,
+            "summary": summary,
         }
         if save_warning:
             result["save_warning"] = save_warning
