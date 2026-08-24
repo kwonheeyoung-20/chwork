@@ -18,6 +18,25 @@
     }
     body { background: var(--bg); }
     #mainSectionTabBar { border-bottom: none !important; padding-bottom: 4px; }
+    .tab-btn {
+      padding: 9px 16px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.12s, box-shadow 0.12s, background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .tab-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+    .tab-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 3px 10px rgba(200,40,40,0.28);
+    }
+    html[data-theme="dark"] .tab-btn.active { box-shadow: 0 3px 10px rgba(255,107,107,0.25); }
     .nav-personal-divider { border-top: 0.5px solid var(--border); margin: 10px 10px 6px; }
     html[data-theme="dark"] .nav-personal-divider { border-color:#ffffff; }
     .hidden { display: none !important; }
@@ -84,11 +103,8 @@
         </div>
       </div>
 
-      <div class="tabs" id="mainSectionTabBar" style="padding:0 28px; margin-top:10px; display:flex; align-items:center;">
-        <span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:6px; white-space:nowrap;">✏️ 입력</span>
+      <div class="tabs" id="mainSectionTabBar" style="padding:0 28px; margin-top:10px; display:flex; align-items:center; gap:8px;">
         <button class="tab-btn active" data-section="monthly_closing" onclick="switchMainSection('monthly_closing')">월결산서</button>
-        <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 8px;"></span>
-        <span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:6px; white-space:nowrap;">📊 자료</span>
         <button class="tab-btn" data-section="branch_profit" onclick="switchMainSection('branch_profit')">지사별손익자료</button>
       </div>
 

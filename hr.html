@@ -1460,27 +1460,38 @@
 <div id="pensionPrintArea" style="display:none;">
   <h2 style="margin-bottom:4px;">퇴직연금(DC) 현황 대장</h2>
   <p id="pension_print_date" style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;"></p>
-  <table class="table" style="width:100%; font-size:11px;">
+  <table class="table mc-vline-table" style="width:100%; font-size:11px;">
     <thead>
       <tr>
-        <th>이름</th><th>지사</th><th>부서</th><th>직급</th><th style="border-right:1.5px solid #333;">가입일</th>
-        <th class="num">누적추계액</th><th class="num">실불입액 합계</th><th class="num" style="border-right:1.5px solid #333;">잔액</th>
+        <th>이름</th><th>지사</th><th>부서</th><th>직급</th><th>가입일</th>
+        <th class="num">누적추계액</th><th class="num">실불입액 합계</th><th class="num">잔액</th>
         <th class="num">당해년도 발생액</th><th class="num">당해년도 불입액 합계</th>
       </tr>
     </thead>
     <tbody id="pension_print_tbody"></tbody>
   </table>
+  <style>
+    /* 세로 구분선: 표의 실제 가로 테두리 두께(1px)와 동일하게 통일.
+       개별 셀마다 넣지 않고 열 번호로 지정해서, 인쇄 페이지가 여러 장으로
+       나뉘어도(반복되는 헤더 포함) 절대 빠짐없이 전 구간에 다 표시됨. */
+    #pensionPrintArea .mc-vline-table th:nth-child(5),
+    #pensionPrintArea .mc-vline-table td:nth-child(5),
+    #pensionPrintArea .mc-vline-table th:nth-child(8),
+    #pensionPrintArea .mc-vline-table td:nth-child(8) {
+      border-right: 1px solid #333 !important;
+    }
+  </style>
 </div>
 
 <div id="pensionInstallPrintArea" style="display:none;">
   <h2 style="margin-bottom:4px;">퇴직연금(DC) 차수별 불입 보고서</h2>
   <p id="pension_install_print_range" style="font-size:13px; color:var(--text-secondary); margin-bottom:4px;"></p>
   <p id="pension_install_print_asof" style="font-size:12px; color:var(--text-muted); margin-bottom:16px;"></p>
-  <table class="table" style="width:100%; font-size:11px;">
+  <table class="table mc-vline-table2" style="width:100%; font-size:11px;">
     <thead>
       <tr>
-        <th>이름</th><th>지사</th><th style="border-right:1.5px solid #333;">부서</th>
-        <th class="num" style="background:#fff3d6; border-right:1.5px solid #333;">이번 차수 지급액</th>
+        <th>이름</th><th>지사</th><th>부서</th>
+        <th class="num" style="background:#fff3d6;">이번 차수 지급액</th>
         <th class="num" style="background:#e3f0ff;">당해년도 발생액</th>
         <th class="num" style="background:#e3f0ff;">당해년도 불입액 합계</th>
       </tr>
@@ -1488,6 +1499,18 @@
     <tbody id="pension_install_print_tbody"></tbody>
     <tfoot id="pension_install_print_tfoot"></tfoot>
   </table>
+  <style>
+    #pensionInstallPrintArea .mc-vline-table2 thead th:nth-child(3),
+    #pensionInstallPrintArea .mc-vline-table2 tbody td:nth-child(3),
+    #pensionInstallPrintArea .mc-vline-table2 thead th:nth-child(4),
+    #pensionInstallPrintArea .mc-vline-table2 tbody td:nth-child(4) {
+      border-right: 1px solid #333 !important;
+    }
+    /* tfoot(합계행)은 첫 칸이 colspan="3"이라 열 번호가 다름 — "이번 차수 지급액" 칸(2번째)에 선 */
+    #pensionInstallPrintArea .mc-vline-table2 tfoot td:nth-child(2) {
+      border-right: 1px solid #333 !important;
+    }
+  </style>
 </div>
 
 <!-- 개인별 급여명세서 출력 모달 -->
