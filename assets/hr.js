@@ -779,7 +779,7 @@ function renderPensionStatus(list) {
     const emp = employeesCache.find(e => e.id === id);
     return emp ? (emp.position || '-') : '-';
   };
-  let html = list.map(p => `
+  const rowHtml = (p) => `
     <tr>
       <td>${esc(p.name)}</td>
       <td>${esc(p.branch || '-')}</td>
@@ -789,19 +789,45 @@ function renderPensionStatus(list) {
       <td class="num">${fmt(p.cumulative_estimate)}</td>
       <td class="num">${fmt(p.total_contributed)}</td>
       <td class="num ${p.balance > 0 ? 'negative' : ''}">${fmt(p.balance)}</td>
-      <td class="num" style="background:var(--accent-light);">${fmt(p.ytd_accrual)}</td>
-      <td class="num" style="background:var(--accent-light);">${fmt(p.ytd_paid)}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(p.ytd_accrual)}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(p.ytd_paid)}</td>
       <td><a class="hr-edit-link" onclick="openHistoryModal('${p.id}', '${esc(p.name)}')">이력/보정</a></td>
     </tr>
-  `).join('');
+  `;
+  const subtotalHtml = (branch, arr) => `
+    <tr class="hr-total-row" style="background:var(--surface);">
+      <td colspan="5">${esc(branch)} 소계 (${arr.length}명)</td>
+      <td class="num">${fmt(sum(arr,'cumulative_estimate'))}</td>
+      <td class="num">${fmt(sum(arr,'total_contributed'))}</td>
+      <td class="num">${fmt(sum(arr,'balance'))}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(sum(arr,'ytd_accrual'))}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(sum(arr,'ytd_paid'))}</td>
+      <td></td>
+    </tr>
+  `;
+
+  // 지사별로 그룹 (원래 정렬 순서 유지, 지사 첫 등장 순서대로)
+  const branches = [];
+  const byBranch = {};
+  list.forEach(p => {
+    const b = p.branch || '(미지정)';
+    if (!byBranch[b]) { byBranch[b] = []; branches.push(b); }
+    byBranch[b].push(p);
+  });
+
+  let html = '';
+  branches.forEach(b => {
+    byBranch[b].forEach(p => { html += rowHtml(p); });
+    html += subtotalHtml(b, byBranch[b]);
+  });
   html += `
     <tr class="hr-total-row">
       <td colspan="5">전체 합계 (${list.length}명)</td>
       <td class="num">${fmt(sum(list,'cumulative_estimate'))}</td>
       <td class="num">${fmt(sum(list,'total_contributed'))}</td>
       <td class="num">${fmt(sum(list,'balance'))}</td>
-      <td class="num" style="background:var(--accent-light);">${fmt(sum(list,'ytd_accrual'))}</td>
-      <td class="num" style="background:var(--accent-light);">${fmt(sum(list,'ytd_paid'))}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(sum(list,'ytd_accrual'))}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(sum(list,'ytd_paid'))}</td>
       <td></td>
     </tr>
   `;
@@ -835,8 +861,8 @@ function renderPension(list, asOf) {
       <td class="num">${fmt(p.cumulative_estimate)}</td>
       <td class="num">${fmt(p.total_contributed)}</td>
       <td class="num ${p.balance > 0 ? 'negative' : ''}">${fmt(p.balance)}</td>
-      <td class="num" style="background:var(--accent-light);">${fmt(p.ytd_accrual)}</td>
-      <td class="num" style="background:var(--accent-light);">${fmt(p.ytd_paid)}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(p.ytd_accrual)}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(p.ytd_paid)}</td>
       <td class="num">${asOf ? fmt(p.as_of_cumulative_estimate) : '-'}</td>
       <td class="num">${asOf ? fmt(p.period_accrual) : '-'}</td>
       <td class="num ${asOf && p.as_of_balance > 0 ? 'negative' : ''}">${asOf ? fmt(p.as_of_balance) : '-'}</td>
@@ -850,8 +876,8 @@ function renderPension(list, asOf) {
       <td class="num">${fmt(sum(arr,'cumulative_estimate'))}</td>
       <td class="num">${fmt(sum(arr,'total_contributed'))}</td>
       <td class="num">${fmt(sum(arr,'balance'))}</td>
-      <td class="num" style="background:var(--accent-light);">${fmt(sum(arr,'ytd_accrual'))}</td>
-      <td class="num" style="background:var(--accent-light);">${fmt(sum(arr,'ytd_paid'))}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(sum(arr,'ytd_accrual'))}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(sum(arr,'ytd_paid'))}</td>
       <td class="num">${asOf ? fmt(sum(arr,'as_of_cumulative_estimate')) : '-'}</td>
       <td class="num">${asOf ? fmt(sum(arr,'period_accrual')) : '-'}</td>
       <td class="num">${asOf ? fmt(sum(arr,'as_of_balance')) : '-'}</td>
@@ -879,8 +905,8 @@ function renderPension(list, asOf) {
       <td class="num">${fmt(sum(list,'cumulative_estimate'))}</td>
       <td class="num">${fmt(sum(list,'total_contributed'))}</td>
       <td class="num">${fmt(sum(list,'balance'))}</td>
-      <td class="num" style="background:var(--accent-light);">${fmt(sum(list,'ytd_accrual'))}</td>
-      <td class="num" style="background:var(--accent-light);">${fmt(sum(list,'ytd_paid'))}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(sum(list,'ytd_accrual'))}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(sum(list,'ytd_paid'))}</td>
       <td class="num">${asOf ? fmt(sum(list,'as_of_cumulative_estimate')) : '-'}</td>
       <td class="num">${asOf ? fmt(sum(list,'period_accrual')) : '-'}</td>
       <td class="num">${asOf ? fmt(sum(list,'as_of_balance')) : '-'}</td>
@@ -2974,27 +3000,49 @@ async function printPensionInstallment(fromArg, toArg) {
     $('pension_install_print_asof').textContent = `당해년도 발생액·불입액 합계 기준일: ${data.as_of}`;
 
     let sumInstall = 0, sumAccrual = 0, sumPaid = 0;
-    $('pension_install_print_tbody').innerHTML = rows.map(r => {
+    const sumBy = (arr, key) => arr.reduce((s, r) => s + (Number(r[key]) || 0), 0);
+    const rowHtml = (r) => `
+      <tr>
+        <td>${esc(r.name)}</td>
+        <td>${esc(r.branch || '-')}</td>
+        <td>${esc(r.department || '-')}</td>
+        <td class="num">${fmt(r.installment_amount)}</td>
+        <td class="num" style="background:#f2f2f2;">${fmt(r.ytd_accrual)}</td>
+        <td class="num" style="background:#f2f2f2;">${fmt(r.ytd_paid)}</td>
+      </tr>
+    `;
+    const subtotalHtml = (branch, arr) => `
+      <tr style="font-weight:600; background:#f8f8f8;">
+        <td colspan="3">${esc(branch)} 소계 (${arr.length}명)</td>
+        <td class="num">${fmt(sumBy(arr,'installment_amount'))}</td>
+        <td class="num" style="background:#eee;">${fmt(sumBy(arr,'ytd_accrual'))}</td>
+        <td class="num" style="background:#eee;">${fmt(sumBy(arr,'ytd_paid'))}</td>
+      </tr>
+    `;
+
+    const branches = [];
+    const byBranch = {};
+    rows.forEach(r => {
+      const b = r.branch || '(미지정)';
+      if (!byBranch[b]) { byBranch[b] = []; branches.push(b); }
+      byBranch[b].push(r);
       sumInstall += r.installment_amount || 0;
       sumAccrual += r.ytd_accrual || 0;
       sumPaid += r.ytd_paid || 0;
-      return `
-        <tr>
-          <td>${esc(r.name)}</td>
-          <td>${esc(r.branch || '-')}</td>
-          <td>${esc(r.department || '-')}</td>
-          <td class="num">${fmt(r.installment_amount)}</td>
-          <td class="num">${fmt(r.ytd_accrual)}</td>
-          <td class="num">${fmt(r.ytd_paid)}</td>
-        </tr>
-      `;
-    }).join('');
+    });
+
+    let bodyHtml = '';
+    branches.forEach(b => {
+      byBranch[b].forEach(r => { bodyHtml += rowHtml(r); });
+      bodyHtml += subtotalHtml(b, byBranch[b]);
+    });
+    $('pension_install_print_tbody').innerHTML = bodyHtml;
     $('pension_install_print_tfoot').innerHTML = `
-      <tr class="hr-total-row">
-        <td colspan="3">합계 (${rows.length}명)</td>
+      <tr style="font-weight:700; background:#e8e8e8;">
+        <td colspan="3">전체 합계 (${rows.length}명)</td>
         <td class="num">${fmt(sumInstall)}</td>
-        <td class="num">${fmt(sumAccrual)}</td>
-        <td class="num">${fmt(sumPaid)}</td>
+        <td class="num" style="background:#ddd;">${fmt(sumAccrual)}</td>
+        <td class="num" style="background:#ddd;">${fmt(sumPaid)}</td>
       </tr>
     `;
 
@@ -3029,7 +3077,9 @@ function printPensionRegister() {
     return emp ? (emp.position || '-') : '-';
   };
   $('pension_print_date').textContent = `기준일자: 오늘(${new Date().toISOString().slice(0,10)})`;
-  $('pension_print_tbody').innerHTML = list.map(p => `
+
+  const sum = (arr, key) => arr.reduce((s, p) => s + (Number(p[key]) || 0), 0);
+  const rowHtml = (p) => `
     <tr>
       <td>${esc(p.name)}</td>
       <td>${esc(p.branch || '-')}</td>
@@ -3039,10 +3089,45 @@ function printPensionRegister() {
       <td class="num">${fmt(p.cumulative_estimate)}</td>
       <td class="num">${fmt(p.total_contributed)}</td>
       <td class="num">${fmt(p.balance)}</td>
-      <td class="num">${fmt(p.ytd_accrual)}</td>
-      <td class="num">${fmt(p.ytd_paid)}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(p.ytd_accrual)}</td>
+      <td class="num" style="background:#f2f2f2;">${fmt(p.ytd_paid)}</td>
     </tr>
-  `).join('');
+  `;
+  const subtotalHtml = (branch, arr) => `
+    <tr style="font-weight:600; background:#f8f8f8;">
+      <td colspan="5">${esc(branch)} 소계 (${arr.length}명)</td>
+      <td class="num">${fmt(sum(arr,'cumulative_estimate'))}</td>
+      <td class="num">${fmt(sum(arr,'total_contributed'))}</td>
+      <td class="num">${fmt(sum(arr,'balance'))}</td>
+      <td class="num" style="background:#eee;">${fmt(sum(arr,'ytd_accrual'))}</td>
+      <td class="num" style="background:#eee;">${fmt(sum(arr,'ytd_paid'))}</td>
+    </tr>
+  `;
+
+  const branches = [];
+  const byBranch = {};
+  list.forEach(p => {
+    const b = p.branch || '(미지정)';
+    if (!byBranch[b]) { byBranch[b] = []; branches.push(b); }
+    byBranch[b].push(p);
+  });
+
+  let html = '';
+  branches.forEach(b => {
+    byBranch[b].forEach(p => { html += rowHtml(p); });
+    html += subtotalHtml(b, byBranch[b]);
+  });
+  html += `
+    <tr style="font-weight:700; background:#e8e8e8;">
+      <td colspan="5">전체 합계 (${list.length}명)</td>
+      <td class="num">${fmt(sum(list,'cumulative_estimate'))}</td>
+      <td class="num">${fmt(sum(list,'total_contributed'))}</td>
+      <td class="num">${fmt(sum(list,'balance'))}</td>
+      <td class="num" style="background:#ddd;">${fmt(sum(list,'ytd_accrual'))}</td>
+      <td class="num" style="background:#ddd;">${fmt(sum(list,'ytd_paid'))}</td>
+    </tr>
+  `;
+  $('pension_print_tbody').innerHTML = html;
 
   $('pensionPrintArea').style.display = 'block';
   const landscapeStyle = document.createElement('style');

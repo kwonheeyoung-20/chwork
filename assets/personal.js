@@ -1072,14 +1072,20 @@ const SUBJECT_TYPE_BADGE = {
   academy: { label: '학원', color: '#fdeee0', text: '#c25e00' },
 };
 
-function subjectTypeBadge(subjectName) {
-  // 시간표(entriesCache)에 등록된 과목명과 대조해서, 그 과목이 정규/방과후/학원 중 뭘로
-  // 등록되어 있는지 자동으로 찾아 배지로 보여줌. 같은 과목명이 여러 요일에 걸쳐 있을 때,
-  // 방과후/학원으로 등록된 게 하나라도 있으면 그걸 우선 표시(정규가 섞여있어도 안 흔들리게).
+function getSubjectType(subjectName) {
+  // 시간표(entriesCache)에서 이 과목명의 등록 타입을 찾음. 같은 과목명이 여러 요일에
+  // 걸쳐 있을 때, 방과후/학원으로 등록된 게 하나라도 있으면 그걸 우선(정규가 섞여있어도 안 흔들리게).
+  // 매칭되는 게 하나도 없으면 null(= "기타")
   const matches = (entriesCache || []).filter(e => e.subject_name === subjectName && e.subject_type);
-  if (matches.length === 0) return '';
+  if (matches.length === 0) return null;
   const chosen = matches.find(e => e.subject_type !== 'regular') || matches[0];
-  const info = SUBJECT_TYPE_BADGE[chosen.subject_type];
+  return chosen.subject_type;
+}
+
+function subjectTypeBadge(subjectName) {
+  const type = getSubjectType(subjectName);
+  if (!type) return '';
+  const info = SUBJECT_TYPE_BADGE[type];
   if (!info) return '';
   return `<span style="display:inline-block; font-size:10px; padding:1px 6px; border-radius:8px; background:${info.color}; color:${info.text}; margin-left:4px; vertical-align:middle;">${info.label}</span>`;
 }
@@ -1097,7 +1103,14 @@ async function loadTeachers() {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 선생님이 없습니다.</td></tr>`;
       return;
     }
-    tbody.innerHTML = teachersCache.map(t => `
+    // 학원 → 방과후 → 정규 → 기타(시간표에 미등록) 순으로 모아서 보여줌
+    const TYPE_SORT_ORDER = { academy: 0, afterschool: 1, regular: 2 };
+    const sorted = [...teachersCache].sort((a, b) => {
+      const ta = TYPE_SORT_ORDER[getSubjectType(a.subject_name)] ?? 3;
+      const tb = TYPE_SORT_ORDER[getSubjectType(b.subject_name)] ?? 3;
+      return ta - tb;
+    });
+    tbody.innerHTML = sorted.map(t => `
       <tr>
         <td>${esc(t.subject_name)} ${subjectTypeBadge(t.subject_name)}</td>
         <td>${esc(t.teacher_name || '-')}</td>
