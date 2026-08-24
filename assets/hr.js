@@ -250,7 +250,6 @@ function switchHrTab(name) {
   $('tab-contacts').style.display = name === 'contacts' ? 'block' : 'none';
   $('tab-contractdocs').style.display = name === 'contractdocs' ? 'block' : 'none';
   if (name === 'pension' || name === 'pension_input') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); }
-  if (name === 'pension_input') { loadPensionInstallmentList(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
   if (name === 'payroll') {
     if (!$('payrollMonth').value) {
@@ -731,7 +730,6 @@ async function loadPension() {
       return;
     }
     renderPension(data.pension || [], asOf);
-    if ($('pensionInstallmentList')) loadPensionInstallmentList();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="12" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
@@ -2850,38 +2848,6 @@ function printPayslip() {
   document.head.appendChild(style);
   window.print();
   document.head.removeChild(style);
-}
-
-/* ── 불입 차수(지급일자별) 목록 — '발생 및 불입 입력' 탭 ── */
-async function loadPensionInstallmentList() {
-  const wrap = $('pensionInstallmentList');
-  wrap.innerHTML = `<div class="dash-empty" style="padding:12px;">불러오는 중…</div>`;
-  try {
-    const res = await fetch(`${apiBase()}/api/hr_pension?installment_list=1`, {
-      headers: { 'X-HR-Password': hrPassword() },
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      wrap.innerHTML = `<div class="dash-empty" style="padding:12px; color:var(--red);">${esc(data.detail || '불러오기 실패')}</div>`;
-      return;
-    }
-    const list = data.installments || [];
-    if (list.length === 0) {
-      wrap.innerHTML = `<div class="dash-empty" style="padding:12px;">아직 저장된 불입 기록이 없습니다.</div>`;
-      return;
-    }
-    wrap.innerHTML = list.map(it => `
-      <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:13px;">
-        <b style="min-width:100px;">${esc(it.date)}</b>
-        <span style="color:var(--text-secondary);">${it.employee_count}명</span>
-        <span style="font-weight:600;">${fmt(it.total_amount)}원</span>
-        ${it.notes && it.notes.length ? `<span style="color:var(--text-muted); font-size:11px;">${it.notes.map(esc).join(', ')}</span>` : ''}
-        <button class="secondary" style="margin-left:auto; font-size:11px; padding:3px 8px;" onclick="$('pensionInstallFrom').value='${it.date}'; $('pensionInstallTo').value='${it.date}'; switchHrTab('pension'); printPensionInstallment();">이 차수 인쇄</button>
-      </div>
-    `).join('');
-  } catch (e) {
-    wrap.innerHTML = `<div class="dash-empty" style="padding:12px; color:var(--red);">불러오기 실패</div>`;
-  }
 }
 
 /* ── 퇴직연금(DC) 차수별 불입 보고서 인쇄 (선택한 기간 지급액 + 당해년도 발생액/불입액 합계) ── */
