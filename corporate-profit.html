@@ -17,6 +17,7 @@
       --text-primary: #eaeaea; --text-secondary: #b0b0b0; --text-muted: #808080;
     }
     body { background: var(--bg); }
+    #mainSectionTabBar { border-bottom: none !important; padding-bottom: 4px; }
     .nav-personal-divider { border-top: 0.5px solid var(--border); margin: 10px 10px 6px; }
     html[data-theme="dark"] .nav-personal-divider { border-color:#ffffff; }
     .hidden { display: none !important; }
@@ -83,8 +84,11 @@
         </div>
       </div>
 
-      <div class="tabs" id="mainSectionTabBar" style="padding:0 28px; margin-top:10px;">
+      <div class="tabs" id="mainSectionTabBar" style="padding:0 28px; margin-top:10px; display:flex; align-items:center;">
+        <span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:6px; white-space:nowrap;">✏️ 입력</span>
         <button class="tab-btn active" data-section="monthly_closing" onclick="switchMainSection('monthly_closing')">월결산서</button>
+        <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 8px;"></span>
+        <span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:6px; white-space:nowrap;">📊 자료</span>
         <button class="tab-btn" data-section="branch_profit" onclick="switchMainSection('branch_profit')">지사별손익자료</button>
       </div>
 
