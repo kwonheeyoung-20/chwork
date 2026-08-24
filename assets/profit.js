@@ -395,6 +395,8 @@ async function runMonthlyClosing() {
 
   const fd = new FormData();
   fd.append('base_date', baseDate);
+  const preparedDate = $('mcPreparedDate').value;
+  if (preparedDate) fd.append('prepared_date', preparedDate);
   Object.entries(files).forEach(([key, file]) => { if (file) fd.append(key, file); });
 
   try {
@@ -447,6 +449,7 @@ async function loadMonthlyClosingList() {
       <div style="display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:13px;">
         <b style="min-width:90px;">${r.period_key}</b>
         <span style="color:var(--text-secondary);">기준일 ${r.base_date}</span>
+        ${r.prepared_date ? `<span style="color:var(--text-secondary);">· 작성일 ${r.prepared_date}</span>` : ''}
         <span style="color:var(--text-muted); font-size:11px; margin-left:auto;">
           ${r.updated_at ? new Date(r.updated_at).toLocaleString('ko-KR') : ''}
         </span>
@@ -478,6 +481,9 @@ document.addEventListener('DOMContentLoaded', () => {
   switchTab('summary');
   if ($('mcBaseDate') && !$('mcBaseDate').value) {
     $('mcBaseDate').value = new Date().toISOString().slice(0, 10);
+  }
+  if ($('mcPreparedDate') && !$('mcPreparedDate').value) {
+    $('mcPreparedDate').value = new Date().toISOString().slice(0, 10);
   }
   loadMonthlyClosingList();
 });
