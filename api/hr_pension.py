@@ -210,7 +210,9 @@ class handler(BaseHTTPRequestHandler):
         ) or []
         grouped = {}
         for r in rows:
-            d = r["contribution_date"]
+            d = (r["contribution_date"] or "")[:10]  # 혹시 시간까지 포함된 형태로 와도 날짜만 추출
+            if not d:
+                continue
             g = grouped.setdefault(d, {"date": d, "employee_ids": set(), "total_amount": 0, "notes": set()})
             g["employee_ids"].add(r["employee_id"])
             g["total_amount"] += r.get("amount") or 0
@@ -235,6 +237,8 @@ class handler(BaseHTTPRequestHandler):
         to_date = qs.get("to", [None])[0]
         if not from_date or not to_date:
             return self._send(400, {"error": "from, to는 필수입니다"})
+        from_date = from_date[:10]
+        to_date = to_date[:10]
 
         import datetime
         kst_today = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date()
