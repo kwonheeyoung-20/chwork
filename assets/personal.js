@@ -684,9 +684,9 @@ function renderTimetable(periods, entries) {
         cells += `<td><span class="tt-cell-empty-add" onclick="openTimetableEntryModal('${p.period_label}', ${wd})">+ 등록</span></td>`;
         continue;
       }
-      // 병합 대상: 0교시/점심시간(요일공통) 이거나, 방과후/학원(같은 활동 묶어보기)일 때만.
-      // 정규수업(regular)은 요일별로 각각 따로 보여줘야 하니 병합 안 함.
-      const mergeable = WHOLE_ROW_PERIODS.includes(p.period_label) || e.subject_type === 'afterschool' || e.subject_type === 'academy';
+      // 병합 대상: 0교시/점심시간처럼 "요일 공통" 칸만 병합. 그 외(정규수업/방과후/학원)는
+      // 요일마다 각각 독립된 칸으로 보여줌 — 과목이 같아도 합치지 않음.
+      const mergeable = WHOLE_ROW_PERIODS.includes(p.period_label);
 
       // 가로 병합 범위 계산
       let colspan = 1;
@@ -697,7 +697,7 @@ function renderTimetable(periods, entries) {
           else break;
         }
       }
-      // 세로 병합은 가로 병합이 없을 때만(1칸 너비일 때만) + 병합 대상일 때만 시도
+      // 세로 병합도 "요일 공통" 칸일 때만
       let rowspan = 1;
       if (mergeable && colspan === 1) {
         let nextIdx = periodIdx + 1;
@@ -721,7 +721,6 @@ function renderTimetable(periods, entries) {
       cells += `
         <td${spanAttrs} style="background:${bgColor};">
           <div class="tt-cell-subject">${esc(e.subject_name)}</div>
-          ${e.teacher_name || e.teacher_phone ? `<div class="tt-cell-teacher">${esc(e.teacher_name || '')} ${e.teacher_phone ? esc(e.teacher_phone) : ''}</div>` : ''}
           ${e.note ? `<div class="tt-cell-teacher" style="font-style:italic;">${esc(e.note)}</div>` : ''}
           <span class="tt-cell-edit" onclick="openTimetableEntryModal('${p.period_label}', ${wd}, '${e.id}')" title="수정">✏️</span>
         </td>
@@ -1064,6 +1063,22 @@ async function saveBulkPeriod() {
 let teachersCache = [];
 let editingTeacherId = null;
 
+const SUBJECT_TYPE_BADGE = {
+  regular: { label: '정규', color: '#e3f0ff', text: '#1a5fb4' },
+  afterschool: { label: '방과후', color: '#e6f7e6', text: '#2e7d32' },
+  academy: { label: '학원', color: '#fdeee0', text: '#c25e00' },
+};
+
+function subjectTypeBadge(subjectName) {
+  // 시간표(entriesCache)에 등록된 과목명과 대조해서, 그 과목이 정규/방과후/학원 중 뭘로
+  // 등록되어 있는지 자동으로 찾아 배지로 보여줌. 여러 요일에 걸쳐 있으면 첫 번째 걸 기준으로.
+  const match = (entriesCache || []).find(e => e.subject_name === subjectName);
+  if (!match || !match.subject_type) return '';
+  const info = SUBJECT_TYPE_BADGE[match.subject_type];
+  if (!info) return '';
+  return `<span style="display:inline-block; font-size:10px; padding:1px 6px; border-radius:8px; background:${info.color}; color:${info.text}; margin-left:4px; vertical-align:middle;">${info.label}</span>`;
+}
+
 async function loadTeachers() {
   const tbody = $('teacherTbody');
   try {
@@ -1079,7 +1094,7 @@ async function loadTeachers() {
     }
     tbody.innerHTML = teachersCache.map(t => `
       <tr>
-        <td>${esc(t.subject_name)}</td>
+        <td>${esc(t.subject_name)} ${subjectTypeBadge(t.subject_name)}</td>
         <td>${esc(t.teacher_name || '-')}</td>
         <td>${esc(t.teacher_phone || '-')}</td>
         <td style="font-size:12px; color:var(--text-secondary);">${esc(t.note || '-')}</td>
