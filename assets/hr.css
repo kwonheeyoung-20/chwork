@@ -43,12 +43,20 @@
 .settle-row.highlight { background: var(--bg-accent, var(--bg)); padding: 12px 8px; border-radius: var(--radius-sm); border-bottom: none; }
 .hr-total-row td { font-weight: 500; background: var(--bg); border-top: 1.5px solid var(--border-strong); color: var(--text-primary); }
 @media print {
+  /* 화면의 나머지 부분(사이드바·메인 콘텐츠 전체)을 display:none으로 완전히 렌더 트리에서
+     제외해서, 인쇄물 맨 뒤에 빈 페이지가 딸려 나오던 문제를 막음.
+     (예전 visibility:hidden 방식은 안 보이기만 하고 실제 차지 공간은 그대로 남아있어서
+     빈 페이지가 생겼었음)
+     단, #printArea(퇴사자정산 화면 자체)는 .layout 안에 있어서, 인쇄 직전에
+     JS(printSettlement)가 body 바로 아래로 잠깐 옮겨두었다가 인쇄 후 원위치로 되돌림. */
   body * { visibility: hidden; }
+  .layout { display: none !important; }
   #printArea, #printArea *, #payslipPrintArea, #payslipPrintArea *,
-  #registerPrintArea, #registerPrintArea *, #pensionPrintArea, #pensionPrintArea *
+  #registerPrintArea, #registerPrintArea *, #pensionPrintArea, #pensionPrintArea *,
+  #pensionInstallPrintArea, #pensionInstallPrintArea *, #mcPrintArea, #mcPrintArea *
   { visibility: visible; }
-  #printArea, #payslipPrintArea, #registerPrintArea, #pensionPrintArea {
-    position: absolute; top: 0; left: 0; width: 100%;
+  #printArea, #payslipPrintArea, #registerPrintArea, #pensionPrintArea, #pensionInstallPrintArea, #mcPrintArea {
+    display: block; position: static; width: 100%;
   }
   /* 모달(position:fixed)이 인쇄시 매 페이지마다 반복 출력되는 문제 방지 */
   .hr-modal-backdrop {

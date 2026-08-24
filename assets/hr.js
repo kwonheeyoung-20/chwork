@@ -1106,6 +1106,11 @@ async function revertSettlement(id, name) {
 
 /* ── 정산내역서 출력/다운로드 ── */
 function printSettlement() {
+  const printAreaEl = $('printArea');
+  const originalParent = printAreaEl.parentNode;
+  const originalNextSibling = printAreaEl.nextSibling;
+  document.body.appendChild(printAreaEl); // .layout 밖(body 바로 아래)으로 잠깐 이동
+
   const style = document.createElement('style');
   style.id = 'settlementPrintStyle';
   style.textContent = `
@@ -1120,6 +1125,13 @@ function printSettlement() {
   document.head.appendChild(style);
   window.print();
   document.head.removeChild(style);
+
+  // 인쇄(또는 취소) 후 원래 위치(퇴사자 정산 화면 안)로 되돌림
+  if (originalNextSibling) {
+    originalParent.insertBefore(printAreaEl, originalNextSibling);
+  } else {
+    originalParent.appendChild(printAreaEl);
+  }
 }
 
 function downloadSettlementExcel() {
@@ -2970,8 +2982,8 @@ async function printPensionInstallment(fromArg, toArg) {
         <tr>
           <td>${esc(r.name)}</td>
           <td>${esc(r.branch || '-')}</td>
-          <td>${esc(r.department || '-')}</td>
-          <td class="num">${fmt(r.installment_amount)}</td>
+          <td style="border-right:1.5px solid #333;">${esc(r.department || '-')}</td>
+          <td class="num" style="border-right:1.5px solid #333;">${fmt(r.installment_amount)}</td>
           <td class="num">${fmt(r.ytd_accrual)}</td>
           <td class="num">${fmt(r.ytd_paid)}</td>
         </tr>
@@ -2979,8 +2991,8 @@ async function printPensionInstallment(fromArg, toArg) {
     }).join('');
     $('pension_install_print_tfoot').innerHTML = `
       <tr class="hr-total-row">
-        <td colspan="3">합계 (${rows.length}명)</td>
-        <td class="num">${fmt(sumInstall)}</td>
+        <td colspan="3" style="border-right:1.5px solid #333;">합계 (${rows.length}명)</td>
+        <td class="num" style="border-right:1.5px solid #333;">${fmt(sumInstall)}</td>
         <td class="num">${fmt(sumAccrual)}</td>
         <td class="num">${fmt(sumPaid)}</td>
       </tr>
@@ -3026,7 +3038,7 @@ function printPensionRegister() {
       <td>${esc(p.pension_enrollment_date || p.hire_date || '-')}</td>
       <td class="num">${fmt(p.cumulative_estimate)}</td>
       <td class="num">${fmt(p.total_contributed)}</td>
-      <td class="num">${fmt(p.balance)}</td>
+      <td class="num" style="border-right:1.5px solid #333;">${fmt(p.balance)}</td>
       <td class="num">${fmt(p.ytd_accrual)}</td>
       <td class="num">${fmt(p.ytd_paid)}</td>
     </tr>
@@ -4843,8 +4855,9 @@ function printPromotionMatrix(containerId) {
   style.textContent = `
     @media print {
       body * { visibility: hidden; }
+      .layout { display: none !important; }
       #promoMatrixPrintArea, #promoMatrixPrintArea * { visibility: visible; }
-      #promoMatrixPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
+      #promoMatrixPrintArea { position: static; width: 100%; }
       @page { size: landscape; margin: 8mm; }
       #promoMatrixPrintTitle { font-size: 14px; margin-bottom: 6px; }
       #promoMatrixPrintBody table { font-size: 8.5px; border-collapse: collapse; width: 100%; }
