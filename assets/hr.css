@@ -53,9 +53,9 @@
   .layout { display: none !important; }
   #printArea, #printArea *, #payslipPrintArea, #payslipPrintArea *,
   #registerPrintArea, #registerPrintArea *, #pensionPrintArea, #pensionPrintArea *,
-  #pensionInstallPrintArea, #pensionInstallPrintArea *, #mcPrintArea, #mcPrintArea *
+  #pensionInstallPrintArea, #pensionInstallPrintArea *, #mcPrintArea, #mcPrintArea *, #bonusReportPrintArea, #bonusReportPrintArea *
   { visibility: visible; }
-  #printArea, #payslipPrintArea, #registerPrintArea, #pensionPrintArea, #pensionInstallPrintArea, #mcPrintArea {
+  #printArea, #payslipPrintArea, #registerPrintArea, #pensionPrintArea, #pensionInstallPrintArea, #mcPrintArea, #bonusReportPrintArea {
     display: block; position: static; width: 100%;
   }
   /* 모달(position:fixed)이 인쇄시 매 페이지마다 반복 출력되는 문제 방지 */
