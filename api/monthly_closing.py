@@ -106,19 +106,25 @@ def _get_saved_remarks_map():
 
 
 def _save_remarks_map(remarks_list):
-    """remarks_list: [{account_key, account_label, note}, ...] — DB에 upsert"""
+    """remarks_list: [{account_key, account_label, note}, ...] — DB에 upsert.
+    같은 계정과목명이 여러 시트(재무상태표(내역)/전월대비증감 등)나 한 시트 안에서
+    중복으로 들어올 수 있는데, 한 번의 upsert 요청 안에 같은 키가 두 번 이상 있으면
+    PostgreSQL이 "ON CONFLICT DO UPDATE command cannot affect row a second time" 오류를
+    내므로, 저장 직전에 계정과목명 기준으로 중복을 미리 걸러냄(나중 값이 최종 반영됨)."""
     if not remarks_list:
         return
-    body = [
-        {
-            "account_key": r["account_key"],
-            "account_label": r.get("account_label") or r["account_key"],
+    deduped = {}
+    for r in remarks_list:
+        key = r.get("account_key")
+        if not key:
+            continue
+        deduped[key] = {
+            "account_key": key,
+            "account_label": r.get("account_label") or key,
             "note": r.get("note") or None,
             "updated_at": datetime.datetime.utcnow().isoformat(),
         }
-        for r in remarks_list
-        if r.get("account_key")
-    ]
+    body = list(deduped.values())
     if body:
         rest_request(
             "POST", "monthly_closing_remarks?on_conflict=account_key",
