@@ -4357,6 +4357,7 @@ let promoLiveCache = [];
 let promoReportListCache = [];
 let promoCurrentDetailReport = null;
 let promoHistoryEmployeeId = null;
+let promoHistoryCache = [];
 
 /* ── 성과급보고서 ── */
 let bonusReportCache = [];
@@ -5001,21 +5002,31 @@ async function loadEmployeePositionHistory() {
     });
     const data = await res.json();
     const list = data.history || [];
+    promoHistoryCache = list;
     if (list.length === 0) {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 직급이력이 없습니다.</td></tr>`;
       return;
     }
-    tbody.innerHTML = list.map(h => `
+    const thisMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+    tbody.innerHTML = list.map(h => {
+      const historyMonth = (h.effective_date || '').slice(0, 7);
+      const isPast = historyMonth && historyMonth < thisMonth;
+      const actionsHtml = isPast
+        ? `<span class="promo-history-locked-actions" data-history-id="${h.id}">
+             <span style="color:var(--text-muted); font-size:11px;">🔒 지난 이력</span>
+             <a class="hr-edit-link" onclick="unlockPositionHistoryRow('${h.id}')">잠금해제</a>
+           </span>`
+        : `<a class="hr-edit-link" onclick="openApplyStandardModal('${employeeId}', '${esc(h.position)}')">급여반영</a>
+           <a class="hr-edit-link" onclick="deletePositionHistory('${h.id}')">삭제</a>`;
+      return `
       <tr>
         <td>${esc(h.effective_date)}</td>
         <td>${esc(h.position)}</td>
         <td style="font-size:12px; color:var(--text-secondary);">${esc(h.note || '-')}</td>
-        <td>
-          <a class="hr-edit-link" onclick="openApplyStandardModal('${employeeId}', '${esc(h.position)}')">급여반영</a>
-          <a class="hr-edit-link" onclick="deletePositionHistory('${h.id}')">삭제</a>
-        </td>
+        <td>${actionsHtml}</td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
   }
@@ -5055,6 +5066,18 @@ async function addPositionHistory() {
     $('promoHistoryMsg').className = 'hr-msg';
     $('promoHistoryMsg').textContent = '추가 중 오류가 발생했습니다: ' + (e.message || '');
   }
+}
+
+function unlockPositionHistoryRow(id) {
+  if (!confirm('이미 지난 시점(지난달 이전)의 직급이력이에요.\n이미 지급된 급여명세서의 계산 근거가 흔들릴 수 있으니 신중하게 진행해주세요.\n\n정말로 이 건을 급여반영/삭제하시겠습니까?')) return;
+  const h = promoHistoryCache.find(x => x.id === id);
+  if (!h) return;
+  const span = document.querySelector(`.promo-history-locked-actions[data-history-id="${id}"]`);
+  if (!span) return;
+  span.outerHTML = `
+    <a class="hr-edit-link" onclick="openApplyStandardModal('${promoHistoryEmployeeId}', '${esc(h.position)}')">급여반영</a>
+    <a class="hr-edit-link" onclick="deletePositionHistory('${id}')">삭제</a>
+  `;
 }
 
 async function deletePositionHistory(id) {
