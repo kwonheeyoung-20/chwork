@@ -372,6 +372,8 @@ function deleteHistory(idx) {
 
 /* ── 월결산서 생성 (① 미리보기 → 내역 수정 → ② 확정) ── */
 let mcPreviewFiles = null; // 확정 단계에서 같은 파일을 다시 보내야 하므로 보관
+let mcFullSummaryCache = null; // 보고서 인쇄용 요약 데이터(당기/전년동기/전기/월별추이)
+let mcDatesCache = null; // 보고서 인쇄용 기준일자/작성일자
 
 async function runMonthlyClosing() {
   const baseDate = $('mcBaseDate').value;
@@ -390,6 +392,8 @@ async function runMonthlyClosing() {
     return;
   }
   mcPreviewFiles = files;
+  const finalizedBadge = $('mcFinalizedBadge');
+  if (finalizedBadge) finalizedBadge.style.display = 'none';
 
   const btn = $('mcGenerateBtn');
   if (btn) btn.disabled = true;
@@ -526,7 +530,11 @@ async function finalizeMonthlyClosing() {
     if (btn) btn.disabled = false;
     if (!data.ok) { showMcFinalizeStatus('오류: ' + data.message, 'error'); return; }
 
-    showMcFinalizeStatus('확정 완료 ✓' + (data.save_warning ? ' (' + data.save_warning + ')' : ' 목록에 저장했어요.'), data.save_warning ? 'error' : 'success');
+    showMcFinalizeStatus('✅ 확정 완료! 아래 "저장된 월결산서 목록"에 등록됐어요.' + (data.save_warning ? ' (' + data.save_warning + ')' : ''), data.save_warning ? 'error' : 'success');
+    mcFullSummaryCache = data.full_summary || mcFullSummaryCache;
+    mcDatesCache = { base_date: data.base_date, prepared_date: data.prepared_date };
+    const badge = $('mcFinalizedBadge');
+    if (badge) badge.style.display = 'inline-block';
     const blob = b64toBlob(data.xlsx_b64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     const url = URL.createObjectURL(blob);
     const dl = $('mcDownloadBtn');
@@ -597,6 +605,79 @@ async function openMonthlyClosingReport(periodKey) {
   } catch (e) {
     alert('열기 실패: ' + e.message);
   }
+}
+
+/* ── 보고서 인쇄 (보고용 요약) ── */
+function mcFmtNum(n) {
+  if (typeof n !== 'number') return '-';
+  return Math.round(n).toLocaleString('ko-KR');
+}
+function mcFmtPct(cur, prev) {
+  if (typeof cur !== 'number' || typeof prev !== 'number' || prev === 0) return '-';
+  return ((cur - prev) / Math.abs(prev) * 100).toFixed(1) + '%';
+}
+
+function printMonthlyClosingReport() {
+  if (!mcFullSummaryCache) {
+    alert('먼저 "① 미리보기 생성"을 실행해주세요.');
+    return;
+  }
+  const dates = mcDatesCache || {};
+  $('mc_print_title').textContent = '월차 결산 보고서';
+  $('mc_print_sub').textContent = `기준일자: ${dates.base_date || '-'}  ·  작성일자: ${dates.prepared_date || '-'}`;
+
+  const INCOME_LABELS = [
+    ['매출액', '매출액'], ['매출원가', '매출원가'], ['매출총이익', '매출총이익'],
+    ['판매관리비', '판매관리비'], ['영업이익', '영업이익'], ['영업외수익', '영업외수익'],
+    ['영업외비용', '영업외비용'], ['법인세차감전순이익', '법인세차감전순이익'], ['당기순이익', '당기순이익'],
+  ];
+  const income = mcFullSummaryCache.income || {};
+  $('mc_print_income_tbody').innerHTML = INCOME_LABELS.map(([key, label]) => {
+    const v = income[key] || {};
+    const cur = v['당기'], prevYear = v['전년동기'], prevTerm = v['전기'];
+    const diff = (typeof cur === 'number' && typeof prevYear === 'number') ? cur - prevYear : null;
+    return `
+      <tr>
+        <td>${label}</td>
+        <td class="num">${mcFmtNum(cur)}</td>
+        <td class="num">${mcFmtNum(prevYear)}</td>
+        <td class="num">${diff === null ? '-' : mcFmtNum(diff)}</td>
+        <td class="num">${mcFmtPct(cur, prevYear)}</td>
+        <td class="num">${mcFmtNum(prevTerm)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const BALANCE_LABELS = [['자산총계', '자산총계'], ['부채총계', '부채총계'], ['자본총계', '자본총계']];
+  const balance = mcFullSummaryCache.balance || {};
+  $('mc_print_balance_tbody').innerHTML = BALANCE_LABELS.map(([key, label]) => {
+    const v = balance[key] || {};
+    const cur = v['당기'], prev = v['전기'];
+    const diff = (typeof cur === 'number' && typeof prev === 'number') ? cur - prev : null;
+    return `
+      <tr>
+        <td>${label}</td>
+        <td class="num">${mcFmtNum(cur)}</td>
+        <td class="num">${mcFmtNum(prev)}</td>
+        <td class="num">${diff === null ? '-' : mcFmtNum(diff)}</td>
+        <td class="num">${mcFmtPct(cur, prev)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const trend = mcFullSummaryCache.trend || {};
+  const monthLabels = Array.from({ length: 12 }, (_, i) => `${i + 1}월`);
+  $('mc_print_trend_thead').innerHTML = `<th>구분</th>` + monthLabels.map(m => `<th class="num">${m}</th>`).join('');
+  $('mc_print_trend_tbody').innerHTML = Object.entries(trend).map(([label, values]) => `
+    <tr>
+      <td>${label}</td>
+      ${(values || []).map(v => `<td class="num">${typeof v === 'number' ? mcFmtNum(v) : '-'}</td>`).join('')}
+    </tr>
+  `).join('');
+
+  $('mcPrintArea').style.display = 'block';
+  window.print();
+  $('mcPrintArea').style.display = 'none';
 }
 
 /* ── 초기화 ── */
