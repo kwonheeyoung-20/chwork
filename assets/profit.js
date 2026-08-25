@@ -464,20 +464,29 @@ async function loadMcRemarks() {
       wrap.innerHTML = `<div class="dash-empty" style="padding:12px; color:var(--red);">${data.message || '불러오기 실패'}</div>`;
       return;
     }
-    const list = data.remarks || [];
-    wrap.innerHTML = `
-      <table class="table" style="width:100%;">
-        <thead><tr><th style="white-space:nowrap;">계정과목</th><th>내역(비고)</th></tr></thead>
-        <tbody>
-          ${list.map(r => `
-            <tr>
-              <td style="white-space:nowrap;">${mcEsc(r.account_label)}</td>
-              <td><input type="text" class="hr-input mc-remark-input" data-key="${mcEsc(r.account_key)}" data-label="${mcEsc(r.account_label)}" value="${mcEsc(r.note || '')}" style="width:100%;"></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
+    const bySheet = data.remarks_by_sheet || {};
+    const sheetNames = Object.keys(bySheet);
+    if (sheetNames.length === 0) {
+      wrap.innerHTML = `<div class="dash-empty" style="padding:12px;">내역(비고) 항목이 없습니다.</div>`;
+      return;
+    }
+    wrap.innerHTML = sheetNames.map(sheetName => {
+      const list = bySheet[sheetName];
+      return `
+        <div style="padding:10px 12px 4px; font-size:13px; font-weight:600; background:var(--bg); position:sticky; top:0;">📄 ${mcEsc(sheetName)}</div>
+        <table class="table" style="width:100%;">
+          <thead><tr><th style="white-space:nowrap;">계정과목</th><th>내역(비고)</th></tr></thead>
+          <tbody>
+            ${list.map(r => `
+              <tr>
+                <td style="white-space:nowrap;">${mcEsc(r.account_label)}</td>
+                <td><input type="text" class="hr-input mc-remark-input" data-key="${mcEsc(r.account_key)}" data-label="${mcEsc(r.account_label)}" value="${mcEsc(r.note || '')}" style="width:100%;"></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }).join('');
   } catch (e) {
     wrap.innerHTML = `<div class="dash-empty" style="padding:12px; color:var(--red);">불러오기 실패</div>`;
   }
