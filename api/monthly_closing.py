@@ -100,9 +100,19 @@ def _cors_headers():
 
 
 def _get_saved_remarks_map():
-    """DB에 저장된 최신 내역(비고) 값들을 {account_key: note} 형태로 가져옴"""
+    """DB에 저장된 최신 내역(비고) 값들을 {account_key: note} 형태로 가져옴.
+    예전에는 키가 "계정명"만이었는데, 지금은 같은 이름이 여러 번 나오는 경우를 구분하려고
+    "계정명|몇번째" 형식으로 바뀜 — 예전 방식으로 저장해두셨던 값도 잃어버리지 않도록,
+    새 키(예: "임차보증금|1")로 못 찾으면 예전 순수 이름 키("임차보증금")도 같이 봐줌."""
     rows = rest_request("GET", "monthly_closing_remarks?select=account_key,note") or []
-    return {r["account_key"]: r.get("note") for r in rows}
+    result = {r["account_key"]: r.get("note") for r in rows}
+    legacy_map = {k: v for k, v in result.items() if "|" not in k}
+    for key in list(result.keys()):
+        if "|" in key:
+            base = key.rsplit("|", 1)[0]
+            if base in legacy_map and key not in result:
+                result[key] = legacy_map[base]
+    return result
 
 
 def _save_remarks_map(remarks_list):
