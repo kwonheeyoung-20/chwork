@@ -151,7 +151,7 @@ def build_monthly_closing(
     wb['인덱스']['K2'] = prepared_date or datetime.date.today()
 
     if remarks_override:
-        apply_remarks_to_bs_naeyeok(wb, remarks_override)
+        apply_all_remarks(wb, remarks_override)
 
     out = BytesIO()
     wb.save(out)
@@ -164,39 +164,52 @@ def normalize_key(name) -> str:
     return "".join(str(name).split())
 
 
-NAEYEOK_ROW_RANGE = (9, 80)  # 재무상태표(내역) 시트에서 계정과목이 있는 행 범위
+# 수기로 "내역"(비고)을 적는 시트들 — 계정과목 열, 내역 열, 실제 데이터가 있는 행 범위
+REMARKS_SHEETS = {
+    '재무상태표(내역)': {'account_col': 1, 'note_col': 4, 'row_range': (9, 80)},
+    '전월대비증감': {'account_col': 1, 'note_col': 13, 'row_range': (7, 54)},
+}
 
 
-def extract_bs_naeyeok_remarks(wb_or_path) -> list[dict]:
-    """재무상태표(내역) 시트에서 계정과목별 현재 "내역"(D열) 값을 그대로 뽑아옴.
-    (매달 새로 생성해도 이 값들은 그대로 유지되므로, 화면 수정 폼을 채우는 용도)"""
+def extract_all_remarks(wb_or_path) -> dict:
+    """내역(비고)이 있는 시트들에서 계정과목별 현재 값을 그대로 뽑아옴.
+    반환: {시트명: [{row, account_key, account_label, note}, ...]}"""
     wb = wb_or_path if hasattr(wb_or_path, "sheetnames") else openpyxl.load_workbook(wb_or_path, data_only=True)
-    ws = wb['재무상태표(내역)']
-    rows = []
-    for r in range(NAEYEOK_ROW_RANGE[0], NAEYEOK_ROW_RANGE[1] + 1):
-        label = ws.cell(row=r, column=1).value
-        if not label or not str(label).strip() or str(label).strip().startswith('='):
+    result = {}
+    for sheet_name, cfg in REMARKS_SHEETS.items():
+        if sheet_name not in wb.sheetnames:
             continue
-        note = ws.cell(row=r, column=4).value
-        rows.append({
-            "row": r,
-            "account_key": normalize_key(label),
-            "account_label": str(label).strip(),
-            "note": note if isinstance(note, str) else (str(note) if note is not None else None),
-        })
-    return rows
+        ws = wb[sheet_name]
+        rows = []
+        for r in range(cfg['row_range'][0], cfg['row_range'][1] + 1):
+            label = ws.cell(row=r, column=cfg['account_col']).value
+            if not label or not str(label).strip() or str(label).strip().startswith('='):
+                continue
+            note = ws.cell(row=r, column=cfg['note_col']).value
+            rows.append({
+                "row": r,
+                "account_key": normalize_key(label),
+                "account_label": str(label).strip(),
+                "note": note if isinstance(note, str) else (str(note) if note is not None else None),
+            })
+        result[sheet_name] = rows
+    return result
 
 
-def apply_remarks_to_bs_naeyeok(wb, remarks_map: dict) -> None:
-    """remarks_map: {account_key(정규화된 계정과목명): note} — 재무상태표(내역) D열에 덮어씀."""
-    ws = wb['재무상태표(내역)']
-    for r in range(NAEYEOK_ROW_RANGE[0], NAEYEOK_ROW_RANGE[1] + 1):
-        label = ws.cell(row=r, column=1).value
-        if not label or not str(label).strip() or str(label).strip().startswith('='):
+def apply_all_remarks(wb, remarks_map: dict) -> None:
+    """remarks_map: {account_key(정규화된 계정과목명): note} — 내역이 있는 모든 시트에 동일하게 덮어씀.
+    (계정과목명이 시트마다 겹칠 일이 거의 없어서, 하나의 맵으로 모든 시트를 같이 처리)"""
+    for sheet_name, cfg in REMARKS_SHEETS.items():
+        if sheet_name not in wb.sheetnames:
             continue
-        key = normalize_key(label)
-        if key in remarks_map:
-            ws.cell(row=r, column=4).value = remarks_map[key] or None
+        ws = wb[sheet_name]
+        for r in range(cfg['row_range'][0], cfg['row_range'][1] + 1):
+            label = ws.cell(row=r, column=cfg['account_col']).value
+            if not label or not str(label).strip() or str(label).strip().startswith('='):
+                continue
+            key = normalize_key(label)
+            if key in remarks_map:
+                ws.cell(row=r, column=cfg['note_col']).value = remarks_map[key] or None
 
 
 # 미리보기/보고서용 핵심지표 — 라이브러리(LibreOffice) 없이도 바로 계산해서 보여주기 위해
