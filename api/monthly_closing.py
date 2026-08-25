@@ -171,7 +171,12 @@ class handler(BaseHTTPRequestHandler):
                     for r in rows:
                         if r["account_key"] in saved_map:
                             r["note"] = saved_map[r["account_key"]]
-                return self._json(200, {"ok": True, "remarks_by_sheet": base_remarks_by_sheet})
+                special_note = saved_map.get("summary_special_note", "")
+                return self._json(200, {
+                    "ok": True,
+                    "remarks_by_sheet": base_remarks_by_sheet,
+                    "special_notes": {"summary_special_note": special_note},
+                })
 
             period_key = qs.get("period_key", [None])[0]
             if period_key:
@@ -252,6 +257,8 @@ class handler(BaseHTTPRequestHandler):
                 self._json(400, {"ok": False, "message": "remarks_json 형식이 올바르지 않습니다."})
                 return
 
+        special_note_text = fs.getvalue("summary_special_note")  # 요약 시트 "특이사항" 수기 입력란
+
         if not uploaded:
             self._json(400, {"ok": False, "message": "최소 1개 이상의 백데이터 파일을 업로드해주세요."})
             return
@@ -264,15 +271,18 @@ class handler(BaseHTTPRequestHandler):
             sys.path.insert(0, str(ROOT))
             from monthly_closing_builder import build_monthly_closing, compute_preview_summary, compute_full_report_summary
 
-            # finalize 단계에서 사용자가 수정한 내역을 먼저 DB에 저장해두고,
+            # finalize 단계에서 사용자가 수정한 내역/특이사항을 먼저 DB에 저장해두고,
             # 그 값(=최신 내역)을 이번 생성에도 그대로 반영
             if mode == "finalize" and remarks_list:
                 _save_remarks_map(remarks_list)
+            if mode == "finalize" and special_note_text is not None:
+                _save_remarks_map([{"account_key": "summary_special_note", "account_label": "특이사항", "note": special_note_text}])
 
             remarks_override = _get_saved_remarks_map()
+            special_notes = {"summary_special_note": remarks_override.get("summary_special_note", "")}
 
             result_bytes = build_monthly_closing(
-                str(TEMPLATE_PATH), uploaded, base_date, prepared_date, remarks_override,
+                str(TEMPLATE_PATH), uploaded, base_date, prepared_date, remarks_override, special_notes,
             )
 
             summary = {}
