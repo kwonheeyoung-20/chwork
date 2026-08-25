@@ -245,7 +245,7 @@ class handler(BaseHTTPRequestHandler):
 
         try:
             sys.path.insert(0, str(ROOT))
-            from monthly_closing_builder import build_monthly_closing, compute_preview_summary
+            from monthly_closing_builder import build_monthly_closing, compute_preview_summary, compute_full_report_summary
 
             # finalize 단계에서 사용자가 수정한 내역을 먼저 DB에 저장해두고,
             # 그 값(=최신 내역)을 이번 생성에도 그대로 반영
@@ -259,13 +259,10 @@ class handler(BaseHTTPRequestHandler):
             )
 
             summary = {}
+            full_summary = {"income": {}, "balance": {}, "trend": {}}
             if uploaded:
-                # 업로드 파일 포인터가 이미 소비됐을 수 있어 다시 열어서 계산
-                summary_files = {}
-                for sheet_name, path_str in uploaded.items():
-                    if sheet_name in ("손익계산서", "재무상태표"):
-                        summary_files[sheet_name] = path_str
-                summary = compute_preview_summary(summary_files)
+                summary = compute_preview_summary(uploaded)
+                full_summary = compute_full_report_summary(uploaded)
         except Exception as exc:
             self._json(500, {"ok": False, "message": f"보고서 생성 실패: {exc}"})
             return
@@ -282,6 +279,9 @@ class handler(BaseHTTPRequestHandler):
                 "filename": filename,
                 "period_key": period_key,
                 "summary": summary,
+                "full_summary": full_summary,
+                "base_date": base_date.isoformat(),
+                "prepared_date": (prepared_date or datetime.date.today()).isoformat(),
             })
             return
 
@@ -315,6 +315,9 @@ class handler(BaseHTTPRequestHandler):
             "filename": filename,
             "period_key": period_key,
             "summary": summary,
+            "full_summary": full_summary,
+            "base_date": base_date.isoformat(),
+            "prepared_date": (prepared_date or datetime.date.today()).isoformat(),
         }
         if save_warning:
             result["save_warning"] = save_warning
