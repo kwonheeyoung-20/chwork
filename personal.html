@@ -373,11 +373,12 @@
               가족에게 요청할 일이나 서로 공유할 내용을 남겨두세요. 확인/처리 여부는 누구나 표시할 수 있지만, 내용 수정·삭제는 작성한 사람만 가능해요.
             </p>
             <div style="display:flex; gap:8px; margin-bottom:12px;">
-              <select id="familyNoteStatusFilter" class="hr-input" style="width:150px;" onchange="loadFamilyNotes()">
-                <option value="all">전체</option>
-                <option value="pending" selected>미확인만</option>
+              <select id="familyNoteStatusFilter" class="hr-input" style="width:170px;" onchange="loadFamilyNotes()">
+                <option value="active" selected>완료 전까지 (미확인+확인함)</option>
+                <option value="pending">미확인만</option>
                 <option value="checked">확인함만</option>
                 <option value="done">처리완료만</option>
+                <option value="all">전체</option>
               </select>
             </div>
             <div id="familyNoteList" style="display:flex; flex-direction:column; gap:8px;">
