@@ -390,7 +390,7 @@ async function loadPersonalOccurrences() {
       const statusLabel = task.category !== '결제일' ? '-'
         : (o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료'));
       const currentRole = sessionStorage.getItem('chwork_hr_role') === 'family' ? 'family' : 'admin';
-      const lockedForOther = task.created_by_role && task.created_by_role !== currentRole;
+      const lockedForOther = currentRole !== 'admin' && task.created_by_role && task.created_by_role !== currentRole;
       const actionsHtml = lockedForOther
         ? `<span style="color:var(--text-muted); font-size:12px;">🔒 등록한 분만 수정 가능</span>`
         : `${(o.status === 'pending' && task.category === '결제일') ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> ` : ''}
@@ -542,7 +542,7 @@ async function editPersonalTask(taskId) {
     if (!t) { alert('일정을 찾을 수 없습니다.'); return; }
 
     const currentRole = sessionStorage.getItem('chwork_hr_role') === 'family' ? 'family' : 'admin';
-    const lockedForOther = t.created_by_role && t.created_by_role !== currentRole;
+    const lockedForOther = currentRole !== 'admin' && t.created_by_role && t.created_by_role !== currentRole;
     if (lockedForOther) {
       alert('이 일정은 처음 등록하신 분(계정)만 수정할 수 있습니다.');
       return;
@@ -1228,7 +1228,7 @@ async function loadFamilyNotes() {
     const STATUS_LABEL = { pending: '🔔 미확인', checked: '👀 확인함', done: '✅ 처리완료' };
     const STATUS_COLOR = { pending: '#fff3d6', checked: '#e3f0ff', done: '#e6f7e6' };
     wrap.innerHTML = familyNotesCache.map(n => {
-      const mine = n.created_by_role === myRole;
+      const mine = myRole === 'admin' || n.created_by_role === myRole;
       const writerLabel = n.created_by_role === 'family' ? '가족' : '나';
       return `
         <div style="padding:12px; background:${STATUS_COLOR[n.status] || 'var(--bg)'}; border-radius:var(--radius-sm);">
