@@ -40,7 +40,7 @@ class SupabaseError(Exception):
 
 
 def rest_request(method, path, body=None, prefer=None):
-    url = f"{SUPABASE_URL}/rest/v1/{urllib.parse.quote(path, safe='?&=,.*:()!~')}"
+    url = f"{SUPABASE_URL}/rest/v1/{urllib.parse.quote(path, safe='?&=,.*:()!~%')}"
     data = json.dumps(body).encode("utf-8") if body is not None else None
     headers = {
         "apikey": SUPABASE_SECRET_KEY,
