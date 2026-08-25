@@ -2901,6 +2901,8 @@ function openPayslipModal(idx) {
     const afterSum = afterBase + afterMeal;
     const normalWageHours = beforeSum > 0 ? 209 * (afterSum / beforeSum) : 209;
     $('ps_normal_wage_hours').textContent = normalWageHours.toFixed(2) + '시간';
+    const normalWageRate = normalWageHours > 0 ? afterSum / normalWageHours : 0;
+    $('ps_normal_wage_rate').textContent = fmt(Math.round(normalWageRate)) + '원';
   }
 
   $('payslipModal').style.display = 'flex';
@@ -3855,9 +3857,14 @@ function renderContractDocs() {
   }
   tbody.innerHTML = list.map(c => {
     const status = contractDocStatus(c);
-    const noteText = status === 'terminated'
-      ? [c.note ? esc(c.note) : null, `해지일 ${esc(c.terminated_date)}${c.termination_note ? ' — ' + esc(c.termination_note) : ''}`].filter(Boolean).join(' — ')
-      : esc(c.note || '-');
+    // 입력 시 비고와 해지/연장 처리 시 비고를 구분해서 두 줄로 보여줌 + hover하면 전체 내용도 보임
+    const noteParts = status === 'terminated'
+      ? [c.note || null, `해지일 ${c.terminated_date}${c.termination_note ? ' — ' + c.termination_note : ''}`].filter(Boolean)
+      : [c.note || null].filter(Boolean);
+    const noteTitle = noteParts.join('\n');
+    const noteText = noteParts.length
+      ? `<span title="${esc(noteTitle)}">${noteParts.map(esc).join('<br>')}</span>`
+      : '-';
     return `
     <tr>
       <td>${esc(c.doc_type || '-')}</td>
@@ -3940,9 +3947,14 @@ function renderFinancialDocs() {
   }
   tbody.innerHTML = list.map(c => {
     const status = contractDocStatus(c);
-    const noteText = status === 'terminated'
-      ? [c.note ? esc(c.note) : null, `해지일 ${esc(c.terminated_date)}${c.termination_note ? ' — ' + esc(c.termination_note) : ''}`].filter(Boolean).join(' — ')
-      : esc(c.note || '-');
+    // 입력 시 비고와 해지/연장 처리 시 비고를 구분해서 두 줄로 보여줌 + hover하면 전체 내용도 보임
+    const noteParts = status === 'terminated'
+      ? [c.note || null, `해지일 ${c.terminated_date}${c.termination_note ? ' — ' + c.termination_note : ''}`].filter(Boolean)
+      : [c.note || null].filter(Boolean);
+    const noteTitle = noteParts.join('\n');
+    const noteText = noteParts.length
+      ? `<span title="${esc(noteTitle)}">${noteParts.map(esc).join('<br>')}</span>`
+      : '-';
     return `
     <tr>
       <td>${esc(c.vendor_name || '-')}</td>
@@ -4381,7 +4393,7 @@ async function loadBonusReport() {
     });
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}${data.detail ? '<br><span style="font-size:11px; color:var(--text-muted);">' + esc(data.detail) + '</span>' : ''}</td></tr>`;
       return;
     }
     bonusReportCache = data.employees || [];
@@ -5306,6 +5318,19 @@ function renderPromotionMatrixInto(containerId, list) {
 }
 
 /* ── 직급별 이력표 인쇄 ── */
+/* ── 직급별 이력표 인쇄 ── */
+function printCurrentPromoView(context) {
+  // context: 'live'(현재 기준 미리보기) 또는 'saved'(저장된 보고서) — 지금 보고 있는 게
+  // "목록형"인지 "직급별 이력표"인지 자동으로 판단해서 그 화면 그대로 인쇄함.
+  if (context === 'live') {
+    const isMatrix = document.querySelector('[data-promoview="matrix"]').classList.contains('active');
+    printPromotionMatrix(isMatrix ? 'promoMatrixWrap' : 'promoLiveTableWrap');
+  } else {
+    const isMatrix = document.querySelector('[data-promosavedview="matrix"]').classList.contains('active');
+    printPromotionMatrix(isMatrix ? 'promoReportDetailMatrixWrap' : 'promoReportDetailTableWrap');
+  }
+}
+
 function printPromotionMatrix(containerId) {
   const source = $(containerId);
   if (!source || !source.querySelector('table')) {
@@ -5313,7 +5338,8 @@ function printPromotionMatrix(containerId) {
     return;
   }
   const asOfDate = $('promoAsOf').value || new Date().toISOString().slice(0, 10);
-  const title = containerId === 'promoReportDetailMatrixWrap'
+  const isSaved = containerId === 'promoReportDetailMatrixWrap' || containerId === 'promoReportDetailTableWrap';
+  const title = isSaved
     ? $('promoReportDetailTitle').textContent
     : `${asOfDate.slice(0, 4)}년 진급자 보고서(기준일: ${asOfDate})`;
 
@@ -5334,6 +5360,7 @@ function printPromotionMatrix(containerId) {
       #promoMatrixPrintBody table { font-size: 8.5px; border-collapse: collapse; width: 100%; }
       #promoMatrixPrintBody th, #promoMatrixPrintBody td { padding: 2px 4px; line-height: 1.2; }
       #promoMatrixPrintBody > div:last-child { font-size: 8px; }
+      #promoMatrixPrintBody table.promo-list-table th:last-child, #promoMatrixPrintBody table.promo-list-table td:last-child { display: none; }
     }
   `;
   document.head.appendChild(style);

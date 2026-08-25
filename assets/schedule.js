@@ -235,6 +235,7 @@ function renderOccurrences(list) {
       <td>${statusBadge(o.status)}</td>
       <td>
         ${o.status === 'pending' ? `<a class="hr-edit-link" onclick="skipOccurrence('${o.id}')">건너뛰기</a> ` : ''}
+        ${o.status === 'done' ? `<a class="hr-edit-link" onclick="editCompleteNote('${o.id}', ${JSON.stringify(o.completed_note || '').replace(/"/g, '&quot;')})">수정</a> ` : ''}
         <a class="hr-edit-link" onclick="deleteOccurrence('${o.id}')">삭제</a>
       </td>
     </tr>
@@ -248,6 +249,7 @@ function onCompleteToggle(occId, checked) {
   if (checked) {
     pendingCompleteOccId = occId;
     $('complete_note').value = '';
+    $('completeModalTitle').textContent = '완료 처리';
     $('completeModal').style.display = 'flex';
   } else {
     setCompleteStatus(occId, false, null);
@@ -258,6 +260,13 @@ function openCompleteModal() { $('completeModal').style.display = 'flex'; }
 function closeCompleteModal() {
   $('completeModal').style.display = 'none';
   loadOccurrences(); // 체크박스 취소했을 때 원상복귀 되도록 다시 로드
+}
+
+function editCompleteNote(occId, existingNote) {
+  pendingCompleteOccId = occId;
+  $('complete_note').value = existingNote || '';
+  $('completeModalTitle').textContent = '완료 메모 수정';
+  $('completeModal').style.display = 'flex';
 }
 
 async function confirmComplete() {
