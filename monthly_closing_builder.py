@@ -79,7 +79,11 @@ def _cell(rows: list[list], row_1idx: int, col_1idx: int):
     return line[c]
 
 
-def _clear_and_fill(dst_ws, cfg, src_rows: list[list]):
+def _clear_and_fill(dst_ws, cfg, src_rows: list[list]) -> dict:
+    """raw 시트를 새 데이터로 채우고, {정규화된 계정명: 실제로 들어간 행 번호} 맵을 반환.
+    (요약/재무상태표(내역) 시트 안에 일부 수식이 "몇 번째 행"을 통째로 하드코딩해서
+    참조하는 곳이 있어서, 매달 계정 순서가 달라지면 엉뚱한 값을 가리키게 됨 —
+    그 수식들을 다시 정확한 행 번호로 고쳐 쓰기 위해 이 맵이 필요함.)"""
     start_row = cfg['start_row']
     start_col = column_index_from_string(cfg['data_start_col'])
     end_col = column_index_from_string(cfg['data_end_col'])
@@ -99,6 +103,7 @@ def _clear_and_fill(dst_ws, cfg, src_rows: list[list]):
     # 2) 새 파일의 값을 그대로 복사 + 이름/키 수식 재생성
     # (실제 업로드 파일의 행/열 개수는 계정과목 유무에 따라 매달 달라질 수 있어
     #  항상 그 파일에 실제로 들어있는 만큼만 읽는다 — _cell()이 범위 밖이면 None을 반환)
+    row_map = {}
     src_max_row = len(src_rows)
     out_row = start_row
     for r in range(start_row, src_max_row + 1):
@@ -117,7 +122,61 @@ def _clear_and_fill(dst_ws, cfg, src_rows: list[list]):
         dst_ws.cell(row=out_row, column=key_col).value = (
             f'=IF({a_letter}{out_row}="","",{name_letter}{out_row}&"|"&COUNTIF(${name_letter}${start_row}:{name_letter}{out_row},{name_letter}{out_row}))'
         )
+        label = _cell(src_rows, r, start_col)
+        if label:
+            row_map.setdefault(normalize_key(label), out_row)
         out_row += 1
+    return row_map
+
+
+# 요약/재무상태표(내역) 시트 안에서 "몇 번째 행"을 그대로 하드코딩해서 참조하는 셀들.
+# (원본 파일에서는 우연히 그 행이 맞았지만, 백데이터마다 계정 순서가 달라질 수 있어서
+#  매번 실제 위치를 다시 찾아서 정확한 행 번호로 고쳐 써야 함)
+HARDCODED_ROW_REFS = [
+    # (수식이 있는 시트, 셀범위, 참조 대상 원본시트, 찾을 계정명, 어떤 데이터소스에서 행번호를 구할지)
+    {"target_sheet": "요약", "cells": [f"B{r}" for r in range(29, 41)],
+     "source_sheet": "기간별손익계산서", "account": "Ⅰ.매출액", "kind": "index"},
+    {"target_sheet": "요약", "cells": [f"C{r}" for r in range(29, 41)],
+     "source_sheet": "기간별손익계산서", "account": "Ⅴ.영업이익", "kind": "index"},
+    {"target_sheet": "재무상태표(내역)", "cells": ["A77"],
+     "source_sheet": "손익계산서", "account": "Ⅹ.당기순이익", "kind": "direct", "direct_col": "C"},
+    {"target_sheet": "재무상태표(내역)", "cells": ["A78"],
+     "source_sheet": "손익계산서", "account": "Ⅹ.당기순이익", "kind": "direct", "direct_col": "E"},
+]
+
+
+def _fix_hardcoded_row_refs(wb, row_maps: dict) -> None:
+    """HARDCODED_ROW_REFS에 정의된 셀들의 수식 안에 있는 "몇 번째 행" 숫자를,
+    이번에 실제로 채워진 행 번호로 다시 써줌. row_maps: {원본시트명: {정규화계정명: 행번호}}"""
+    import re
+    for spec in HARDCODED_ROW_REFS:
+        if spec["target_sheet"] not in wb.sheetnames:
+            continue
+        source_map = row_maps.get(spec["source_sheet"])
+        if not source_map:
+            continue  # 그 원본 시트를 이번에 새로 안 올리셨으면(=예전 데이터 유지) 손대지 않음
+        account_key = normalize_key(spec["account"])
+        new_row = source_map.get(account_key)
+        if not new_row:
+            continue  # 이번 달 데이터에 그 계정 자체가 없으면 건드리지 않음(원래 값 유지)
+
+        ws = wb[spec["target_sheet"]]
+        for cell_addr in spec["cells"]:
+            cell = ws[cell_addr]
+            formula = cell.value
+            if not isinstance(formula, str) or not formula.startswith("="):
+                continue
+            if spec["kind"] == "index":
+                # INDEX(시트!$C:$N, 33, N) 형태에서 "33"만 새 행 번호로 교체
+                pattern = re.compile(
+                    r'(INDEX\(' + re.escape(spec["source_sheet"]) + r'!\$?[A-Z]+:\$?[A-Z]+,\s*)\d+(\s*,)'
+                )
+                new_formula = pattern.sub(rf'\g<1>{new_row}\g<2>', formula)
+            else:  # direct: 시트!C55 형태에서 행번호만 교체
+                col = spec["direct_col"]
+                pattern = re.compile(re.escape(spec["source_sheet"]) + r'!' + re.escape(col) + r'\d+')
+                new_formula = pattern.sub(f'{spec["source_sheet"]}!{col}{new_row}', formula)
+            cell.value = new_formula
 
 
 def build_monthly_closing(
@@ -137,12 +196,17 @@ def build_monthly_closing(
     """
     wb = openpyxl.load_workbook(template_path)
 
+    row_maps = {}
     for sheet_name, cfg in RAW_SHEET_CONFIG.items():
         if sheet_name not in uploaded_files or uploaded_files[sheet_name] is None:
             continue
         src_rows = _load_rows(uploaded_files[sheet_name])
         dst_ws = wb[sheet_name]
-        _clear_and_fill(dst_ws, cfg, src_rows)
+        row_maps[sheet_name] = _clear_and_fill(dst_ws, cfg, src_rows)
+
+    # 요약/재무상태표(내역) 안에 "몇 번째 행"을 그대로 박아둔 수식들을,
+    # 이번에 실제로 채워진 행 번호로 다시 맞춰줌 (계정 순서가 달라져도 안전하게)
+    _fix_hardcoded_row_refs(wb, row_maps)
 
     # 기준일 갱신 — 이 값 하나로 인덱스/요약/재무상태표(내역)/매출액대비 비율분석/전월대비증감의
     # 모든 기간 문구가 자동으로 바뀜
