@@ -99,6 +99,169 @@ class handler(BaseHTTPRequestHandler):
             self.send_header(k, v)
         self.end_headers()
 
+    def _get_bonus_report(self, qs):
+        year_str = qs.get("year", [None])[0]
+        round_str = qs.get("round", [None])[0]
+        if not year_str or round_str not in ("1", "2"):
+            return self._send(400, {"error": "year, round(1 또는 2)는 필수입니다"})
+        year = int(year_str)
+        round_no = int(round_str)
+        y1, y2 = year - 1, year - 2
+
+        employees = rest_request(
+            "GET", "employees?status=eq.재직&select=id,name,branch,department,position,hire_date&order=hire_date.asc"
+        ) or []
+
+        salary_rows = rest_request(
+            "GET", "salary_history?select=employee_id,effective_month,annual_salary_thousand&order=effective_month.asc"
+        ) or []
+        # 직원별로, 해당 연도 안에서 가장 마지막(늦은) effective_month의 연봉을 그 해 연봉으로 봄
+        salary_by_emp_year = {}
+        for r in salary_rows:
+            emp_id = r["employee_id"]
+            yr = int(r["effective_month"][:4])
+            key = (emp_id, yr)
+            salary_by_emp_year[key] = r["annual_salary_thousand"]  # asc 정렬이라 뒤에 값이 마지막 값으로 남음
+
+        bonus_rows = rest_request(
+            "GET", "other_payments?payment_type=like.*성과급*&select=employee_id,payment_date,amount,note&order=payment_date.asc"
+        ) or []
+        bonus_by_emp_year = {}
+        note_by_emp_year = {}  # 과거 성과급의 "기준/율"을 note에 적어두신 경우 그대로 보여줌(맨 마지막 건 기준)
+        for r in bonus_rows:
+            emp_id = r["employee_id"]
+            yr = int(r["payment_date"][:4])
+            key = (emp_id, yr)
+            bonus_by_emp_year[key] = bonus_by_emp_year.get(key, 0) + (r.get("amount") or 0)
+            if r.get("note"):
+                note_by_emp_year[key] = r["note"]
+
+        decided_rows = rest_request(
+            "GET", f"bonus_reports?year=eq.{year}&round=eq.{round_no}&select=*"
+        ) or []
+        decided_by_emp = {r["employee_id"]: r for r in decided_rows}
+
+        locked = is_period_locked(f"bonus-{year}-{round_no}")
+
+        note_rows = rest_request(
+            "GET", f"bonus_report_notes?year=eq.{year}&round=eq.{round_no}&select=criteria_note"
+        ) or []
+        criteria_note = note_rows[0]["criteria_note"] if note_rows else None
+
+        def monthly(annual_thousand):
+            return round(annual_thousand * 1000 / 12) if annual_thousand else None
+
+        result = []
+        for idx, emp in enumerate(employees, start=1):
+            eid = emp["id"]
+            decided = decided_by_emp.get(eid)
+            salary_y2 = salary_by_emp_year.get((eid, y2))
+            salary_y1 = salary_by_emp_year.get((eid, y1))
+            salary_now = salary_by_emp_year.get((eid, year)) or salary_y1
+            result.append({
+                "seq": idx,
+                "employee_id": eid,
+                "name": emp.get("name"), "branch": emp.get("branch"),
+                "department": emp.get("department"), "position": emp.get("position"),
+                "hire_date": emp.get("hire_date"),
+                "salary_y2": salary_y2, "monthly_y2": monthly(salary_y2),
+                "criteria_y2": note_by_emp_year.get((eid, y2)),
+                "bonus_y2": bonus_by_emp_year.get((eid, y2), 0),
+                "salary_y1": salary_y1, "monthly_y1": monthly(salary_y1),
+                "criteria_y1": note_by_emp_year.get((eid, y1)),
+                "bonus_y1": bonus_by_emp_year.get((eid, y1), 0),
+                "salary_now": salary_now, "monthly_now": monthly(salary_now),
+                "criteria": decided.get("criteria") if decided else None,
+                "decided_amount": decided.get("decided_amount") if decided else None,
+                "note": decided.get("note") if decided else None,
+            })
+
+        return self._send(200, {
+            "year": year, "round": round_no, "y1": y1, "y2": y2,
+            "locked": locked, "employees": result, "criteria_note": criteria_note,
+        })
+
+    def _save_bonus_report(self, payload):
+        year = payload.get("year")
+        round_no = payload.get("round")
+        items = payload.get("items") or []
+        if not year or round_no not in (1, 2):
+            return self._send(400, {"error": "year, round(1 또는 2)는 필수입니다"})
+        if is_period_locked(f"bonus-{year}-{round_no}"):
+            return self._send(423, {"error": f"{year}년 {round_no}차 성과급은 이미 마감되어 있습니다. 먼저 마감해제해주세요."})
+
+        body = []
+        for it in items:
+            if not it.get("employee_id"):
+                continue
+            body.append({
+                "employee_id": it["employee_id"],
+                "year": year,
+                "round": round_no,
+                "criteria": it.get("criteria"),
+                "decided_amount": it.get("decided_amount"),
+                "note": it.get("note"),
+                "updated_at": "now()",
+            })
+        if not body:
+            return self._send(400, {"error": "저장할 항목이 없습니다"})
+        rest_request(
+            "POST", "bonus_reports?on_conflict=employee_id,year,round",
+            body=body, prefer="resolution=merge-duplicates",
+        )
+        return self._send(200, {"ok": True, "count": len(body)})
+
+    def _save_bonus_criteria_note(self, payload):
+        year = payload.get("year")
+        round_no = payload.get("round")
+        note = payload.get("criteria_note")
+        if not year or round_no not in (1, 2):
+            return self._send(400, {"error": "year, round(1 또는 2)는 필수입니다"})
+        rest_request(
+            "POST", "bonus_report_notes?on_conflict=year,round",
+            body={"year": year, "round": round_no, "criteria_note": note, "updated_at": "now()"},
+            prefer="resolution=merge-duplicates",
+        )
+        return self._send(200, {"ok": True})
+
+    def _finalize_bonus_report(self, payload):
+        year = payload.get("year")
+        round_no = payload.get("round")
+        pay_date = payload.get("pay_date")
+        if not year or round_no not in (1, 2) or not pay_date:
+            return self._send(400, {"error": "year, round(1 또는 2), pay_date는 필수입니다"})
+        if is_period_locked(f"bonus-{year}-{round_no}"):
+            return self._send(423, {"error": f"{year}년 {round_no}차 성과급은 이미 마감되어 있습니다."})
+
+        rows = rest_request(
+            "GET", f"bonus_reports?year=eq.{year}&round=eq.{round_no}&decided_amount=gt.0&select=*"
+        ) or []
+        created_count = 0
+        for r in rows:
+            if r.get("other_payment_id"):
+                continue  # 이미 반영된 건 중복 생성 방지
+            note_text = r.get("note") or f"{year}년 {round_no}차 성과급보고서 확정 반영"
+            if r.get("criteria"):
+                note_text = f"[{r['criteria']}] {note_text}"
+            op = rest_request("POST", "other_payments", body={
+                "employee_id": r["employee_id"],
+                "payment_type": f"성과급({round_no}차)",
+                "payment_date": pay_date,
+                "amount": r["decided_amount"],
+                "note": note_text,
+            }, prefer="return=representation")
+            if op:
+                rest_request("PATCH", f"bonus_reports?id=eq.{r['id']}", body={"other_payment_id": op[0]["id"]})
+                created_count += 1
+
+        rest_request(
+            "POST", "period_locks?on_conflict=module,period_key",
+            body={"module": "other_payments", "period_key": f"bonus-{year}-{round_no}", "locked": True,
+                  "note": f"{year}년 {round_no}차 성과급보고서 확정"},
+            prefer="resolution=merge-duplicates",
+        )
+        return self._send(200, {"ok": True, "created": created_count})
+
     def do_GET(self):
         try:
             if not self._authorized():
@@ -108,6 +271,9 @@ class handler(BaseHTTPRequestHandler):
             if qs.get("locks", ["0"])[0] == "1":
                 locks = rest_request("GET", "period_locks?module=eq.other_payments&select=*&order=period_key.desc")
                 return self._send(200, {"locks": locks})
+
+            if qs.get("bonus_report", ["0"])[0] == "1":
+                return self._get_bonus_report(qs)
 
             employee_id = qs.get("employee_id", [None])[0]
             year = qs.get("year", [None])[0]
@@ -131,6 +297,13 @@ class handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
+
+            if isinstance(payload, dict) and payload.get("type") == "bonus_save":
+                return self._save_bonus_report(payload)
+            if isinstance(payload, dict) and payload.get("type") == "bonus_finalize":
+                return self._finalize_bonus_report(payload)
+            if isinstance(payload, dict) and payload.get("type") == "bonus_criteria_note":
+                return self._save_bonus_criteria_note(payload)
 
             if isinstance(payload, dict) and payload.get("type") == "lock":
                 period_key = payload.get("period_key")
