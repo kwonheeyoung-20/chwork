@@ -94,6 +94,7 @@
     { "src": "/api/promotions", "dest": "api/workspace.py?resource=promotions" },
     { "src": "/api/annual_leave_calc", "dest": "api/workspace.py?resource=annualleave" },
     { "src": "/api/personal_schedule", "dest": "api/workspace.py?resource=personal" },
+    { "src": "/api/family_notes", "dest": "api/workspace.py?resource=family_notes" },
     { "src": "/api/timetable", "dest": "api/workspace.py?resource=timetable" },
     { "src": "/api/manuals", "dest": "api/workspace.py?resource=manuals" },
     { "src": "/api/monthly_closing", "dest": "api/monthly_closing.py" },

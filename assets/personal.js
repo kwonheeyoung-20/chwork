@@ -70,6 +70,7 @@ function showMain() {
     loadPerCalendar();
   });
   loadTimetable();
+  loadFamilyNotes();
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -388,10 +389,10 @@ async function loadPersonalOccurrences() {
       const color = memberColor(task.member_name);
       const statusLabel = task.category !== '결제일' ? '-'
         : (o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료'));
-      const isFamily = sessionStorage.getItem('chwork_hr_role') === 'family';
-      const lockedForFamily = isFamily && task.member_name === '나';
-      const actionsHtml = lockedForFamily
-        ? `<span style="color:var(--text-muted); font-size:12px;">🔒 수정 불가</span>`
+      const currentRole = sessionStorage.getItem('chwork_hr_role') === 'family' ? 'family' : 'admin';
+      const lockedForOther = task.created_by_role && task.created_by_role !== currentRole;
+      const actionsHtml = lockedForOther
+        ? `<span style="color:var(--text-muted); font-size:12px;">🔒 등록한 분만 수정 가능</span>`
         : `${(o.status === 'pending' && task.category === '결제일') ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> ` : ''}
             <a class="hr-edit-link" onclick="editPersonalTask('${o.task_id}')">수정</a>
             <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">이 날짜만 삭제</a>
@@ -540,10 +541,16 @@ async function editPersonalTask(taskId) {
     const t = personalTasksCache.find(x => x.id === taskId);
     if (!t) { alert('일정을 찾을 수 없습니다.'); return; }
 
+    const currentRole = sessionStorage.getItem('chwork_hr_role') === 'family' ? 'family' : 'admin';
+    const lockedForOther = t.created_by_role && t.created_by_role !== currentRole;
+    if (lockedForOther) {
+      alert('이 일정은 처음 등록하신 분(계정)만 수정할 수 있습니다.');
+      return;
+    }
+
     editingPersonalTaskId = taskId;
     $('personalEventModalTitle').textContent = '일정 수정';
-    const lockedForFamily = sessionStorage.getItem('chwork_hr_role') === 'family' && t.member_name === '나';
-    $('personalEventDeleteBtn').style.display = lockedForFamily ? 'none' : 'inline-block';
+    $('personalEventDeleteBtn').style.display = 'inline-block';
     $('pe_member').value = t.member_name;
     $('pe_category').value = t.category || '일정';
     $('pe_title').value = t.title || '';
@@ -1190,6 +1197,144 @@ async function deleteTeacher(id) {
     await fetch(`${apiBase()}/api/timetable?id=${id}&type=teacher`, { method: 'DELETE', headers: authHeaders() });
     loadTeachers();
     loadTimetable();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 가족 공유 메모 ── */
+let familyNotesCache = [];
+let editingFamilyNoteId = null;
+
+function currentAccountRole() {
+  return sessionStorage.getItem('chwork_hr_role') === 'family' ? 'family' : 'admin';
+}
+
+async function loadFamilyNotes() {
+  const wrap = $('familyNoteList');
+  wrap.innerHTML = `<div class="dash-empty">불러오는 중…</div>`;
+  const status = $('familyNoteStatusFilter').value;
+  try {
+    const res = await fetch(`${apiBase()}/api/family_notes?status=${status}`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    const data = await res.json();
+    familyNotesCache = data.notes || [];
+    $('familyNoteCount').textContent = `총 ${familyNotesCache.length}건`;
+    if (familyNotesCache.length === 0) {
+      wrap.innerHTML = `<div class="dash-empty">해당하는 메모가 없습니다.</div>`;
+      return;
+    }
+    const myRole = currentAccountRole();
+    const STATUS_LABEL = { pending: '🔔 미확인', checked: '👀 확인함', done: '✅ 처리완료' };
+    const STATUS_COLOR = { pending: '#fff3d6', checked: '#e3f0ff', done: '#e6f7e6' };
+    wrap.innerHTML = familyNotesCache.map(n => {
+      const mine = n.created_by_role === myRole;
+      const writerLabel = n.created_by_role === 'family' ? '가족' : '나';
+      return `
+        <div style="padding:12px; background:${STATUS_COLOR[n.status] || 'var(--bg)'}; border-radius:var(--radius-sm);">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+            <span class="member-chip" style="background:${memberColor(n.target_member)}; font-size:11px;">${esc(n.target_member)}</span>
+            <span style="font-size:11px; color:var(--text-muted);">${STATUS_LABEL[n.status] || n.status}</span>
+            <span style="font-size:11px; color:var(--text-muted); margin-left:auto;">작성: ${writerLabel} · ${new Date(n.created_at).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+          </div>
+          <div style="font-size:14px; white-space:pre-wrap;">${esc(n.content)}</div>
+          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            ${n.status !== 'checked' ? `<a class="hr-edit-link" onclick="setFamilyNoteStatus('${n.id}','checked')">확인함으로 표시</a>` : ''}
+            ${n.status !== 'done' ? `<a class="hr-edit-link" onclick="setFamilyNoteStatus('${n.id}','done')">처리완료로 표시</a>` : ''}
+            ${n.status !== 'pending' ? `<a class="hr-edit-link" onclick="setFamilyNoteStatus('${n.id}','pending')">미확인으로 되돌리기</a>` : ''}
+            ${mine ? `<a class="hr-edit-link" onclick="editFamilyNote('${n.id}')">수정</a><a class="hr-edit-link" style="color:var(--red);" onclick="deleteFamilyNote('${n.id}')">삭제</a>` : `<span style="font-size:11px; color:var(--text-muted);">🔒 작성자만 수정/삭제 가능</span>`}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (e) {
+    wrap.innerHTML = `<div class="dash-empty" style="color:var(--red);">불러오기 실패</div>`;
+  }
+}
+
+function populateFamilyNoteTargetSelect() {
+  const sel = $('fn_target');
+  const names = (membersCache || []).map(m => m.name);
+  sel.innerHTML = `<option value="전체">전체</option>` + names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+
+function openFamilyNoteModal() {
+  editingFamilyNoteId = null;
+  $('familyNoteModalTitle').textContent = '메모 남기기';
+  populateFamilyNoteTargetSelect();
+  $('fn_target').value = '전체';
+  $('fn_content').value = '';
+  $('familyNoteModalMsg').textContent = '';
+  $('familyNoteModal').style.display = 'flex';
+}
+
+function editFamilyNote(id) {
+  const n = familyNotesCache.find(x => x.id === id);
+  if (!n) return;
+  editingFamilyNoteId = id;
+  $('familyNoteModalTitle').textContent = '메모 수정';
+  populateFamilyNoteTargetSelect();
+  $('fn_target').value = n.target_member;
+  $('fn_content').value = n.content;
+  $('familyNoteModalMsg').textContent = '';
+  $('familyNoteModal').style.display = 'flex';
+}
+
+function closeFamilyNoteModal() {
+  $('familyNoteModal').style.display = 'none';
+}
+
+async function saveFamilyNote() {
+  const target_member = $('fn_target').value;
+  const content = $('fn_content').value.trim();
+  if (!content) {
+    $('familyNoteModalMsg').textContent = '내용을 입력해주세요.';
+    return;
+  }
+  try {
+    const isEdit = !!editingFamilyNoteId;
+    const url = isEdit ? `${apiBase()}/api/family_notes?id=${editingFamilyNoteId}` : `${apiBase()}/api/family_notes`;
+    const res = await fetch(url, {
+      method: isEdit ? 'PATCH' : 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify({ target_member, content }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      $('familyNoteModalMsg').textContent = data.error || '저장 중 오류가 발생했습니다.';
+      return;
+    }
+    closeFamilyNoteModal();
+    loadFamilyNotes();
+  } catch (e) {
+    $('familyNoteModalMsg').textContent = '저장 중 오류가 발생했습니다.';
+  }
+}
+
+async function setFamilyNoteStatus(id, status) {
+  try {
+    const res = await fetch(`${apiBase()}/api/family_notes?id=${id}`, {
+      method: 'PATCH',
+      headers: authHeaders(true),
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error('failed');
+    loadFamilyNotes();
+  } catch (e) {
+    alert('상태 변경 중 오류가 발생했습니다.');
+  }
+}
+
+async function deleteFamilyNote(id) {
+  if (!confirm('이 메모를 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/family_notes?id=${id}`, { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert(data.error || '삭제 중 오류가 발생했습니다.');
+      return;
+    }
+    loadFamilyNotes();
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
   }
