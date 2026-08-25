@@ -1012,7 +1012,7 @@
             <h2>성과급보고서</h2>
           </div>
           <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
-            직전 2개년도의 연봉·월급·성과급 지급이력을 비교하여 당해년도 성과급을 검토·결정하기 위한 자료예요.
+            직전 2개년도(연봉·성과급) 자료를 현재 재직 직원 기준으로 정리해서, 당해년도 성과급 지급액을 결정하는 보고서예요.
             1차·2차는 지급 기준이 다르니 각각 따로 입력·마감할 수 있어요. 마감하면 결정된 금액이 "성과급/기타지급"에 자동으로 등록됩니다.
           </p>
 
@@ -1021,8 +1021,8 @@
             <select id="bonusYear" class="hr-input" style="width:100px;" onchange="loadBonusReport()"></select>
             <label style="font-size:13px; color:var(--text-secondary); margin-left:8px;">차수:</label>
             <select id="bonusRound" class="hr-input" style="width:90px;" onchange="loadBonusReport()">
-              <option value="1">1차(9월 지급)</option>
-              <option value="2">2차(익년 2월 지급)</option>
+              <option value="1">1차</option>
+              <option value="2">2차</option>
             </select>
             <button class="secondary" onclick="loadBonusReport()">조회</button>
             <span id="bonusLockStatus" style="font-size:12px; color:var(--text-muted); margin-left:8px;"></span>
@@ -1038,48 +1038,25 @@
           </div>
 
           <div class="table-wrap">
-            <table class="table" id="bonusReportTable" style="white-space:nowrap;">
+            <table class="table" id="bonusReportTable">
               <thead>
                 <tr>
-                  <th rowspan="2">순번</th>
-                  <th rowspan="2">이름</th>
-                  <th rowspan="2">지사</th>
-                  <th rowspan="2">부서</th>
-                  <th rowspan="2">직급</th>
-                  <th rowspan="2">입사일</th>
-                  <th colspan="4" id="bonusY2GroupHeader" style="text-align:center; background:#eef3fa;">2024년 이력</th>
-                  <th colspan="4" id="bonusY1GroupHeader" style="text-align:center; background:#eef3fa;">2025년 이력</th>
-                  <th colspan="2" style="text-align:center; background:#f2f2f2;">당해년도 현재 급여</th>
-                  <th colspan="5" style="text-align:center; background:#fff3d6;">당해년도 성과급 결정</th>
-                </tr>
-                <tr>
-                  <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
-                  <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
-                  <th class="num">연봉(천원)</th><th class="num">월급여</th>
-                  <th style="min-width:110px;">결정기준/율(입력)</th>
-                  <th class="num" style="background:#fff9ec; min-width:130px;">결정 성과급(입력)</th>
-                  <th class="num">전년대비 증감</th>
-                  <th class="num">전년대비(%)</th>
-                  <th style="min-width:110px;">비고</th>
+                  <th style="white-space:nowrap; min-width:90px;">지사</th>
+                  <th style="white-space:nowrap; min-width:80px;">부서</th>
+                  <th style="white-space:nowrap; min-width:70px;">성명</th>
+                  <th style="white-space:nowrap; min-width:80px;">직급</th>
+                  <th class="num" id="bonusY2SalaryHeader">연봉</th>
+                  <th class="num" id="bonusY2BonusHeader">성과급</th>
+                  <th class="num" id="bonusY1SalaryHeader">연봉</th>
+                  <th class="num" id="bonusY1BonusHeader">성과급</th>
+                  <th class="num" style="background:#fff3d6; min-width:150px;">당해년도 결정 성과급(입력)</th>
+                  <th>비고</th>
                 </tr>
               </thead>
               <tbody id="bonusReportTbody">
-                <tr><td colspan="21" style="text-align:center; color:var(--text-muted); padding:24px;">조회를 눌러주세요.</td></tr>
+                <tr><td colspan="10" style="text-align:center; color:var(--text-muted); padding:24px;">조회를 눌러주세요.</td></tr>
               </tbody>
-              <tfoot id="bonusReportTfoot"></tfoot>
             </table>
-          </div>
-
-          <div id="bonusCriteriaTableWrap" style="margin-top:20px; padding:14px; background:var(--bg); border-radius:var(--radius-sm);">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-              <h3 style="font-size:14px; margin:0;">📌 [참고] 지급기준표</h3>
-              <button class="secondary" onclick="saveBonusCriteriaNote()" style="font-size:11px; padding:3px 8px;">저장</button>
-            </div>
-            <p style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
-              직급별 지급 기준을 참고용으로 적어두는 칸이에요. 여기서 수정하시면 저장되고, 인쇄물에도 그대로 나가요.
-            </p>
-            <textarea id="bonusCriteriaNote" class="hr-input" rows="6" style="width:100%; resize:vertical;"
-              placeholder="예: 임원 2,000~10,000천원 / 부장 2,000~2,500천원 / 차장·과장 1,500~2,000천원 / 대리 1,500천원 / 1년미만 300천원(2개월 이상 근무자)"></textarea>
           </div>
         </section>
 
