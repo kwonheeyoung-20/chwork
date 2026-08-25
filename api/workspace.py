@@ -458,8 +458,8 @@ SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 HR_PASSWORD = os.environ.get("HR_PASSWORD", "")
 FAMILY_PASSWORD = os.environ.get("FAMILY_PASSWORD", "")
 
-# 가족용 비밀번호는 "개인 일정관리(personal)"와 "학교 시간표(timetable)"만 열 수 있음
-FAMILY_ALLOWED_RESOURCES = {"personal", "timetable"}
+# 가족용 비밀번호는 "개인 일정관리(personal)", "가족 공유 메모(family_notes)", "학교 시간표(timetable)"만 열 수 있음
+FAMILY_ALLOWED_RESOURCES = {"personal", "family_notes", "timetable"}
 CONTRACT_BUCKET = "contracts"
 
 
