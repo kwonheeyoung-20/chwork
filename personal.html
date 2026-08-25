@@ -362,6 +362,50 @@
               </table>
             </div>
           </section>
+
+          <!-- ── 가족 공유 메모 ── -->
+          <section class="panel">
+            <div class="panel-header">
+              <h2>👨‍👩‍👧 가족 공유 메모 <span id="familyNoteCount" class="hr-count"></span></h2>
+              <button class="primary" onclick="openFamilyNoteModal()">+ 메모 남기기</button>
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+              가족에게 요청할 일이나 서로 공유할 내용을 남겨두세요. 확인/처리 여부는 누구나 표시할 수 있지만, 내용 수정·삭제는 작성한 사람만 가능해요.
+            </p>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <select id="familyNoteStatusFilter" class="hr-input" style="width:150px;" onchange="loadFamilyNotes()">
+                <option value="all">전체</option>
+                <option value="pending" selected>미확인만</option>
+                <option value="checked">확인함만</option>
+                <option value="done">처리완료만</option>
+              </select>
+            </div>
+            <div id="familyNoteList" style="display:flex; flex-direction:column; gap:8px;">
+              <div class="dash-empty">불러오는 중…</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- 메모 작성/수정 모달 -->
+        <div id="familyNoteModal" class="hr-modal-backdrop" style="display:none;">
+          <div class="hr-modal" style="width:420px;">
+            <h2 id="familyNoteModalTitle">메모 남기기</h2>
+            <div class="hr-form-grid" style="grid-template-columns:1fr;">
+              <label>받는 사람
+                <select id="fn_target" class="hr-input">
+                  <option value="전체">전체</option>
+                </select>
+              </label>
+              <label>내용
+                <textarea id="fn_content" class="hr-input" rows="4" placeholder="예: 이번 주 토요일 가족모임 참석 여부 알려주세요"></textarea>
+              </label>
+            </div>
+            <div id="familyNoteModalMsg" class="hr-msg"></div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+              <button class="secondary" onclick="closeFamilyNoteModal()">취소</button>
+              <button class="primary" onclick="saveFamilyNote()">저장</button>
+            </div>
+          </div>
         </div>
 
         <!-- ── 학교 시간표 ── -->
