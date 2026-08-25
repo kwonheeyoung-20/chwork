@@ -838,8 +838,8 @@ function renderPension(list, asOf) {
   pensionListCache = list;
   pensionAsOfCache = asOf;
   $('pensionInputCount').textContent = `총 ${list.length}명`;
-  $('asOfCumHeader').textContent = asOf ? `${asOf} 기준 누적추계액` : '지급일자 누적추계액';
-  $('periodAccrualHeader').textContent = asOf ? `${asOf.slice(0,4)}년 1월~${asOf.slice(5)} 발생액` : '해당연도 1월~지급일자 발생액';
+  $('asOfCumHeader').textContent = asOf ? `${asOf} 기준 누적추계액` : '기준일자 누적추계액';
+  $('periodAccrualHeader').textContent = asOf ? `${asOf.slice(0,4)}년 1월~${asOf.slice(5)} 발생액` : '해당연도 1월~기준일자 발생액';
   const tbody = $('pensionTbody');
   if (list.length === 0) {
     tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; color:var(--text-muted); padding:24px;">DC 가입자가 없습니다.</td></tr>`;
@@ -940,7 +940,7 @@ async function saveContribution() {
     note: $('c_note').value.trim() || null,
   };
   if (!payload.employee_id || !payload.contribution_date || !payload.amount) {
-    $('contribMsg').textContent = '직원, 지급일자, 금액은 필수입니다.';
+    $('contribMsg').textContent = '직원, 정산지급일, 금액은 필수입니다.';
     return;
   }
   try {
@@ -1215,7 +1215,7 @@ function downloadPensionExcel() {
 /* ── 일괄 불입 처리 ── */
 function fillBulkAmounts(mode) {
   if (mode === 'accrual' && !$('pensionAsOf').value) {
-    alert('먼저 위에서 "지급일자"를 지정하고 조회한 뒤 사용해주세요.');
+    alert('먼저 위에서 "기준일자"를 지정하고 조회한 뒤 사용해주세요.');
     return;
   }
   document.querySelectorAll('#pensionTbody tr').forEach(tr => {
@@ -1237,9 +1237,9 @@ function fillBulkAmounts(mode) {
 }
 
 async function saveBulkContributions() {
-  const date = $('pensionAsOf').value;
+  const date = $('pensionSettlePayDate').value;
   if (!date) {
-    alert('먼저 위에서 "지급일자"를 지정해주세요 (이 날짜로 저장됩니다).');
+    alert('먼저 "정산지급일"을 지정해주세요 (이 날짜로 저장됩니다).');
     return;
   }
   const items = [];
@@ -1485,7 +1485,7 @@ async function saveContributionEdit(id) {
   const amount = Number($(`edit_amount_${id}`).value);
   const note = $(`edit_note_${id}`).value.trim() || null;
   if (!date || !amount) {
-    alert('지급일자와 금액은 필수입니다.');
+    alert('정산지급일과 금액은 필수입니다.');
     return;
   }
   try {
@@ -2919,7 +2919,7 @@ function printPayslip() {
   document.head.removeChild(style);
 }
 
-/* ── 불입 차수(지급일자별) 목록 — '발생 및 불입 입력' 탭 ── */
+/* ── 불입 차수(정산지급일별) 목록 — '발생 및 불입 입력' 탭 ── */
 async function loadPensionInstallmentList() {
   const wrap = $('pensionInstallmentList');
   wrap.innerHTML = `<div class="dash-empty" style="padding:12px;">불러오는 중…</div>`;
