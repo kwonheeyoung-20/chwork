@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+  <link rel="stylesheet" href="assets/fonts.css">
+  <title>개인 일정관리 | 창현 Dashboard</title>
+<script>document.documentElement.setAttribute("data-theme", localStorage.getItem("chwork_theme") || "light");</script>
+<script>document.documentElement.setAttribute("data-font", localStorage.getItem("chwork_font") || "default");</script>
+  <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/hr.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#c82828">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="WORKS">
+  <style>
+    .sch-banner { border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; font-size: 13px; }
+    .sch-banner.warn { background: #fff4e5; border: 0.5px solid #f0b429; color: #8a5b00; }
+    .sch-banner.danger { background: #fdecea; border: 0.5px solid var(--red); color: var(--red); }
+    .sch-banner h3 { font-size: 13px; margin-bottom: 8px; }
+    .sch-banner-row { display:flex; justify-content:space-between; align-items:center; padding:3px 0; }
+    .sch-dday { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+    .sch-dday.overdue { background:#fdecea; color:var(--red); }
+    .sch-dday.soon { background:#fff4e5; color:#8a5b00; }
+
+    .sch-cal-header { display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:14px; }
+    .sch-cal-header h3 { font-size:16px; min-width:120px; text-align:center; }
+    .sch-cal-nav-btn { background:var(--bg); border:0.5px solid var(--border-strong); border-radius:var(--radius-sm); width:30px; height:30px; cursor:pointer; font-size:14px; color:var(--text-secondary); }
+    .sch-cal-nav-btn:hover { background:var(--surface); }
+    .sch-cal-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; }
+    .sch-cal-weekday { text-align:center; font-size:12px; font-weight:600; color:var(--text-muted); padding:4px 0 8px; }
+    .sch-cal-weekday.sun { color:var(--red); }
+    .sch-cal-weekday.sat { color:#3366cc; }
+    .sch-cal-cell { min-height:80px; border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:6px; background:var(--surface); display:flex; flex-direction:column; gap:2px; transition:transform 0.12s, box-shadow 0.12s, z-index 0s; position:relative; }
+    .sch-cal-cell.has-items:hover { transform:scale(1.06); box-shadow:0 4px 16px rgba(0,0,0,0.16); z-index:5; }
+    .sch-cal-cell.empty { background:transparent; border-color:transparent; }
+    .sch-cal-cell.today { border:1.5px solid var(--red); background:#fff8f7; }
+    .sch-cal-daynum { font-size:12px; font-weight:600; color:var(--text-secondary); }
+    .sch-cal-daynum.sun { color:var(--red); }
+    .sch-cal-daynum.sat { color:#3366cc; }
+    .sch-cal-cell.today .sch-cal-daynum { color:var(--red); font-weight:800; }
+    .sch-cal-cell.holiday { background:#fff8f7; }
+    .sch-cal-holiday { font-size:9.5px; color:var(--red); font-weight:600; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sch-cal-item { font-size:10px; padding:1px 5px; border-radius:4px; line-height:1.5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#fff; }
+    .sch-cal-item.done { text-decoration:line-through; opacity:0.55; }
+    .sch-cal-more { font-size:10px; color:var(--text-muted); padding-left:5px; }
+
+    .member-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 10px 3px 6px; border-radius:20px; font-size:12px; font-weight:600; color:#fff; }
+    .member-dot { width:9px; height:9px; border-radius:50%; background:#fff; opacity:0.85; }
+    .member-legend { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+
+    .tt-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    .tt-table th, .tt-table td { border:1.5px solid #8a8f98; padding:6px 8px; font-size:12px; text-align:center; vertical-align:middle; word-break:break-word; }
+    .tt-table th:first-child, .tt-table td:first-child { width:80px; }
+    .tt-table th { background:var(--bg); font-weight:600; border:1.5px solid #6b7280; }
+    .tt-table td { position: relative; }
+    .tt-cell-subject { font-weight:600; font-size:13px; }
+    .tt-cell-teacher { font-size:10.5px; color:var(--text-secondary); margin-top:2px; }
+    .tt-cell-edit {
+      position: absolute; top: 3px; right: 4px;
+      font-size: 13px; line-height: 1; color: var(--text-muted);
+      cursor: pointer; padding: 2px 4px; border-radius: 4px;
+    }
+    .tt-cell-edit:hover { background: var(--bg); color: var(--accent); }
+    .tt-cell-empty-add {
+      font-size: 11px; color: var(--text-muted); cursor: pointer;
+      display: block; padding: 10px 0;
+    }
+    .tt-cell-empty-add:hover { color: var(--accent); }
+    details.panel summary::-webkit-details-marker { display: none; }
+    details.panel[open] summary span { transform: rotate(90deg); display: inline-block; }
+    details.panel summary span { transition: transform 0.15s; }
+    .nav-personal-divider { border-top: 0.5px solid var(--border); margin: 10px 10px 6px; }
+    .login-card { max-width:380px; margin:60px auto; background:var(--surface); border:0.5px solid var(--border); border-radius:20px; padding:44px 32px 32px; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.08); }
+    .login-icon { width:64px; height:64px; margin:0 auto 22px; border-radius:16px; overflow:hidden; border:0.5px solid var(--border); box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+    .login-icon img { width:100%; height:100%; object-fit:cover; display:block; }
+    .login-eyebrow { font-size:11px; letter-spacing:2px; color:var(--text-muted); font-weight:700; margin-bottom:8px; }
+    .login-title { font-size:28px; font-weight:800; margin-bottom:8px; letter-spacing:-0.5px; }
+    .login-tagline { font-size:13px; color:var(--text-secondary); margin-bottom:30px; line-height:1.5; }
+    .login-form { display:flex; flex-direction:column; gap:10px; text-align:left; }
+    .login-footer { margin-top:26px; padding-top:20px; border-top:0.5px solid var(--border); font-size:11px; color:var(--text-muted); line-height:1.7; }
+    /* ── 다크모드 ── */
+    :root[data-theme="dark"] {
+      --bg: #16181c;
+      --surface: #1e2126;
+      --border: #3a3f47;
+      --border-strong: #ffffff;
+      --text-secondary: #d5d8dd;
+      --text-muted: #9aa0aa;
+      --green-light: #123821;
+    }
+    html[data-theme="dark"] body { background:#16181c; color:#e8eaed; }
+    html[data-theme="dark"] .panel, html[data-theme="dark"] .sidebar,
+    html[data-theme="dark"] .hr-modal, html[data-theme="dark"] .topbar,
+    html[data-theme="dark"] .login-card, html[data-theme="dark"] .hr-modal-backdrop .hr-modal {
+      background:#1e2126; color:#e8eaed; border-color:#3a3f47;
+    }
+    /* 글자색이 원래 진한 회색/검정으로 박혀있던 요소들을 다크모드에서 강제로 밝게 */
+    html[data-theme="dark"] h1, html[data-theme="dark"] h2, html[data-theme="dark"] h3,
+    html[data-theme="dark"] h4, html[data-theme="dark"] p, html[data-theme="dark"] label,
+    html[data-theme="dark"] .panel-header, html[data-theme="dark"] .brand,
+    html[data-theme="dark"] .brand-sub, html[data-theme="dark"] .nav a,
+    html[data-theme="dark"] .table, html[data-theme="dark"] .table th, html[data-theme="dark"] .table td,
+    html[data-theme="dark"] .tt-table, html[data-theme="dark"] .tt-table th, html[data-theme="dark"] .tt-table td,
+    html[data-theme="dark"] button.secondary,
+    html[data-theme="dark"] .hr-count, html[data-theme="dark"] .settings-row {
+      color:#e8eaed !important;
+    }
+    html[data-theme="dark"] .hr-input { background:#22262c; color:#e8eaed !important; border-color:#3a3f47; }
+    html[data-theme="dark"] button.secondary { background:#2a2e35; border-color:#3a3f47 !important; }
+    html[data-theme="dark"] .table th, html[data-theme="dark"] .table td,
+    html[data-theme="dark"] .tt-table th, html[data-theme="dark"] .tt-table td { border-color:#ffffff !important; }
+    html[data-theme="dark"] .table th, html[data-theme="dark"] .tt-table th { background:#262a31 !important; }
+    html[data-theme="dark"] .sch-cal-cell, html[data-theme="dark"] .member-legend,
+    html[data-theme="dark"] .table-wrap, html[data-theme="dark"] hr,
+    html[data-theme="dark"] .nav-personal-divider { border-color:#ffffff; }
+    html[data-theme="dark"] .sch-cal-item.done { background:#0f3320 !important; color:#7fe3a8 !important; }
+    /* 시간표는 과목별로 연한 파스텔 배경을 쓰는데, 다크모드 강제 밝은글씨랑 겹치면 안 보여서 색칠된 칸만 어두운 글씨로 되돌림 */
+    html[data-theme="dark"] .tt-table td[style*="background"] { color:#1a1a1a !important; }
+    html[data-theme="dark"] .tt-table td[style*="background"] .tt-cell-teacher { color:#3a3a3a !important; }
+    html[data-theme="dark"] a { color:#7fb3ff; }
+    /* 사이드바 선택된 메뉴 — 다크모드에서 안 보이는 문제 보정 */
+    html[data-theme="dark"] .nav a.active, html[data-theme="dark"] .nav-sub a.active {
+      background: var(--accent) !important; color: #fff !important;
+    }
+    /* 날짜/월 선택 입력창의 달력 아이콘 — 다크모드에서 안 보이는 문제 보정 */
+    html[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,
+    html[data-theme="dark"] input[type="month"]::-webkit-calendar-picker-indicator,
+    html[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+    }
+    /* 섹션 소제목(금융상품/계약보증서/증빙자료 등)을 좀 더 돋보이게 */
+    .section-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 15px; font-weight: 800; padding-left: 10px;
+      border-left: 4px solid var(--accent);
+      margin: 28px 0 12px;
+    }
+    /* 패널 안 부제목(일정 목록/학교 시간표/선생님 연락처/거래처 연락처 등)도 동일한 스타일로 통일 */
+    .panel-header h2 {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 800; padding-left: 10px;
+      border-left: 4px solid var(--accent);
+    }
+    /* 옅은 배경 위 진한 글씨로 만들어진 배지/라벨류는 밝게 바꾸면 안 보이니 배경까지 같이 다크 버전으로 */
+    html[data-theme="dark"] .hr-badge { filter: brightness(1.3) saturate(0.9); }
+    html[data-theme="dark"] .sch-dday.soon, html[data-theme="dark"] .sch-dday.personal-soon,
+    html[data-theme="dark"] .sch-banner.warn, html[data-theme="dark"] .sch-banner.personal-warn {
+      background:#3a2f14 !important; color:#f0c96a !important; border-color:#6b5a2a !important;
+    }
+    html[data-theme="dark"] .sch-dday.overdue, html[data-theme="dark"] .sch-banner.danger,
+    html[data-theme="dark"] .sch-banner.personal-danger {
+      background:#3a1f1f !important; color:#ff9a9a !important; border-color:#6b3a3a !important;
+    }
+    .theme-toggle-btn { display:block; width:100%; text-align:left; background:none; border:none; color:inherit; font-size:13px; padding:8px 0; cursor:pointer; }
+    .logout-btn { display:block; width:100%; text-align:left; background:none; border:none; color:var(--red); font-size:13px; padding:8px 0; cursor:pointer; }
+    /* ── 탭 메뉴: 상자(카드)형 디자인 ── */
+    .tab-btn {
+      padding: 9px 16px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.12s, box-shadow 0.12s, background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .tab-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+    .tab-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 3px 10px rgba(200,40,40,0.28);
+    }
+    html[data-theme="dark"] .tab-btn.active { box-shadow: 0 3px 10px rgba(255,107,107,0.25); }
+    #hrTabBar { border-bottom: none !important; padding-bottom: 4px; }
+    .settings-row { display:flex; align-items:center; width:100%; text-align:left; background:var(--bg); border:0.5px solid var(--border); border-radius:10px; padding:12px 14px; font-size:14px; color:inherit; cursor:pointer; }
+    .settings-row:hover { border-color:var(--accent); }
+    /* ── 모바일 반응형 ── */
+    .mobile-menu-btn { display:none; }
+    .mobile-sidebar-overlay { display:none; }
+    @media (max-width: 820px) {
+      .mobile-menu-btn {
+        display:flex; align-items:center; justify-content:center;
+        width:38px; height:38px; border:0.5px solid var(--border-strong); border-radius:10px;
+        background:var(--surface); color:inherit; font-size:18px; cursor:pointer; flex-shrink:0;
+      }
+      .sidebar {
+        position:fixed; top:0; left:0; height:100vh; z-index:210;
+        transform:translateX(-105%); transition:transform 0.22s ease; box-shadow:4px 0 20px rgba(0,0,0,0.35);
+        overflow-y:auto;
+      }
+      .sidebar.mobile-open { transform:translateX(0); }
+      .mobile-sidebar-overlay.show {
+        display:block; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:205;
+      }
+      /* 일정 목록/필터류 입력폼 — 모바일에서 너무 커서 축소 */
+      .hr-input, select.hr-input, input.hr-input { font-size:13px !important; padding:8px 10px !important; height:auto !important; }
+      button.primary, button.secondary { font-size:13px !important; padding:8px 12px !important; }
+      .panel { padding:16px !important; }
+      .panel-header h2 { font-size:15px !important; }
+      /* 표 — 모바일에서 줄 간격/여백 축소 */
+      .table th, .table td { padding:6px 8px !important; font-size:12px !important; line-height:1.4 !important; }
+      .table-wrap { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
+      .table { white-space:nowrap; }
+      .table td .hr-edit-link { white-space:normal; }
+      .tt-table th, .tt-table td { padding:4px 6px !important; }
+    }
+    /* 필터 영역: 라벨+입력을 하나의 상자로 묶어서 보여줌 */
+    .sch-filter-bar { display:flex; align-items:center; gap:8px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap; }
+    .field-group {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--surface); border: 0.5px solid var(--border-strong);
+      border-radius: 8px; padding: 4px 8px 4px 10px;
+    }
+    .field-group label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .field-group .hr-input, .field-group input, .field-group select {
+      border: none !important; background: transparent !important; padding: 2px 0 !important;
+      font-size: 13px; min-width: 0;
+    }
+    .field-group input[type="date"] { width: 118px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar" id="mainSidebar" style="display:none;">
+    <div class="brand">창현 Dashboard</div>
+    <div class="brand-sub">관리부 · 경영관리 · 재무보고</div>
+    <nav class="nav">
+      <a href="index.html" class="admin-only-nav">🏠 대시보드</a>
+      <div class="nav-personal-divider admin-only-nav"></div>
+      <a href="hr.html#home" class="admin-only-nav">👥 인사/급여관리</a>
+      <div class="nav-sub admin-only-nav">
+        <a href="hr.html#payroll">💰 급여관리</a>
+        <a href="hr.html#pension">🏦 퇴직급여관리</a>
+      </div>
+      <a href="schedule.html" class="admin-only-nav">📅 업무 일정관리</a>
+      <a href="hr.html#contractdocs" class="admin-only-nav">📁 계약/증빙관리</a>
+      <a href="hr.html#contacts" class="admin-only-nav">📇 거래처 연락처</a>
+      <a href="corporate-profit.html" class="admin-only-nav">📊 분석및보고</a>
+      <div class="nav-personal-divider"></div>
+      <a class="active" href="personal.html">👨‍👩‍👧 개인 일정관리</a>
+      <div class="nav-personal-divider"></div>
+      <a href="#" onclick="openSettingsModal(); return false;">⚙️ 설정</a>
+    </nav>
+  </aside>
+  <div class="mobile-sidebar-overlay" id="mobileSidebarOverlay" onclick="toggleMobileSidebar()"></div>
+
+  <main class="main">
+    <header class="topbar">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="메뉴">☰</button>
+        <div>
+          <h1>개인 일정관리</h1>
+          <p>가족 일정과 아이 학교 시간표를 관리합니다.</p>
+        </div>
+      </div>
+      <!-- pill removed -->
+    </header>
+
+    <div class="content">
+
+      <!-- 로그인 게이트 -->
+      <section id="loginPanel" class="login-card" style="display:none;">
+        <div class="login-icon"><img src="icons/icon-192.png" alt="창현"></div>
+        <h1 class="login-title">WORKS</h1>
+        <p class="login-tagline">인사·급여·일정·계약을 관리하는 공간</p>
+        <div class="login-form">
+          <input id="pwInput" type="password" placeholder="비밀번호" class="hr-input" autocomplete="current-password">
+          <button class="primary" onclick="perLogin()">로그인</button>
+          <div id="loginMsg" class="hr-msg"></div>
+        </div>
+      </section>
+
+      <div id="perMain" style="display:none; flex-direction:column; gap:20px;">
+
+        <div style="display:flex; gap:8px; margin-bottom:14px;">
+          <button class="tab-btn active" data-persub="family" onclick="switchPerTab('family')">가족 일정</button>
+          <button class="tab-btn" data-persub="timetable" onclick="switchPerTab('timetable')">학교 시간표</button>
+        </div>
+
+        <!-- ── 가족 일정 ── -->
+        <div id="perFamilyView">
+          <div id="perReminderBannerWrap"></div>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>가족 구성원</h2>
+              <button class="secondary" onclick="openMemberModal()">+ 구성원 추가</button>
+            </div>
+            <div class="member-legend" id="memberLegend"></div>
+          </section>
+
+          <section class="panel">
+            <div class="sch-cal-header">
+              <button class="sch-cal-nav-btn" onclick="perCalPrevMonth()">◀</button>
+              <h3 id="perCalMonthLabel">2026년 8월</h3>
+              <button class="sch-cal-nav-btn" onclick="perCalNextMonth()">▶</button>
+              <button class="secondary" onclick="perCalToday()" style="margin-left:6px;">오늘</button>
+              <button class="primary" onclick="openPersonalEventModal()" style="margin-left:auto;">+ 일정 추가</button>
+            </div>
+            <div class="sch-cal-grid" id="perCalWeekdayRow">
+              <div class="sch-cal-weekday sun">일</div>
+              <div class="sch-cal-weekday">월</div>
+              <div class="sch-cal-weekday">화</div>
+              <div class="sch-cal-weekday">수</div>
+              <div class="sch-cal-weekday">목</div>
+              <div class="sch-cal-weekday">금</div>
+              <div class="sch-cal-weekday sat">토</div>
+            </div>
+            <div class="sch-cal-grid" id="perCalGrid" style="margin-top:4px;"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>일정 목록 <span id="perOccCount" class="hr-count"></span></h2>
+            </div>
+            <div class="sch-filter-bar" style="margin-bottom:14px;">
+              <div class="field-group">
+                <label>기간</label>
+                <input id="perRangeFrom" type="date" class="hr-input">
+                <span style="color:var(--text-muted);">~</span>
+                <input id="perRangeTo" type="date" class="hr-input">
+              </div>
+              <button class="secondary" onclick="setPerRangePreset('month')">이번달</button>
+              <button class="secondary" onclick="setPerRangePreset('3m')">앞으로 3개월</button>
+              <div class="field-group">
+                <label>구성원</label>
+                <select id="perMemberFilter" class="hr-input">
+                  <option value="">전체</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label>상태</label>
+                <select id="perStatusFilter" class="hr-input">
+                  <option value="pending">미완료</option>
+                  <option value="all">전체</option>
+                  <option value="done">완료</option>
+                </select>
+              </div>
+              <button class="primary" onclick="loadPersonalOccurrences()">조회</button>
+            </div>
+            <div class="table-wrap">
+              <table class="table" id="perOccTable" style="white-space:nowrap;">
+                <thead><tr>
+                  <th style="white-space:nowrap; min-width:110px;">날짜</th>
+                  <th style="white-space:nowrap; min-width:70px;">구성원</th>
+                  <th style="white-space:nowrap; min-width:70px;">구분</th>
+                  <th style="white-space:nowrap; min-width:140px;">제목</th>
+                  <th style="white-space:nowrap; min-width:120px;">비고</th>
+                  <th style="white-space:nowrap; min-width:60px;">상태</th>
+                  <th style="white-space:nowrap; min-width:200px;"></th>
+                </tr></thead>
+                <tbody id="perOccTbody"><tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- ── 가족 공유 메모 ── -->
+          <section class="panel">
+            <div class="panel-header">
+              <h2>👨‍👩‍👧 가족 공유 메모 <span id="familyNoteCount" class="hr-count"></span></h2>
+              <button class="primary" onclick="openFamilyNoteModal()">+ 메모 남기기</button>
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+              가족에게 요청할 일이나 서로 공유할 내용을 남겨두세요. 확인/처리 여부는 누구나 표시할 수 있지만, 내용 수정·삭제는 작성한 사람만 가능해요.
+            </p>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <select id="familyNoteStatusFilter" class="hr-input" style="width:170px;" onchange="loadFamilyNotes()">
+                <option value="active" selected>완료 전까지 (미확인+확인함)</option>
+                <option value="pending">미확인만</option>
+                <option value="checked">확인함만</option>
+                <option value="done">처리완료만</option>
+                <option value="all">전체</option>
+              </select>
+            </div>
+            <div id="familyNoteList" style="display:flex; flex-direction:column; gap:8px;">
+              <div class="dash-empty">불러오는 중…</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- 메모 작성/수정 모달 -->
+        <div id="familyNoteModal" class="hr-modal-backdrop" style="display:none;">
+          <div class="hr-modal" style="width:420px;">
+            <h2 id="familyNoteModalTitle">메모 남기기</h2>
+            <div class="hr-form-grid" style="grid-template-columns:1fr;">
+              <label>받는 사람
+                <select id="fn_target" class="hr-input">
+                  <option value="전체">전체</option>
+                </select>
+              </label>
+              <label>내용
+                <textarea id="fn_content" class="hr-input" rows="4" placeholder="예: 이번 주 토요일 가족모임 참석 여부 알려주세요"></textarea>
+              </label>
+            </div>
+            <div id="familyNoteModalMsg" class="hr-msg"></div>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+              <button class="secondary" onclick="closeFamilyNoteModal()">취소</button>
+              <button class="primary" onclick="saveFamilyNote()">저장</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 학교 시간표 ── -->
+        <div id="perTimetableView" style="display:none;">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>학교 시간표</h2>
+              <div style="display:flex; gap:8px;">
+                <button class="secondary" onclick="printTimetable()">인쇄</button>
+                <button class="secondary" onclick="openPeriodModal()">+ 교시 시간 설정</button>
+              </div>
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
+              항상 "현재 시간표" 하나만 관리해요. 학기가 바뀌면 각 칸을 눌러서 그때그때 수정/삭제해주세요.
+            </p>
+            <div style="display:flex; gap:14px; align-items:center; margin-bottom:14px; font-size:11px; color:var(--text-secondary);">
+              <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#e3f5d3; margin-right:4px;"></span>정규수업(과목별 색)</span>
+              <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#dfe6ec; margin-right:4px;"></span>방과후</span>
+              <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#dce9fb; margin-right:4px;"></span>학원</span>
+            </div>
+            <div class="table-wrap">
+              <table class="tt-table" id="ttTable">
+                <thead>
+                  <tr><th style="width:80px;">시간</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th></tr>
+                </thead>
+                <tbody id="ttTbody"><tr><td colspan="6" style="padding:24px; color:var(--text-muted);">불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <h2>선생님 연락처</h2>
+              <button class="primary" onclick="openTeacherModal()">+ 선생님 등록</button>
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
+              여기 등록해두면, 위 시간표 어느 칸에 그 과목명을 넣든 자동으로 선생님 정보가 붙어요.
+            </p>
+            <div class="table-wrap">
+              <table class="table" id="teacherTable">
+                <thead><tr><th>과목명</th><th>선생님</th><th>연락처</th><th>비고</th><th style="width:110px; white-space:nowrap;"></th></tr></thead>
+                <tbody id="teacherTbody"><tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <details class="panel" style="padding:0;">
+            <summary style="cursor:pointer; padding:20px 24px; font-weight:600; font-size:15px; list-style:none; display:flex; align-items:center; gap:6px;">
+              <span>▸</span> 교시 목록 펼쳐보기
+            </summary>
+            <div style="padding:0 24px 20px;">
+              <div class="table-wrap">
+                <table class="table" id="periodListTable">
+                  <thead><tr><th>교시명</th><th>시간</th><th>순서</th><th></th></tr></thead>
+                  <tbody id="periodListTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 가족 구성원 추가/수정 모달 -->
+<div id="memberModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:360px;">
+    <h2>가족 구성원 추가</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>이름 <input id="mem_name" class="hr-input" placeholder="예: 하진"></label>
+      <label>색상 <input id="mem_color" type="color" class="hr-input" value="#c82828" style="height:38px; padding:2px;"></label>
+    </div>
+    <div id="memberModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeMemberModal()">취소</button>
+      <button class="primary" onclick="saveMember()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 개인 일정 추가 모달 -->
+<div id="personalEventModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:460px;">
+    <h2 id="personalEventModalTitle">일정 추가</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr 1fr;">
+      <label>구성원
+        <select id="pe_member" class="hr-input"></select>
+      </label>
+      <label>구분
+        <select id="pe_category" class="hr-input">
+          <option value="일정">일정</option>
+          <option value="생일">생일</option>
+          <option value="기념일">기념일</option>
+          <option value="결제일">결제일</option>
+          <option value="학원">학원</option>
+          <option value="기타">기타</option>
+        </select>
+      </label>
+      <label class="hr-span2">제목 <input id="pe_title" class="hr-input" placeholder="예: 하진 생일, 피아노학원"></label>
+      <label>반복유형
+        <select id="pe_recurrence" class="hr-input" onchange="togglePersonalRecurrenceFields()">
+          <option value="once">일회성</option>
+          <option value="weekly">매주</option>
+          <option value="monthly">매월</option>
+          <option value="yearly">매년</option>
+        </select>
+      </label>
+      <label>기준일자 <input id="pe_anchor_date" type="date" class="hr-input" onchange="togglePersonalRecurrenceFields()"></label>
+      <span id="peIntervalWrap" style="display:none;">
+        <label>반복 간격(주 단위, 매주일때만) <input id="pe_interval" type="number" class="hr-input" value="1" min="1"></label>
+      </span>
+      <span id="peLunarWrap" class="hr-span2" style="display:none; flex-direction:column; gap:2px;">
+        <label style="flex-direction:row; align-items:center; gap:6px;">
+          <input type="checkbox" id="pe_is_lunar" style="width:auto;" onchange="updateLunarPreview()">
+          <span style="font-weight:400; font-size:12px;">음력 기준(생일 등) — 기준일자를 음력으로 인식해서, 매년 그 음력 날짜에 해당하는 양력 날짜로 자동 계산돼요</span>
+        </label>
+        <div id="lunarPreview" style="font-size:11px; color:var(--text-muted); margin-left:22px;"></div>
+      </span>
+      <label>종료일(선택) <input id="pe_end_date" type="date" class="hr-input"></label>
+      <label class="hr-span2">사전 알림(며칠 전부터) <input id="pe_reminder_days" type="number" class="hr-input" value="1" min="0"></label>
+      <label class="hr-span2">비고 <input id="pe_note" class="hr-input"></label>
+      <label class="hr-span2" style="flex-direction:row; align-items:center; gap:6px;">
+        <input type="checkbox" id="pe_is_private" style="width:auto;">
+        <span style="font-weight:400; font-size:12px;">🔒 나만 보기 (가족 계정에는 이 일정이 보이지 않습니다)</span>
+      </label>
+    </div>
+    <div id="personalEventModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:space-between; margin-top:16px;">
+      <button class="secondary" id="personalEventDeleteBtn" style="display:none; color:var(--red);" onclick="deletePersonalTaskFromModal()">일정 전체 삭제</button>
+      <div style="display:flex; gap:8px; margin-left:auto;">
+        <button class="secondary" onclick="closePersonalEventModal()">취소</button>
+        <button class="primary" onclick="savePersonalEvent()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 날짜 클릭 시 그 날 일정 전체 보기 모달 -->
+<div id="perDayDetailModal" class="hr-modal-backdrop" style="display:none;" onclick="if(event.target===this) closePerDayDetail()">
+  <div class="hr-modal" style="width:400px; max-height:80vh; overflow-y:auto;">
+    <h2 id="perDayDetailTitle">일정</h2>
+    <div id="perDayDetailBody" style="margin-top:8px;"></div>
+    <div style="display:flex; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closePerDayDetail()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 완료 처리 메모 모달 -->
+<div id="perCompleteModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:360px;">
+    <h2>완료 처리</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>메모(선택) <input id="pc_note" class="hr-input"></label>
+    </div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closePerCompleteModal()">취소</button>
+      <button class="primary" onclick="confirmPerComplete()">완료 처리</button>
+    </div>
+  </div>
+</div>
+
+<!-- 교시 시간 설정 모달 -->
+<div id="periodModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:400px;">
+    <h2 id="periodModalTitle">교시 시간 설정</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr 1fr;">
+      <label class="hr-span2">교시명
+        <input id="pd_period" class="hr-input" list="periodLabelList" placeholder="예: 아침활동, 1교시, 점심시간">
+        <datalist id="periodLabelList">
+          <option value="아침활동"><option value="1교시"><option value="2교시">
+          <option value="3교시"><option value="4교시"><option value="점심시간">
+          <option value="5교시"><option value="6교시"><option value="방과후">
+        </datalist>
+      </label>
+      <label>순서(작을수록 위) <input id="pd_sort" type="number" class="hr-input" value="0"></label>
+      <label>시작시간 <input id="pd_start" type="time" class="hr-input"></label>
+      <label>종료시간 <input id="pd_end" type="time" class="hr-input" onkeydown="if(event.key==='Enter'){event.preventDefault(); savePeriod();}"></label>
+    </div>
+    <div id="periodModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:space-between; margin-top:16px;">
+      <button class="secondary" id="periodDeleteBtn" style="display:none; color:var(--red);" onclick="deletePeriodFromModal()">삭제</button>
+      <div style="display:flex; gap:8px; margin-left:auto;">
+        <button class="secondary" onclick="closePeriodModal()">취소</button>
+        <button class="primary" onclick="savePeriod()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 과목 등록 모달 (그리드 셀 클릭 시 열림) -->
+<div id="ttEntryModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:360px;">
+    <h2 id="ttEntryModalTitle">과목 등록</h2>
+    <p id="ttEntryModalSub" style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;"></p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>과목명 <input id="te_subject" class="hr-input" list="subjectNameList" placeholder="등록된 과목이면 선생님 정보가 자동으로 붙어요" onkeydown="if(event.key==='Enter'){event.preventDefault(); saveTimetableEntry();}"></label>
+      <label>구분
+        <select id="te_subject_type" class="hr-input">
+          <option value="regular">정규수업 (과목별 다른 색)</option>
+          <option value="afterschool">방과후 (한 가지 색으로 묶임)</option>
+          <option value="academy">학원 (방과후와 별도 색)</option>
+        </select>
+      </label>
+      <label>비고 <input id="te_note" class="hr-input" placeholder="예: ~15:50까지, 격주 수업 등"></label>
+      <datalist id="subjectNameList"></datalist>
+    </div>
+    <div id="ttEntryModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:space-between; margin-top:16px;">
+      <button class="secondary" id="ttEntryDeleteBtn" style="display:none; color:var(--red);" onclick="deleteTimetableEntryFromModal()">삭제</button>
+      <div style="display:flex; gap:8px; margin-left:auto;">
+        <button class="secondary" onclick="closeTimetableEntryModal()">취소</button>
+        <button class="primary" onclick="saveTimetableEntry()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 정규수업 요일별 일괄입력 모달 -->
+<div id="bulkPeriodModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:420px;">
+    <h2 id="bulkPeriodModalTitle">요일별 일괄입력</h2>
+    <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">비워두면 그 요일은 등록 안 하거나(기존 있으면) 삭제됩니다.</p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>구분
+        <select id="bp_subject_type" class="hr-input">
+          <option value="regular">정규수업 (과목별 다른 색)</option>
+          <option value="afterschool">방과후 (한 가지 색으로 묶임)</option>
+          <option value="academy">학원 (방과후와 별도 색)</option>
+        </select>
+      </label>
+      <label>월 <input id="bp_mon" class="hr-input" list="subjectNameList"></label>
+      <label>화 <input id="bp_tue" class="hr-input" list="subjectNameList"></label>
+      <label>수 <input id="bp_wed" class="hr-input" list="subjectNameList"></label>
+      <label>목 <input id="bp_thu" class="hr-input" list="subjectNameList"></label>
+      <label>금 <input id="bp_fri" class="hr-input" list="subjectNameList"></label>
+    </div>
+    <div id="bulkPeriodModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeBulkPeriodModal()">취소</button>
+      <button class="primary" onclick="saveBulkPeriod()">전체 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 선생님 연락처 등록/수정 모달 -->
+<div id="teacherModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:400px;">
+    <h2 id="teacherModalTitle">선생님 등록</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>과목명 <input id="tc_subject" class="hr-input" placeholder="예: 생명탐구(A), 태권도"></label>
+      <label>선생님 성함 <input id="tc_name" class="hr-input"></label>
+      <label>연락처 <input id="tc_phone" class="hr-input" placeholder="010-0000-0000"></label>
+      <label>비고 <input id="tc_note" class="hr-input"></label>
+    </div>
+    <div id="teacherModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeTeacherModal()">취소</button>
+      <button class="primary" onclick="saveTeacher()">저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 시간표 인쇄 전용 영역 (시간표 + 선생님 연락처 같이 출력) -->
+<div id="ttFullPrintArea" style="display:none;">
+  <div id="ttPrintTimetableBody"></div>
+  <div id="ttPrintTeacherBody"></div>
+</div>
+
+<!-- 설정 모달 -->
+<div id="settingsModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:360px;">
+    <h2>설정</h2>
+    <div style="display:flex; flex-direction:column; gap:4px; margin-top:10px;">
+      <button class="settings-row" onclick="toggleTheme()">
+        <span id="settingsThemeLabel">🌙 다크 모드로 전환</span>
+      </button>
+      <div class="settings-row" style="cursor:default; flex-direction:column; align-items:flex-start; gap:6px;">
+        <span>🔤 글꼴</span>
+        <select id="fontSelect" class="hr-input" style="width:100%;" onchange="applyFont(this.value)">
+          <option value="default" style="font-family:'Pretendard', sans-serif;">기본 (Pretendard)</option>
+          <option value="gmarket" style="font-family:'GmarketSans', sans-serif;">지마켓 산스</option>
+          <option value="cafe24" style="font-family:'Cafe24Ssurround', sans-serif;">카페24 써라운드</option>
+          <option value="scdream" style="font-family:'SCoreDream', sans-serif;">에스코어드림</option>
+        </select>
+      </div>
+      <button class="settings-row" style="color:var(--red);" onclick="logoutUser()">
+        <span>🚪 로그아웃</span>
+      </button>
+    </div>
+    <div style="display:flex; justify-content:flex-end; margin-top:18px;">
+      <button class="secondary" onclick="closeSettingsModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/theme.js"></script>
+<script src="assets/personal.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
