@@ -33,7 +33,7 @@ function saveApiBase() {
 
 /* ── 탭 전환 ── */
 function switchTab(name) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('#profitTabBar .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
 }
 
@@ -412,6 +412,8 @@ async function runMonthlyClosing() {
 
     showMcStatus('미리보기 생성 완료 ✓ 아래에서 확인·수정 후 확정해주세요. (아직 목록에 저장 안 됨)', 'success');
     renderMcKpi(data.summary || {});
+    mcFullSummaryCache = data.full_summary || null;
+    mcDatesCache = { base_date: data.base_date, prepared_date: data.prepared_date };
 
     const blob = b64toBlob(data.xlsx_b64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     const url = URL.createObjectURL(blob);
