@@ -697,6 +697,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._get_annualleave(qs)
             if resource == "personal":
                 return self._get_personal(qs)
+            if resource == "family_notes":
+                return self._get_family_notes(qs)
             if resource == "timetable":
                 return self._get_timetable(qs)
             if resource == "manuals":
@@ -980,6 +982,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._post_promotions(payload)
             if resource == "personal":
                 return self._post_personal(payload)
+            if resource == "family_notes":
+                return self._post_family_notes(payload)
             if resource == "timetable":
                 return self._post_timetable(payload)
             if resource == "manuals":
@@ -1338,6 +1342,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._patch_promotions(item_id, payload)
             if resource == "personal":
                 return self._patch_personal(item_id, payload)
+            if resource == "family_notes":
+                return self._patch_family_notes(item_id, payload)
             if resource == "timetable":
                 return self._patch_timetable(item_id, payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
@@ -1460,6 +1466,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._delete_promotions(qs)
             if resource == "personal":
                 return self._delete_personal(qs)
+            if resource == "family_notes":
+                return self._delete_family_notes(qs)
             if resource == "timetable":
                 return self._delete_timetable(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
@@ -1611,7 +1619,7 @@ class handler(BaseHTTPRequestHandler):
 
         path = (
             "personal_schedule_occurrences?due_date=gte." + from_date + "&due_date=lte." + to_date
-            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,note,date_type,is_private)&order=due_date.asc"
+            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,note,date_type,is_private,created_by_role)&order=due_date.asc"
         )
         if status_filter and status_filter != "all":
             path += "&status=eq." + status_filter
@@ -1641,8 +1649,9 @@ class handler(BaseHTTPRequestHandler):
             occ_id = payload.get("occurrence_id")
             if not occ_id:
                 return self._send(400, {"error": "occurrence_id는 필수입니다"})
-            if role == "family" and self._occurrence_is_mine(occ_id):
-                return self._send(403, {"error": "이 일정은 가족 계정으로 처리할 수 없습니다"})
+            occ_owner = self._occurrence_owner_role(occ_id)
+            if self._blocked_by_ownership(occ_owner, role):
+                return self._send(403, {"error": "이 일정은 처음 등록하신 분(계정)만 처리할 수 있습니다"})
             done = payload.get("done", True)
             rest_request("PATCH", f"personal_schedule_occurrences?id=eq.{occ_id}", body={
                 "status": "done" if done else "pending",
@@ -1655,8 +1664,9 @@ class handler(BaseHTTPRequestHandler):
             occ_id = payload.get("occurrence_id")
             if not occ_id:
                 return self._send(400, {"error": "occurrence_id는 필수입니다"})
-            if role == "family" and self._occurrence_is_mine(occ_id):
-                return self._send(403, {"error": "이 일정은 가족 계정으로 처리할 수 없습니다"})
+            occ_owner = self._occurrence_owner_role(occ_id)
+            if self._blocked_by_ownership(occ_owner, role):
+                return self._send(403, {"error": "이 일정은 처음 등록하신 분(계정)만 처리할 수 있습니다"})
             rest_request("PATCH", f"personal_schedule_occurrences?id=eq.{occ_id}", body={"status": "skipped"})
             return self._send(200, {"ok": True})
 
@@ -1698,29 +1708,96 @@ class handler(BaseHTTPRequestHandler):
             "lunar_month": lunar_month,
             "lunar_day": lunar_day,
             "is_private": bool(payload.get("is_private")),
+            "created_by_role": role,
         }
         created = rest_request("POST", "personal_schedule_tasks", body=body, prefer="return=representation")
         rpc("generate_personal_schedule_occurrences", {})
         self._generate_lunar_occurrences()
         return self._send(201, {"task": created[0] if created else None})
 
-    def _task_member_name(self, task_id):
-        rows = rest_request("GET", f"personal_schedule_tasks?id=eq.{task_id}&select=member_name")
-        return rows[0]["member_name"] if rows else None
+    def _get_family_notes(self, qs):
+        status_filter = qs.get("status", [None])[0]
+        path = "family_notes?select=*&order=status.asc,created_at.desc"
+        if status_filter and status_filter != "all":
+            path += "&status=eq." + status_filter
+        rows = rest_request("GET", path) or []
+        return self._send(200, {"notes": rows})
 
-    def _occurrence_is_mine(self, occ_id):
+    def _post_family_notes(self, payload):
+        target_member = payload.get("target_member")
+        content = payload.get("content")
+        if not target_member or not content:
+            return self._send(400, {"error": "target_member, content는 필수입니다"})
+        body = {
+            "target_member": target_member,
+            "content": content,
+            "created_by_role": self._role(),
+            "status": "pending",
+        }
+        created = rest_request("POST", "family_notes", body=body, prefer="return=representation")
+        return self._send(201, {"note": created[0] if created else None})
+
+    def _patch_family_notes(self, note_id, payload):
+        # 상태(확인함/완료)는 가족 누구나 바꿀 수 있음(공유 게시판이니까).
+        # 내용(content) 수정은 작성한 본인(계정)만 가능.
+        if "content" in payload or "target_member" in payload:
+            rows = rest_request("GET", f"family_notes?id=eq.{note_id}&select=created_by_role")
+            owner_role = rows[0]["created_by_role"] if rows else None
+            if self._blocked_by_ownership(owner_role, self._role()):
+                return self._send(403, {"error": "이 메모는 작성하신 분(계정)만 수정할 수 있습니다"})
+
+        update_fields = {}
+        for key in ("target_member", "content"):
+            if key in payload:
+                update_fields[key] = payload[key]
+        if "status" in payload:
+            status = payload["status"]
+            if status not in ("pending", "checked", "done"):
+                return self._send(400, {"error": "status 값이 올바르지 않습니다"})
+            update_fields["status"] = status
+            update_fields["checked_at"] = datetime.datetime.utcnow().isoformat() if status != "pending" else None
+
+        if not update_fields:
+            return self._send(400, {"error": "수정할 항목이 없습니다"})
+        rest_request("PATCH", f"family_notes?id=eq.{note_id}", body=update_fields)
+        return self._send(200, {"ok": True})
+
+    def _delete_family_notes(self, qs):
+        note_id = qs.get("id", [None])[0]
+        if not note_id:
+            return self._send(400, {"error": "id는 필수입니다"})
+        rows = rest_request("GET", f"family_notes?id=eq.{note_id}&select=created_by_role")
+        owner_role = rows[0]["created_by_role"] if rows else None
+        if self._blocked_by_ownership(owner_role, self._role()):
+            return self._send(403, {"error": "이 메모는 작성하신 분(계정)만 삭제할 수 있습니다"})
+        rest_request("DELETE", f"family_notes?id=eq.{note_id}")
+        return self._send(200, {"ok": True})
+
+    def _blocked_by_ownership(self, owner_role, current_role):
+        """'나'(admin) 계정은 누가 입력했든 관리자 권한으로 전부 수정/삭제 가능.
+        '가족'(family) 계정은 본인이 입력한 것만 가능."""
+        if current_role == "admin":
+            return False
+        return bool(owner_role) and owner_role != current_role
+
+    def _task_owner_role(self, task_id):
+        rows = rest_request("GET", f"personal_schedule_tasks?id=eq.{task_id}&select=created_by_role")
+        return rows[0]["created_by_role"] if rows else None
+
+    def _occurrence_owner_role(self, occ_id):
         rows = rest_request(
             "GET",
-            f"personal_schedule_occurrences?id=eq.{occ_id}&select=personal_schedule_tasks(member_name)",
+            f"personal_schedule_occurrences?id=eq.{occ_id}&select=personal_schedule_tasks(created_by_role)",
         )
         if not rows:
-            return False
+            return None
         task = rows[0].get("personal_schedule_tasks") or {}
-        return task.get("member_name") == "나"
+        return task.get("created_by_role")
 
     def _patch_personal(self, task_id, payload):
-        if self._role() == "family" and self._task_member_name(task_id) == "나":
-            return self._send(403, {"error": "이 일정은 가족 계정으로 수정할 수 없습니다"})
+        owner_role = self._task_owner_role(task_id)
+        if self._blocked_by_ownership(owner_role, self._role()):
+            return self._send(403, {"error": "이 일정은 처음 등록하신 분(계정)만 수정할 수 있습니다"})
 
         update_fields = {}
         for key in ("member_name", "category", "title", "recurrence_type", "interval_value",
@@ -1772,13 +1849,15 @@ class handler(BaseHTTPRequestHandler):
             rest_request("DELETE", f"personal_schedule_members?id=eq.{member_id}")
             return self._send(200, {"ok": True})
         if task_id:
-            if role == "family" and self._task_member_name(task_id) == "나":
-                return self._send(403, {"error": "이 일정은 가족 계정으로 삭제할 수 없습니다"})
+            owner_role = self._task_owner_role(task_id)
+            if self._blocked_by_ownership(owner_role, role):
+                return self._send(403, {"error": "이 일정은 처음 등록하신 분(계정)만 삭제할 수 있습니다"})
             rest_request("DELETE", f"personal_schedule_tasks?id=eq.{task_id}")
             return self._send(200, {"ok": True})
         if occ_id:
-            if role == "family" and self._occurrence_is_mine(occ_id):
-                return self._send(403, {"error": "이 일정은 가족 계정으로 삭제할 수 없습니다"})
+            occ_owner = self._occurrence_owner_role(occ_id)
+            if self._blocked_by_ownership(occ_owner, role):
+                return self._send(403, {"error": "이 일정은 처음 등록하신 분(계정)만 삭제할 수 있습니다"})
             rest_request("DELETE", f"personal_schedule_occurrences?id=eq.{occ_id}")
             return self._send(200, {"ok": True})
         return self._send(400, {"error": "id, occurrence_id 또는 member_id가 필요합니다"})
