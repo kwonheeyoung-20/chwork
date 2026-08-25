@@ -146,15 +146,16 @@ class handler(BaseHTTPRequestHandler):
 
             if qs.get("remarks", ["0"])[0] == "1":
                 sys.path.insert(0, str(ROOT))
-                from monthly_closing_builder import extract_bs_naeyeok_remarks
+                from monthly_closing_builder import extract_all_remarks
                 if not TEMPLATE_PATH.exists():
                     return self._json(500, {"ok": False, "message": "템플릿 파일을 찾을 수 없습니다."})
-                base_remarks = extract_bs_naeyeok_remarks(str(TEMPLATE_PATH))
+                base_remarks_by_sheet = extract_all_remarks(str(TEMPLATE_PATH))
                 saved_map = _get_saved_remarks_map()
-                for r in base_remarks:
-                    if r["account_key"] in saved_map:
-                        r["note"] = saved_map[r["account_key"]]
-                return self._json(200, {"ok": True, "remarks": base_remarks})
+                for sheet_name, rows in base_remarks_by_sheet.items():
+                    for r in rows:
+                        if r["account_key"] in saved_map:
+                            r["note"] = saved_map[r["account_key"]]
+                return self._json(200, {"ok": True, "remarks_by_sheet": base_remarks_by_sheet})
 
             period_key = qs.get("period_key", [None])[0]
             if period_key:
