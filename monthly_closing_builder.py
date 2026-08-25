@@ -173,6 +173,10 @@ REMARKS_SHEETS = {
 
 def extract_all_remarks(wb_or_path) -> dict:
     """내역(비고)이 있는 시트들에서 계정과목별 현재 값을 그대로 뽑아옴.
+    같은 계정명(예: "대손충당금")이 한 시트 안에 여러 번 나올 수 있어서(매출채권 대손충당금,
+    미수금 대손충당금 등), 이름만으로는 서로 구분이 안 됨 — 그래서 "이름|몇번째로 등장했는지"를
+    키로 씀. 이건 원본 엑셀 수식이 이미 쓰고 있는 방식과 동일하고(COUNTIF 기반), 이 보고서
+    시트 자체의 줄 순서는 매달 안 바뀌므로(백데이터만 바뀜) 매달 같은 항목을 정확히 가리킴.
     반환: {시트명: [{row, account_key, account_label, note}, ...]}"""
     wb = wb_or_path if hasattr(wb_or_path, "sheetnames") else openpyxl.load_workbook(wb_or_path, data_only=True)
     result = {}
@@ -181,14 +185,17 @@ def extract_all_remarks(wb_or_path) -> dict:
             continue
         ws = wb[sheet_name]
         rows = []
+        occurrence_count = {}
         for r in range(cfg['row_range'][0], cfg['row_range'][1] + 1):
             label = ws.cell(row=r, column=cfg['account_col']).value
             if not label or not str(label).strip() or str(label).strip().startswith('='):
                 continue
+            base_key = normalize_key(label)
+            occurrence_count[base_key] = occurrence_count.get(base_key, 0) + 1
             note = ws.cell(row=r, column=cfg['note_col']).value
             rows.append({
                 "row": r,
-                "account_key": normalize_key(label),
+                "account_key": f"{base_key}|{occurrence_count[base_key]}",
                 "account_label": str(label).strip(),
                 "note": note if isinstance(note, str) else (str(note) if note is not None else None),
             })
@@ -197,17 +204,19 @@ def extract_all_remarks(wb_or_path) -> dict:
 
 
 def apply_all_remarks(wb, remarks_map: dict) -> None:
-    """remarks_map: {account_key(정규화된 계정과목명): note} — 내역이 있는 모든 시트에 동일하게 덮어씀.
-    (계정과목명이 시트마다 겹칠 일이 거의 없어서, 하나의 맵으로 모든 시트를 같이 처리)"""
+    """remarks_map: {account_key(이름|몇번째): note} — 내역이 있는 모든 시트에 덮어씀."""
     for sheet_name, cfg in REMARKS_SHEETS.items():
         if sheet_name not in wb.sheetnames:
             continue
         ws = wb[sheet_name]
+        occurrence_count = {}
         for r in range(cfg['row_range'][0], cfg['row_range'][1] + 1):
             label = ws.cell(row=r, column=cfg['account_col']).value
             if not label or not str(label).strip() or str(label).strip().startswith('='):
                 continue
-            key = normalize_key(label)
+            base_key = normalize_key(label)
+            occurrence_count[base_key] = occurrence_count.get(base_key, 0) + 1
+            key = f"{base_key}|{occurrence_count[base_key]}"
             if key in remarks_map:
                 ws.cell(row=r, column=cfg['note_col']).value = remarks_map[key] or None
 
