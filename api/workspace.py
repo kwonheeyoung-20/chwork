@@ -1718,7 +1718,10 @@ class handler(BaseHTTPRequestHandler):
     def _get_family_notes(self, qs):
         status_filter = qs.get("status", [None])[0]
         path = "family_notes?select=*&order=status.asc,created_at.desc"
-        if status_filter and status_filter != "all":
+        if status_filter == "active":
+            # 완료 처리 전까지(미확인+확인함) — 기본으로 보여주는 값
+            path += "&status=neq.done"
+        elif status_filter and status_filter != "all":
             path += "&status=eq." + status_filter
         rows = rest_request("GET", path) or []
         return self._send(200, {"notes": rows})
