@@ -1628,6 +1628,18 @@ class handler(BaseHTTPRequestHandler):
             rows = [r for r in rows if not (r.get("personal_schedule_tasks") or {}).get("is_private")]
         if member_filter:
             rows = [r for r in rows if (r.get("personal_schedule_tasks") or {}).get("member_name") == member_filter]
+        if status_filter == "pending":
+            # 결제일 외(생일 등)는 "완료" 개념이 없어서 지나도 계속 미확인 상태로 남는데,
+            # 미확인 목록을 볼 때는 이미 지난 것까지 계속 보일 필요는 없으니 자동으로 뺌.
+            # (결제일은 실제 확인/처리해야 하니 지났어도 계속 보여줘야 함 — 그건 그대로 둠)
+            today_iso = kst_today().isoformat()
+            rows = [
+                r for r in rows
+                if not (
+                    (r.get("personal_schedule_tasks") or {}).get("category") != "결제일"
+                    and r["due_date"] < today_iso
+                )
+            ]
         return self._send(200, {"occurrences": rows})
 
     def _post_personal(self, payload):
