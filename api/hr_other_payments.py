@@ -118,8 +118,11 @@ class handler(BaseHTTPRequestHandler):
         # 직원별로, 해당 연도 안에서 가장 마지막(늦은) effective_month의 연봉을 그 해 연봉으로 봄
         salary_by_emp_year = {}
         for r in salary_rows:
-            emp_id = r["employee_id"]
-            yr = int(r["effective_month"][:4])
+            emp_id = r.get("employee_id")
+            month = r.get("effective_month")
+            if not emp_id or not month:
+                continue
+            yr = int(str(month)[:4])
             key = (emp_id, yr)
             salary_by_emp_year[key] = r["annual_salary_thousand"]  # asc 정렬이라 뒤에 값이 마지막 값으로 남음
 
@@ -129,8 +132,11 @@ class handler(BaseHTTPRequestHandler):
         bonus_by_emp_year = {}
         note_by_emp_year = {}  # 과거 성과급의 "기준/율"을 note에 적어두신 경우 그대로 보여줌(맨 마지막 건 기준)
         for r in bonus_rows:
-            emp_id = r["employee_id"]
-            yr = int(r["payment_date"][:4])
+            emp_id = r.get("employee_id")
+            pdate = r.get("payment_date")
+            if not emp_id or not pdate:
+                continue
+            yr = int(str(pdate)[:4])
             key = (emp_id, yr)
             bonus_by_emp_year[key] = bonus_by_emp_year.get(key, 0) + (r.get("amount") or 0)
             if r.get("note"):
@@ -143,10 +149,13 @@ class handler(BaseHTTPRequestHandler):
 
         locked = is_period_locked(f"bonus-{year}-{round_no}")
 
-        note_rows = rest_request(
-            "GET", f"bonus_report_notes?year=eq.{year}&round=eq.{round_no}&select=criteria_note"
-        ) or []
-        criteria_note = note_rows[0]["criteria_note"] if note_rows else None
+        try:
+            note_rows = rest_request(
+                "GET", f"bonus_report_notes?year=eq.{year}&round=eq.{round_no}&select=criteria_note"
+            ) or []
+            criteria_note = note_rows[0]["criteria_note"] if note_rows else None
+        except SupabaseError:
+            criteria_note = None  # bonus_report_notes 테이블이 아직 없으면(마이그레이션 084 미실행) 그냥 빈 값으로
 
         def monthly(annual_thousand):
             return round(annual_thousand * 1000 / 12) if annual_thousand else None
