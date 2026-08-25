@@ -185,6 +185,7 @@ def build_monthly_closing(
     base_date: datetime.date,
     prepared_date: datetime.date | None = None,
     remarks_override: dict | None = None,
+    special_notes: dict | None = None,
 ) -> bytes:
     """
     uploaded_files: {"재무상태표": <파일경로 or BytesIO>, "손익계산서": ..., "기간별손익계산서": ..., "기간별손익계산서(전년동기)": ...}
@@ -193,6 +194,7 @@ def build_monthly_closing(
     base_date: 결산기준일 — 이 월의 실적을 다루는지(예: 2026-07-31)
     prepared_date: 작성일자 — 실제로 이 보고서를 작성/보고한 날짜(예: 2026-09-05, 기준일자와 다를 수 있음)
     remarks_override: {account_key: note} — 재무상태표(내역) D열(내역/비고)에 덮어쓸 값들
+    special_notes: {note_key: text} — 요약 시트 "특이사항" 등 고정 위치 수기 입력란에 덮어쓸 값들
     """
     wb = openpyxl.load_workbook(template_path)
 
@@ -216,10 +218,29 @@ def build_monthly_closing(
 
     if remarks_override:
         apply_all_remarks(wb, remarks_override)
+    if special_notes:
+        apply_special_notes(wb, special_notes)
 
     out = BytesIO()
     wb.save(out)
     return out.getvalue()
+
+
+# 계정과목과 무관하게, 고정된 위치에 있는 수기 입력란(예: 요약 시트의 "특이사항")
+SPECIAL_NOTE_CELLS = {
+    "summary_special_note": {"sheet": "요약", "cell": "A69"},
+}
+
+
+def apply_special_notes(wb, notes: dict) -> None:
+    """notes: {note_key: text} — SPECIAL_NOTE_CELLS에 정의된 고정 셀에 그대로 덮어씀.
+    여러 줄(줄바꿈)을 그대로 셀에 넣으면 엑셀에서도 줄바꿈되어 보임(wrap_text 설정되어 있음)."""
+    for key, cfg in SPECIAL_NOTE_CELLS.items():
+        if key not in notes:
+            continue
+        if cfg["sheet"] not in wb.sheetnames:
+            continue
+        wb[cfg["sheet"]][cfg["cell"]] = notes[key] or ""
 
 
 def normalize_key(name) -> str:

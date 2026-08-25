@@ -96,13 +96,13 @@
     </aside>
 
     <main class="main">
-      <div class="topbar" style="display:flex; align-items:center; gap:10px;">
+      <header class="topbar">
         <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="메뉴">☰</button>
         <div>
           <h1>분석 및 보고</h1>
           <p>지사별 손익자료와 월결산서를 관리합니다.</p>
         </div>
-      </div>
+      </header>
 
       <div class="tabs" id="mainSectionTabBar" style="padding:0 28px; margin-top:10px; display:flex; align-items:center; gap:8px;">
         <button class="tab-btn active" data-section="monthly_closing" onclick="switchMainSection('monthly_closing')">월결산서</button>
@@ -286,6 +286,12 @@
               <a id="mcDownloadBtn" class="secondary" href="#">📥 미리보기 엑셀 다운로드 (백데이터용, 아직 확정 전)</a>
               <button class="secondary" onclick="printMonthlyClosingReport()">🖨 보고서 인쇄 (보고용 요약)</button>
             </div>
+
+            <h3 style="font-size:14px; margin-bottom:6px;">📌 요약 시트 특이사항</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">
+              요약 시트 맨 아래 "특이사항" 칸에 들어가는 내용이에요. 여러 줄로 나눠서 적으실 수 있어요.
+            </p>
+            <textarea id="mcSpecialNote" class="hr-input" rows="4" style="width:100%; margin-bottom:20px; resize:vertical;" placeholder="예: 전년동기(1~5월) 영업외비용에 법인세추납액 3,100만원 포함"></textarea>
 
             <h3 style="font-size:14px; margin-bottom:6px;">📝 재무상태표(내역) 비고 수정</h3>
             <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
