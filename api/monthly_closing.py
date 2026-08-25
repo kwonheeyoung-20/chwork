@@ -10,6 +10,7 @@ import base64
 import sys
 import datetime
 import urllib.request
+import urllib.parse
 import urllib.error
 from urllib.parse import urlparse, parse_qs, quote
 from pathlib import Path
@@ -39,7 +40,7 @@ class SupabaseError(Exception):
 
 
 def rest_request(method, path, body=None, prefer=None):
-    url = f"{SUPABASE_URL}/rest/v1/{path}"
+    url = f"{SUPABASE_URL}/rest/v1/{urllib.parse.quote(path, safe='?&=,.*:()!~')}"
     data = json.dumps(body).encode("utf-8") if body is not None else None
     headers = {
         "apikey": SUPABASE_SECRET_KEY,

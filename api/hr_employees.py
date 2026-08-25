@@ -15,6 +15,7 @@ import os
 import json
 import traceback
 import urllib.request
+import urllib.parse
 import urllib.error
 from urllib.parse import urlparse, parse_qs, quote
 
@@ -69,7 +70,7 @@ def _sb_headers(prefer=None):
 def rest_request(method, path, body=None, prefer=None):
     if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
         raise SupabaseError(0, "SUPABASE_URL 또는 SUPABASE_SECRET_KEY 환경변수가 비어있습니다.")
-    url = f"{SUPABASE_URL}/rest/v1/{path}"
+    url = f"{SUPABASE_URL}/rest/v1/{urllib.parse.quote(path, safe='?&=,.*:()!~')}"
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(url, data=data, method=method, headers=_sb_headers(prefer))
     try:
