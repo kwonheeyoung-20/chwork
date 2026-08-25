@@ -476,17 +476,27 @@ async function loadMcRemarks() {
     }
     wrap.innerHTML = sheetNames.map(sheetName => {
       const list = bySheet[sheetName];
+      // 같은 계정명이 몇 번 나오는지 미리 세어서, 2번 이상이면 "(N번째)" 표시를 붙임
+      const totalByLabel = {};
+      list.forEach(r => { totalByLabel[r.account_label] = (totalByLabel[r.account_label] || 0) + 1; });
+      const seenSoFar = {};
       return `
         <div style="padding:10px 12px 4px; font-size:13px; font-weight:600; background:var(--bg); position:sticky; top:0;">📄 ${mcEsc(sheetName)}</div>
         <table class="table" style="width:100%;">
           <thead><tr><th style="white-space:nowrap;">계정과목</th><th>내역(비고)</th></tr></thead>
           <tbody>
-            ${list.map(r => `
+            ${list.map(r => {
+              seenSoFar[r.account_label] = (seenSoFar[r.account_label] || 0) + 1;
+              const dupSuffix = totalByLabel[r.account_label] > 1
+                ? ` <span style="color:var(--text-muted); font-size:11px;">(${seenSoFar[r.account_label]}번째, 위/아래 항목 참고)</span>`
+                : '';
+              return `
               <tr>
-                <td style="white-space:nowrap;">${mcEsc(r.account_label)}</td>
+                <td style="white-space:nowrap;">${mcEsc(r.account_label)}${dupSuffix}</td>
                 <td><input type="text" class="hr-input mc-remark-input" data-key="${mcEsc(r.account_key)}" data-label="${mcEsc(r.account_label)}" value="${mcEsc(r.note || '')}" style="width:100%;"></td>
               </tr>
-            `).join('')}
+            `;
+            }).join('')}
           </tbody>
         </table>
       `;
