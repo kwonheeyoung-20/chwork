@@ -4397,9 +4397,34 @@ async function loadBonusReport() {
       $('bonusReportTfoot').innerHTML = '';
       return;
     }
-    tbody.innerHTML = bonusReportCache.map(e => renderBonusRow(e, locked)).join('');
+
+    // 지사별로 그룹 (첫 등장 순서 유지)
+    const branches = [];
+    const byBranch = {};
+    bonusReportCache.forEach(e => {
+      const b = e.branch || '(미지정)';
+      if (!byBranch[b]) { byBranch[b] = []; branches.push(b); }
+      byBranch[b].push(e);
+    });
+
+    let html = '';
+    branches.forEach(b => {
+      html += byBranch[b].map(e => renderBonusRow(e, locked)).join('');
+      html += `<tr class="hr-total-row bonus-subtotal-row" data-branch="${esc(b)}">
+        <td colspan="9">${esc(b)} 소계 (${byBranch[b].length}명)</td>
+        <td class="num bonus-subtotal-y2">-</td>
+        <td colspan="3"></td>
+        <td class="num bonus-subtotal-y1">-</td>
+        <td colspan="2"></td>
+        <td></td>
+        <td class="num bonus-subtotal-decided">-</td>
+        <td colspan="3"></td>
+      </tr>`;
+    });
+    tbody.innerHTML = html;
+
     document.querySelectorAll('.bonus-decided-input, .bonus-note-input, .bonus-criteria-input').forEach(el => {
-      el.addEventListener('input', () => updateBonusRowCalc(el.closest('tr')));
+      el.addEventListener('input', () => { updateBonusRowCalc(el.closest('tr')); renderBonusReportTotals(); });
     });
     document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => updateBonusRowCalc(tr));
     renderBonusReportTotals();
@@ -4410,7 +4435,7 @@ async function loadBonusReport() {
 
 function renderBonusRow(e, locked) {
   return `
-    <tr data-emp-id="${e.employee_id}" data-bonus-y1="${e.bonus_y1 || 0}">
+    <tr data-emp-id="${e.employee_id}" data-branch="${esc(e.branch || '(미지정)')}" data-bonus-y1="${e.bonus_y1 || 0}" data-bonus-y2="${e.bonus_y2 || 0}">
       <td class="num">${e.seq}</td>
       <td>${esc(e.name)}</td>
       <td>${esc(e.branch || '-')}</td>
@@ -4464,20 +4489,42 @@ function updateBonusRowCalc(tr) {
 }
 
 function renderBonusReportTotals() {
-  let sumY1Bonus = 0, sumDecided = 0;
+  const branchSums = {}; // branch -> {y2, y1, decided, count}
+  let sumY2 = 0, sumY1Bonus = 0, sumDecided = 0;
+
   document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => {
-    sumY1Bonus += Number(tr.dataset.bonusY1 || 0);
+    const branch = tr.dataset.branch;
+    const y2 = Number(tr.dataset.bonusY2 || 0);
+    const y1 = Number(tr.dataset.bonusY1 || 0);
     const v = tr.querySelector('.bonus-decided-input').value.trim();
-    if (v !== '') sumDecided += Number(v);
+    const decided = v === '' ? 0 : Number(v);
+
+    if (!branchSums[branch]) branchSums[branch] = { y2: 0, y1: 0, decided: 0 };
+    branchSums[branch].y2 += y2;
+    branchSums[branch].y1 += y1;
+    branchSums[branch].decided += decided;
+
+    sumY2 += y2; sumY1Bonus += y1; sumDecided += decided;
   });
+
+  document.querySelectorAll('.bonus-subtotal-row').forEach(row => {
+    const branch = row.dataset.branch;
+    const s = branchSums[branch] || { y2: 0, y1: 0, decided: 0 };
+    row.querySelector('.bonus-subtotal-y2').textContent = fmt(s.y2);
+    row.querySelector('.bonus-subtotal-y1').textContent = fmt(s.y1);
+    row.querySelector('.bonus-subtotal-decided').textContent = fmt(s.decided);
+  });
+
   $('bonusReportTfoot').innerHTML = `
     <tr class="hr-total-row">
-      <td colspan="13">합계</td>
-      <td class="num">직전년도 성과급 합계</td>
+      <td colspan="9">전체 합계</td>
+      <td class="num">${fmt(sumY2)}</td>
+      <td colspan="3"></td>
       <td class="num">${fmt(sumY1Bonus)}</td>
       <td colspan="2"></td>
-      <td class="num" style="background:#fff9ec;">당해년도 결정 합계: ${fmt(sumDecided)}</td>
-      <td colspan="2"></td>
+      <td></td>
+      <td class="num" style="background:#fff9ec;">${fmt(sumDecided)}</td>
+      <td colspan="3"></td>
     </tr>
   `;
 }
@@ -4591,14 +4638,19 @@ function printBonusReport() {
       <th>결정기준/율</th><th class="num" style="background:#fff9ec;">결정 성과급</th><th class="num">전년대비 증감</th><th class="num">전년대비(%)</th><th>비고</th>
     </tr>
   `;
-  let sumY1 = 0, sumDecided = 0;
-  $('bonus_print_tbody').innerHTML = bonusReportCache.map(e => {
+  const branches = [];
+  const byBranch = {};
+  bonusReportCache.forEach(e => {
+    const b = e.branch || '(미지정)';
+    if (!byBranch[b]) { byBranch[b] = []; branches.push(b); }
+    byBranch[b].push(e);
+  });
+
+  const rowHtml = (e) => {
     const cur = inputMap[e.employee_id] || {};
     const decided = cur.decided_amount;
     const diff = decided != null ? decided - (e.bonus_y1 || 0) : null;
     const pct = (diff != null && e.bonus_y1) ? ((diff / e.bonus_y1) * 100).toFixed(1) + '%' : '-';
-    sumY1 += e.bonus_y1 || 0;
-    if (decided != null) sumDecided += decided;
     return `
       <tr>
         <td class="num">${e.seq}</td><td>${esc(e.name)}</td><td>${esc(e.branch || '-')}</td><td>${esc(e.department || '-')}</td><td>${esc(e.position || '-')}</td><td>${esc(e.hire_date || '-')}</td>
@@ -4612,13 +4664,47 @@ function printBonusReport() {
         <td>${esc(cur.note || '')}</td>
       </tr>
     `;
-  }).join('') + `
+  };
+  const subtotalHtml = (branch, arr) => {
+    const s = arr.reduce((acc, e) => {
+      acc.y2 += e.bonus_y2 || 0;
+      acc.y1 += e.bonus_y1 || 0;
+      const cur = inputMap[e.employee_id] || {};
+      acc.decided += cur.decided_amount != null ? cur.decided_amount : 0;
+      return acc;
+    }, { y2: 0, y1: 0, decided: 0 });
+    return `
+      <tr class="hr-total-row">
+        <td colspan="9">${esc(branch)} 소계 (${arr.length}명)</td>
+        <td class="num">${fmt(s.y2)}</td><td colspan="3"></td>
+        <td class="num">${fmt(s.y1)}</td><td colspan="2"></td>
+        <td></td>
+        <td class="num" style="background:#fff9ec;">${fmt(s.decided)}</td>
+        <td colspan="3"></td>
+      </tr>
+    `;
+  };
+
+  let sumY2 = 0, sumY1 = 0, sumDecided = 0;
+  let bodyHtml = '';
+  branches.forEach(b => {
+    bodyHtml += byBranch[b].map(rowHtml).join('');
+    bodyHtml += subtotalHtml(b, byBranch[b]);
+    byBranch[b].forEach(e => {
+      sumY2 += e.bonus_y2 || 0;
+      sumY1 += e.bonus_y1 || 0;
+      const cur = inputMap[e.employee_id] || {};
+      if (cur.decided_amount != null) sumDecided += cur.decided_amount;
+    });
+  });
+  $('bonus_print_tbody').innerHTML = bodyHtml + `
     <tr class="hr-total-row">
-      <td colspan="13">합계</td>
-      <td class="num">${fmt(sumY1)}</td>
-      <td colspan="2"></td>
+      <td colspan="9">전체 합계</td>
+      <td class="num">${fmt(sumY2)}</td><td colspan="3"></td>
+      <td class="num">${fmt(sumY1)}</td><td colspan="2"></td>
+      <td></td>
       <td class="num" style="background:#fff9ec;">${fmt(sumDecided)}</td>
-      <td colspan="2"></td>
+      <td colspan="3"></td>
     </tr>
   `;
 
