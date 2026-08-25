@@ -883,9 +883,12 @@
             나중에 직원정보가 바뀌어도 저장된 보고서 내용은 그대로 보존됩니다.
           </p>
 
-          <div style="display:flex; gap:4px; border-bottom: 0.5px solid var(--border); margin-bottom:14px;">
+          <div style="display:flex; align-items:center; gap:4px; border-bottom: 0.5px solid var(--border); margin-bottom:14px; flex-wrap:wrap;">
+            <span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:2px; white-space:nowrap;">📊 조회</span>
             <button class="tab-btn active" data-promosub="live" onclick="switchPromotionsSubTab('live')">현재 기준 미리보기</button>
             <button class="tab-btn" data-promosub="saved" onclick="switchPromotionsSubTab('saved')">저장된 보고서</button>
+            <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 6px;"></span>
+            <span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:2px; white-space:nowrap;">✏️ 관리</span>
             <button class="tab-btn" data-promosub="history" onclick="switchPromotionsSubTab('history')">직급이력 관리</button>
             <button class="tab-btn" data-promosub="standards" onclick="switchPromotionsSubTab('standards')">급여기준표</button>
           </div>
@@ -905,10 +908,10 @@
             <div style="display:flex; gap:4px; margin-bottom:12px;">
               <button class="tab-btn active" data-promoview="list" onclick="switchPromoViewMode('list')">목록형</button>
               <button class="tab-btn" data-promoview="matrix" onclick="switchPromoViewMode('matrix')">직급별 이력표</button>
-              <button class="secondary" onclick="printPromotionMatrix('promoMatrixWrap')" style="margin-left:8px;">이력표 인쇄</button>
+              <button class="secondary" onclick="printCurrentPromoView('live')" style="margin-left:8px;">🖨 인쇄</button>
             </div>
             <div class="table-wrap" id="promoLiveTableWrap">
-              <table class="table" id="promoLiveTable">
+              <table class="table promo-list-table" id="promoLiveTable">
                 <thead>
                   <tr>
                     <th>지사</th><th>부서</th><th>성명</th><th>직급</th><th>입사일</th>
@@ -939,10 +942,10 @@
               <div style="display:flex; gap:4px; margin-bottom:12px;">
                 <button class="tab-btn active" data-promosavedview="list" onclick="switchPromoSavedViewMode('list')">목록형</button>
                 <button class="tab-btn" data-promosavedview="matrix" onclick="switchPromoSavedViewMode('matrix')">직급별 이력표</button>
-                <button class="secondary" onclick="printPromotionMatrix('promoReportDetailMatrixWrap')" style="margin-left:8px;">이력표 인쇄</button>
+                <button class="secondary" onclick="printCurrentPromoView('saved')" style="margin-left:8px;">🖨 인쇄</button>
               </div>
               <div class="table-wrap" id="promoReportDetailTableWrap">
-                <table class="table" id="promoReportDetailTable">
+                <table class="table promo-list-table" id="promoReportDetailTable">
                   <thead>
                     <tr>
                       <th>지사</th><th>부서</th><th>성명</th><th>직급</th><th>입사일</th>
@@ -1621,6 +1624,7 @@
       </div>
       <div style="margin-top:10px; padding:10px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary);">
         <b style="color:var(--text-primary);">통상시급 산정시간(급여명세서 표기용)</b>: <span id="ps_normal_wage_hours">209.00시간</span>
+        <br><b style="color:var(--text-primary);">통상시급</b>: <span id="ps_normal_wage_rate">-</span>
         <div style="margin-top:2px; font-size:11px;">(기본급+식대)를 이 시간으로 나누면 통상시급이 산출됩니다. 재직자 조정이 있는 달은 209시간이 아닌 자동 환산된 시간이 표시됩니다.</div>
       </div>
       <div id="ps_adjust_note_wrap" style="display:none; margin-top:14px; padding:10px 12px; background:var(--bg); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary);">
