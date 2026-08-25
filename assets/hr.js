@@ -102,7 +102,9 @@ const MENU_GROUPS = {
       { id: 'otherpay', label: '성과급/기타지급', group: '입력' },
       { id: 'annual', label: '직원별 연간 급여 종합', group: '자료' },
       { id: 'contracts', label: '연봉계약서', group: '자료' },
-      { id: 'promotions', label: '인사기록보고서', group: '자료' },
+      { id: 'promotions', label: '인사기록보고서', group: '보고' },
+      { id: 'bonus_report', label: '성과급보고서', group: '보고' },
+      { id: 'salary_increase_report', label: '연봉인상보고서', group: '보고' },
     ],
   },
   pension: {
@@ -226,7 +228,8 @@ function switchMenuGroup(group) {
       let prefix = '';
       if (t.group && t.group !== lastGroup) {
         if (lastGroup !== null) prefix += `<span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 8px;"></span>`;
-        prefix += `<span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:6px; white-space:nowrap;">${t.group === '입력' ? '✏️ 입력' : '📊 조회'}</span>`;
+        const groupLabel = t.group === '입력' ? '✏️ 입력' : t.group === '보고' ? '📑 보고' : '📊 조회';
+        prefix += `<span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:6px; white-space:nowrap;">${groupLabel}</span>`;
         lastGroup = t.group;
       }
       return `${prefix}<button class="tab-btn${i === 0 ? ' active' : ''}" data-tab="${t.id}" onclick="switchHrTab('${t.id}')">${t.label}</button>`;
@@ -247,6 +250,8 @@ function switchHrTab(name) {
   $('tab-annual').style.display = name === 'annual' ? 'block' : 'none';
   $('tab-contracts').style.display = name === 'contracts' ? 'block' : 'none';
   $('tab-promotions').style.display = name === 'promotions' ? 'block' : 'none';
+  $('tab-bonus_report').style.display = name === 'bonus_report' ? 'block' : 'none';
+  $('tab-salary_increase_report').style.display = name === 'salary_increase_report' ? 'block' : 'none';
   $('tab-contacts').style.display = name === 'contacts' ? 'block' : 'none';
   $('tab-contractdocs').style.display = name === 'contractdocs' ? 'block' : 'none';
   if (name === 'pension') { loadPensionStatus(); }
@@ -276,6 +281,9 @@ function switchHrTab(name) {
   }
   if (name === 'promotions') {
     initPromotionsTab();
+  }
+  if (name === 'bonus_report') {
+    initBonusReportTab();
   }
   if (name === 'contacts') {
     loadContacts();
@@ -4337,6 +4345,298 @@ let promoLiveCache = [];
 let promoReportListCache = [];
 let promoCurrentDetailReport = null;
 let promoHistoryEmployeeId = null;
+
+/* ── 성과급보고서 ── */
+let bonusReportCache = [];
+let bonusReportMetaCache = {};
+
+function initBonusReportTab() {
+  const sel = $('bonusYear');
+  if (!sel.dataset.loaded) {
+    const thisYear = new Date().getFullYear();
+    let opts = '';
+    for (let y = thisYear + 1; y >= thisYear - 1; y--) opts += `<option value="${y}">${y}년</option>`;
+    sel.innerHTML = opts;
+    sel.value = thisYear;
+    sel.dataset.loaded = '1';
+  }
+  if (!$('bonusPayDate').value) $('bonusPayDate').value = new Date().toISOString().slice(0, 10);
+  loadBonusReport();
+}
+
+function fmtManwon(thousand) {
+  // 연봉은 "천원" 단위 숫자 그대로 표시(양식과 동일하게)
+  if (thousand == null) return '-';
+  return Number(thousand).toLocaleString('ko-KR');
+}
+
+async function loadBonusReport() {
+  const year = $('bonusYear').value;
+  const round = $('bonusRound').value;
+  const tbody = $('bonusReportTbody');
+  tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_other_payments?bonus_report=1&year=${year}&round=${round}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}</td></tr>`;
+      return;
+    }
+    bonusReportCache = data.employees || [];
+    bonusReportMetaCache = { year: data.year, round: data.round, y1: data.y1, y2: data.y2, locked: data.locked };
+    $('bonusY2GroupHeader').textContent = `${data.y2}년 이력 (전전년도)`;
+    $('bonusY1GroupHeader').textContent = `${data.y1}년 이력 (직전년도)`;
+    $('bonusLockStatus').textContent = data.locked ? `🔒 ${year}년 ${round}차 마감됨` : `${year}년 ${round}차 마감 전`;
+    $('bonusCriteriaNote').value = data.criteria_note || '';
+
+    const locked = data.locked;
+    if (bonusReportCache.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
+      $('bonusReportTfoot').innerHTML = '';
+      return;
+    }
+    tbody.innerHTML = bonusReportCache.map(e => renderBonusRow(e, locked)).join('');
+    document.querySelectorAll('.bonus-decided-input, .bonus-note-input, .bonus-criteria-input').forEach(el => {
+      el.addEventListener('input', () => updateBonusRowCalc(el.closest('tr')));
+    });
+    document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => updateBonusRowCalc(tr));
+    renderBonusReportTotals();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function renderBonusRow(e, locked) {
+  return `
+    <tr data-emp-id="${e.employee_id}" data-bonus-y1="${e.bonus_y1 || 0}">
+      <td class="num">${e.seq}</td>
+      <td>${esc(e.name)}</td>
+      <td>${esc(e.branch || '-')}</td>
+      <td>${esc(e.department || '-')}</td>
+      <td>${esc(e.position || '-')}</td>
+      <td>${esc(e.hire_date || '-')}</td>
+      <td class="num" style="background:#f7f9fc;">${fmtManwon(e.salary_y2)}</td>
+      <td class="num" style="background:#f7f9fc;">${fmt(e.monthly_y2)}</td>
+      <td style="background:#f7f9fc;">${esc(e.criteria_y2 || '-')}</td>
+      <td class="num" style="background:#f7f9fc;">${fmt(e.bonus_y2)}</td>
+      <td class="num" style="background:#f7f9fc;">${fmtManwon(e.salary_y1)}</td>
+      <td class="num" style="background:#f7f9fc;">${fmt(e.monthly_y1)}</td>
+      <td style="background:#f7f9fc;">${esc(e.criteria_y1 || '-')}</td>
+      <td class="num" style="background:#f7f9fc;">${fmt(e.bonus_y1)}</td>
+      <td class="num">${fmtManwon(e.salary_now)}</td>
+      <td class="num">${fmt(e.monthly_now)}</td>
+      <td><input type="text" class="hr-input bonus-criteria-input" style="width:110px;" value="${esc(e.criteria || '')}" ${locked ? 'disabled' : ''}></td>
+      <td style="background:#fff9ec;">
+        <input type="number" class="hr-input bonus-decided-input" style="width:120px; text-align:right;"
+          value="${e.decided_amount != null ? e.decided_amount : ''}" ${locked ? 'disabled' : ''}>
+      </td>
+      <td class="num bonus-diff-cell">-</td>
+      <td class="num bonus-pct-cell">-</td>
+      <td><input type="text" class="hr-input bonus-note-input" style="width:110px;" value="${esc(e.note || '')}" ${locked ? 'disabled' : ''}></td>
+    </tr>
+  `;
+}
+
+function updateBonusRowCalc(tr) {
+  if (!tr) return;
+  const bonusY1 = Number(tr.dataset.bonusY1 || 0);
+  const decidedInput = tr.querySelector('.bonus-decided-input');
+  const decided = decidedInput.value.trim() === '' ? null : Number(decidedInput.value);
+  const diffCell = tr.querySelector('.bonus-diff-cell');
+  const pctCell = tr.querySelector('.bonus-pct-cell');
+  if (decided == null) {
+    diffCell.textContent = '-';
+    pctCell.textContent = '-';
+    return;
+  }
+  const diff = decided - bonusY1;
+  diffCell.textContent = fmt(diff);
+  diffCell.style.color = diff < 0 ? 'var(--red)' : '';
+  if (bonusY1 > 0) {
+    const pct = (diff / bonusY1 * 100).toFixed(1) + '%';
+    pctCell.textContent = pct;
+    pctCell.style.color = diff < 0 ? 'var(--red)' : '';
+  } else {
+    pctCell.textContent = '-';
+  }
+}
+
+function renderBonusReportTotals() {
+  let sumY1Bonus = 0, sumDecided = 0;
+  document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => {
+    sumY1Bonus += Number(tr.dataset.bonusY1 || 0);
+    const v = tr.querySelector('.bonus-decided-input').value.trim();
+    if (v !== '') sumDecided += Number(v);
+  });
+  $('bonusReportTfoot').innerHTML = `
+    <tr class="hr-total-row">
+      <td colspan="13">합계</td>
+      <td class="num">직전년도 성과급 합계</td>
+      <td class="num">${fmt(sumY1Bonus)}</td>
+      <td colspan="2"></td>
+      <td class="num" style="background:#fff9ec;">당해년도 결정 합계: ${fmt(sumDecided)}</td>
+      <td colspan="2"></td>
+    </tr>
+  `;
+}
+
+function collectBonusReportInputs() {
+  const items = [];
+  document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => {
+    const empId = tr.dataset.empId;
+    const amountInput = tr.querySelector('.bonus-decided-input');
+    const noteInput = tr.querySelector('.bonus-note-input');
+    const criteriaInput = tr.querySelector('.bonus-criteria-input');
+    const val = amountInput.value.trim();
+    items.push({
+      employee_id: empId,
+      criteria: criteriaInput.value.trim() || null,
+      decided_amount: val === '' ? null : Number(val),
+      note: noteInput.value.trim() || null,
+    });
+  });
+  return items;
+}
+
+async function saveBonusReportDraft() {
+  const year = Number($('bonusYear').value);
+  const round = Number($('bonusRound').value);
+  const items = collectBonusReportInputs();
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'bonus_save', year, round, items }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert('저장 실패: ' + (data.error || '')); return; }
+    alert('저장되었습니다.');
+    loadBonusReport();
+  } catch (e) {
+    alert('저장 중 오류가 발생했습니다.');
+  }
+}
+
+async function saveBonusCriteriaNote() {
+  const year = Number($('bonusYear').value);
+  const round = Number($('bonusRound').value);
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'bonus_criteria_note', year, round, criteria_note: $('bonusCriteriaNote').value }),
+    });
+    if (!res.ok) throw new Error('failed');
+    alert('지급기준표가 저장되었습니다.');
+  } catch (e) {
+    alert('저장 중 오류가 발생했습니다.');
+  }
+}
+
+async function finalizeBonusReport() {
+  const year = Number($('bonusYear').value);
+  const round = Number($('bonusRound').value);
+  const payDate = $('bonusPayDate').value;
+  if (!payDate) { alert('지급일자를 먼저 선택해주세요.'); return; }
+  if (!confirm(`${year}년 ${round}차 성과급을 확정(마감)하시겠습니까?\n결정된 금액이 "성과급/기타지급"에 자동 등록되고, 이 차수는 잠깁니다.`)) return;
+
+  const items = collectBonusReportInputs();
+  try {
+    await fetch(`${apiBase()}/api/hr_other_payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'bonus_save', year, round, items }),
+    });
+    const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'bonus_finalize', year, round, pay_date: payDate }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert('확정 실패: ' + (data.error || '')); return; }
+    alert(`확정 완료! ${data.created}건이 성과급/기타지급에 등록됐습니다.`);
+    loadBonusReport();
+  } catch (e) {
+    alert('확정 중 오류가 발생했습니다.');
+  }
+}
+
+function printBonusReport() {
+  if (bonusReportCache.length === 0) {
+    alert('먼저 조회해주세요.');
+    return;
+  }
+  const year = $('bonusYear').value;
+  const round = $('bonusRound').value;
+  $('bonus_print_title').textContent = `${year}년 성과급 검토표 - ${round}차`;
+
+  const inputs = collectBonusReportInputs();
+  const inputMap = {};
+  inputs.forEach(it => { inputMap[it.employee_id] = it; });
+
+  $('bonus_print_thead').innerHTML = `
+    <tr>
+      <th rowspan="2">순번</th><th rowspan="2">이름</th><th rowspan="2">지사</th><th rowspan="2">부서</th><th rowspan="2">직급</th><th rowspan="2">입사일</th>
+      <th colspan="4" style="text-align:center;">${bonusReportMetaCache.y2}년 이력</th>
+      <th colspan="4" style="text-align:center;">${bonusReportMetaCache.y1}년 이력</th>
+      <th colspan="2" style="text-align:center;">당해년도 현재</th>
+      <th colspan="5" style="text-align:center; background:#fff3d6;">당해년도 성과급 결정</th>
+    </tr>
+    <tr>
+      <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
+      <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
+      <th class="num">연봉(천원)</th><th class="num">월급여</th>
+      <th>결정기준/율</th><th class="num" style="background:#fff9ec;">결정 성과급</th><th class="num">전년대비 증감</th><th class="num">전년대비(%)</th><th>비고</th>
+    </tr>
+  `;
+  let sumY1 = 0, sumDecided = 0;
+  $('bonus_print_tbody').innerHTML = bonusReportCache.map(e => {
+    const cur = inputMap[e.employee_id] || {};
+    const decided = cur.decided_amount;
+    const diff = decided != null ? decided - (e.bonus_y1 || 0) : null;
+    const pct = (diff != null && e.bonus_y1) ? ((diff / e.bonus_y1) * 100).toFixed(1) + '%' : '-';
+    sumY1 += e.bonus_y1 || 0;
+    if (decided != null) sumDecided += decided;
+    return `
+      <tr>
+        <td class="num">${e.seq}</td><td>${esc(e.name)}</td><td>${esc(e.branch || '-')}</td><td>${esc(e.department || '-')}</td><td>${esc(e.position || '-')}</td><td>${esc(e.hire_date || '-')}</td>
+        <td class="num">${fmtManwon(e.salary_y2)}</td><td class="num">${fmt(e.monthly_y2)}</td><td>${esc(e.criteria_y2 || '-')}</td><td class="num">${fmt(e.bonus_y2)}</td>
+        <td class="num">${fmtManwon(e.salary_y1)}</td><td class="num">${fmt(e.monthly_y1)}</td><td>${esc(e.criteria_y1 || '-')}</td><td class="num">${fmt(e.bonus_y1)}</td>
+        <td class="num">${fmtManwon(e.salary_now)}</td><td class="num">${fmt(e.monthly_now)}</td>
+        <td>${esc(cur.criteria || '')}</td>
+        <td class="num" style="background:#fff9ec;">${decided != null ? fmt(decided) : ''}</td>
+        <td class="num">${diff != null ? fmt(diff) : '-'}</td>
+        <td class="num">${pct}</td>
+        <td>${esc(cur.note || '')}</td>
+      </tr>
+    `;
+  }).join('') + `
+    <tr class="hr-total-row">
+      <td colspan="13">합계</td>
+      <td class="num">${fmt(sumY1)}</td>
+      <td colspan="2"></td>
+      <td class="num" style="background:#fff9ec;">${fmt(sumDecided)}</td>
+      <td colspan="2"></td>
+    </tr>
+  `;
+
+  const criteriaNote = $('bonusCriteriaNote').value.trim();
+  const existingCriteriaBlock = document.getElementById('bonus_print_criteria_block');
+  if (existingCriteriaBlock) existingCriteriaBlock.remove();
+  if (criteriaNote) {
+    const block = document.createElement('div');
+    block.id = 'bonus_print_criteria_block';
+    block.style.cssText = 'margin-top:16px; padding:10px; border:1px solid #ccc; font-size:11px; white-space:pre-wrap;';
+    block.innerHTML = `<b>[참고] 지급기준표</b><br>${esc(criteriaNote).replace(/\n/g, '<br>')}`;
+    $('bonusReportPrintArea').appendChild(block);
+  }
+
+  $('bonusReportPrintArea').style.display = 'block';
+  window.print();
+  $('bonusReportPrintArea').style.display = 'none';
+}
 
 function initPromotionsTab() {
   if (!$('promoAsOf').value) {
