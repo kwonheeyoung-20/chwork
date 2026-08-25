@@ -60,7 +60,7 @@ def _sb_headers():
 def rest_request(path):
     if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
         raise SupabaseError(0, "SUPABASE_URL 또는 SUPABASE_SECRET_KEY 환경변수가 비어있습니다.")
-    url = f"{SUPABASE_URL}/rest/v1/{urllib.parse.quote(path, safe='?&=,.*:()!~%')}"
+    url = f"{SUPABASE_URL}/rest/v1/{urllib.parse.quote(path, safe='?&=,.*:()!~%/')}"
     req = urllib.request.Request(url, method="GET", headers=_sb_headers())
     try:
         with urllib.request.urlopen(req, timeout=25) as resp:
