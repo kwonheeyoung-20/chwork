@@ -470,6 +470,8 @@ async function loadMcRemarks() {
     }
     const bySheet = data.remarks_by_sheet || {};
     const sheetNames = Object.keys(bySheet);
+    const specialNote = (data.special_notes && data.special_notes.summary_special_note) || '';
+    $('mcSpecialNote').value = specialNote;
     if (sheetNames.length === 0) {
       wrap.innerHTML = `<div class="dash-empty" style="padding:12px;">내역(비고) 항목이 없습니다.</div>`;
       return;
@@ -531,6 +533,7 @@ async function finalizeMonthlyClosing() {
   fd.append('base_date', baseDate);
   if (preparedDate) fd.append('prepared_date', preparedDate);
   fd.append('remarks_json', JSON.stringify(remarksList));
+  fd.append('summary_special_note', $('mcSpecialNote').value);
   Object.entries(mcPreviewFiles).forEach(([key, file]) => { if (file) fd.append(key, file); });
 
   try {
@@ -620,7 +623,7 @@ async function openMonthlyClosingReport(periodKey) {
 /* ── 보고서 인쇄 (보고용 요약) ── */
 function mcFmtNum(n) {
   if (typeof n !== 'number') return '-';
-  return Math.round(n).toLocaleString('ko-KR');
+  return Math.round(n / 1000).toLocaleString('ko-KR'); // 보고서 인쇄는 천원 단위로 표시
 }
 function mcFmtPct(cur, prev) {
   if (typeof cur !== 'number' || typeof prev !== 'number' || prev === 0) return '-';
@@ -634,7 +637,7 @@ function printMonthlyClosingReport() {
   }
   const dates = mcDatesCache || {};
   $('mc_print_title').textContent = '월차 결산 보고서';
-  $('mc_print_sub').textContent = `기준일자: ${dates.base_date || '-'}  ·  작성일자: ${dates.prepared_date || '-'}`;
+  $('mc_print_sub').textContent = `기준일자: ${dates.base_date || '-'}  ·  작성일자: ${dates.prepared_date || '-'}  ·  (단위: 천원)`;
 
   const INCOME_LABELS = [
     ['매출액', '매출액'], ['매출원가', '매출원가'], ['매출총이익', '매출총이익'],
