@@ -4661,33 +4661,20 @@ function printBonusReportDecision() {
 
   $('bonus_print_thead').innerHTML = `
     <tr>
-      <th rowspan="2">순번</th><th rowspan="2">이름</th><th rowspan="2">지사</th><th rowspan="2">부서</th><th rowspan="2">직급</th><th rowspan="2">입사일</th>
-      <th colspan="4" style="text-align:center;">${bonusReportMetaCache.y2}년 이력</th>
-      <th colspan="4" style="text-align:center;">${bonusReportMetaCache.y1}년 이력</th>
-      <th colspan="2" style="text-align:center;">당해년도 현재</th>
-      <th rowspan="2" style="text-align:center; background:#fff3d6; min-width:120px;">성과급금액</th>
-    </tr>
-    <tr>
-      <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
-      <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
-      <th class="num">연봉(천원)</th><th class="num">월급여</th>
+      <th>순번</th><th>이름</th><th>지사</th><th>부서</th><th>직급</th><th>입사일</th>
+      <th style="text-align:center; background:#fff3d6; min-width:150px;">성과급금액</th>
     </tr>
   `;
   const { branches, byBranch } = _bonusBranchGroups();
   const rowHtml = (e) => `
     <tr>
       <td class="num">${e.seq}</td><td>${esc(e.name)}</td><td>${esc(e.branch || '-')}</td><td>${esc(e.department || '-')}</td><td>${esc(e.position || '-')}</td><td>${esc(e.hire_date || '-')}</td>
-      <td class="num">${fmtManwon(e.salary_y2)}</td><td class="num">${fmt(e.monthly_y2)}</td><td>${esc(e.criteria_y2 || '-')}</td><td class="num">${fmt(e.bonus_y2)}</td>
-      <td class="num">${fmtManwon(e.salary_y1)}</td><td class="num">${fmt(e.monthly_y1)}</td><td>${esc(e.criteria_y1 || '-')}</td><td class="num">${fmt(e.bonus_y1)}</td>
-      <td class="num">${fmtManwon(e.salary_now)}</td><td class="num">${fmt(e.monthly_now)}</td>
       <td style="background:#fff9ec;">&nbsp;</td>
     </tr>
   `;
   const subtotalHtml = (branch, arr) => `
     <tr class="hr-total-row">
-      <td colspan="9">${esc(branch)} 소계 (${arr.length}명)</td>
-      <td class="num">${fmt(arr.reduce((s, e) => s + (e.bonus_y2 || 0), 0))}</td><td colspan="3"></td>
-      <td class="num">${fmt(arr.reduce((s, e) => s + (e.bonus_y1 || 0), 0))}</td><td colspan="2"></td>
+      <td colspan="6">${esc(branch)} 소계 (${arr.length}명)</td>
       <td style="background:#fff9ec;"></td>
     </tr>
   `;
@@ -4732,13 +4719,14 @@ function printBonusReportFinal() {
       <th colspan="4" style="text-align:center;">${bonusReportMetaCache.y2}년 이력</th>
       <th colspan="4" style="text-align:center;">${bonusReportMetaCache.y1}년 이력</th>
       <th colspan="2" style="text-align:center;">당해년도 현재</th>
-      <th colspan="5" style="text-align:center; background:#fff3d6;">당해년도 성과급 결정</th>
+      <th colspan="4" style="text-align:center; background:#fff3d6;">당해년도 성과급 결정</th>
+      <th rowspan="2">비고</th>
     </tr>
     <tr>
       <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
       <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
       <th class="num">연봉(천원)</th><th class="num">월급여</th>
-      <th>결정기준/율</th><th class="num" style="background:#fff9ec;">결정 성과급</th><th class="num">전년대비 증감</th><th class="num">전년대비(%)</th><th>비고</th>
+      <th style="background:#fff9ec;">결정기준/율</th><th class="num" style="background:#fff9ec;">결정 성과급</th><th class="num" style="background:#fff9ec;">전년대비 증감</th><th class="num" style="background:#fff9ec;">전년대비(%)</th>
     </tr>
   `;
   const { branches, byBranch } = _bonusBranchGroups();
@@ -4753,10 +4741,10 @@ function printBonusReportFinal() {
         <td class="num">${fmtManwon(e.salary_y2)}</td><td class="num">${fmt(e.monthly_y2)}</td><td>${esc(e.criteria_y2 || '-')}</td><td class="num">${fmt(e.bonus_y2)}</td>
         <td class="num">${fmtManwon(e.salary_y1)}</td><td class="num">${fmt(e.monthly_y1)}</td><td>${esc(e.criteria_y1 || '-')}</td><td class="num">${fmt(e.bonus_y1)}</td>
         <td class="num">${fmtManwon(e.salary_now)}</td><td class="num">${fmt(e.monthly_now)}</td>
-        <td>${esc(cur.criteria || '')}</td>
+        <td style="background:#fff9ec;">${esc(cur.criteria || '')}</td>
         <td class="num" style="background:#fff9ec;">${decided != null ? fmt(decided) : ''}</td>
-        <td class="num">${diff != null ? fmt(diff) : '-'}</td>
-        <td class="num">${pct}</td>
+        <td class="num" style="background:#fff9ec;">${diff != null ? fmt(diff) : '-'}</td>
+        <td class="num" style="background:#fff9ec;">${pct}</td>
         <td>${esc(cur.note || '')}</td>
       </tr>
     `;
@@ -4774,9 +4762,10 @@ function printBonusReportFinal() {
         <td colspan="9">${esc(branch)} 소계 (${arr.length}명)</td>
         <td class="num">${fmt(s.y2)}</td><td colspan="3"></td>
         <td class="num">${fmt(s.y1)}</td><td colspan="2"></td>
-        <td></td>
+        <td style="background:#fff9ec;"></td>
         <td class="num" style="background:#fff9ec;">${fmt(s.decided)}</td>
-        <td colspan="3"></td>
+        <td colspan="2" style="background:#fff9ec;"></td>
+        <td></td>
       </tr>
     `;
   };
@@ -4798,9 +4787,10 @@ function printBonusReportFinal() {
       <td colspan="9">전체 합계</td>
       <td class="num">${fmt(sumY2)}</td><td colspan="3"></td>
       <td class="num">${fmt(sumY1)}</td><td colspan="2"></td>
-      <td></td>
+      <td style="background:#fff9ec;"></td>
       <td class="num" style="background:#fff9ec;">${fmt(sumDecided)}</td>
-      <td colspan="3"></td>
+      <td colspan="2" style="background:#fff9ec;"></td>
+      <td></td>
     </tr>
   `;
 
