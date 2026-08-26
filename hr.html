@@ -1548,7 +1548,7 @@
 <div id="pensionPrintArea" style="display:none;">
   <h2 style="margin-bottom:4px;">퇴직연금(DC) 현황 대장</h2>
   <p id="pension_print_date" style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;"></p>
-  <table class="table" style="width:100%; font-size:11px;">
+  <table class="table mc-framed-table" style="width:100%; font-size:11px;">
     <thead>
       <tr>
         <th style="white-space:nowrap; min-width:70px;">이름</th><th style="white-space:nowrap; min-width:90px;">지사</th><th style="white-space:nowrap; min-width:80px;">부서</th><th style="white-space:nowrap; min-width:80px;">직급</th><th style="white-space:nowrap; min-width:100px;">가입일</th>
@@ -1564,7 +1564,7 @@
   <h2 style="margin-bottom:4px;">퇴직연금(DC) 차수별 불입 보고서</h2>
   <p id="pension_install_print_range" style="font-size:13px; color:var(--text-secondary); margin-bottom:4px;"></p>
   <p id="pension_install_print_asof" style="font-size:12px; color:var(--text-muted); margin-bottom:16px;"></p>
-  <table class="table" style="width:100%; font-size:11px;">
+  <table class="table mc-framed-table" style="width:100%; font-size:11px;">
     <thead>
       <tr>
         <th>이름</th><th>지사</th><th>부서</th>
@@ -1584,12 +1584,7 @@
   <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">
     직전 2개년도 연봉·성과급 자료를 바탕으로 당해년도 성과급 지급액을 결정하는 보고서입니다.
   </p>
-  <table class="table" style="width:100%; font-size:11px;">
-    <thead>
-      <tr id="bonus_print_thead"></tr>
-    </thead>
-    <tbody id="bonus_print_tbody"></tbody>
-  </table>
+  <div id="bonus_print_table_container"></div>
 </div>
 
 <!-- 개인별 급여명세서 출력 모달 -->
