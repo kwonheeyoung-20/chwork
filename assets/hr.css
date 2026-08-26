@@ -62,12 +62,18 @@
   border-top: 1.5px solid #999 !important;
 }
 @media print {
-  /* 화면을 그대로 복제해서 인쇄하는 표(mc-framed-table)들은, 화면에서 쓰던 옅은 배경색
-     (표 헤더/합계행의 var(--bg), 옅은 하늘색 계열)까지 그대로 따라오는데, 인쇄에서는
-     필요없으니 투명하게 강제. (성과급보고서 등 강조용 배경(#fff9ec 등)은 별도 인라인
-     스타일이라 이 규칙의 영향을 안 받고 그대로 유지됨) */
-  .mc-framed-table thead th,
-  .mc-framed-table tr.hr-total-row td {
+  /* 화면에서 쓰던 옅은 배경색(표 헤더/합계행의 var(--bg), 옅은 하늘색 계열)은
+     인쇄에서는 필요없으니, 앱에 있는 모든 인쇄 영역에 공통으로 투명하게 강제.
+     (성과급보고서 등 강조용 배경(#fff9ec 등)은 별도 인라인 스타일이라
+     이 규칙보다 우선 적용되어 그대로 유지됨) */
+  #printArea .table th, #printArea .hr-total-row td,
+  #payslipPrintArea .table th, #payslipPrintArea .hr-total-row td,
+  #registerPrintArea .table th, #registerPrintArea .hr-total-row td,
+  #pensionPrintArea .table th, #pensionPrintArea .hr-total-row td,
+  #pensionInstallPrintArea .table th, #pensionInstallPrintArea .hr-total-row td,
+  #mcPrintArea .table th, #mcPrintArea .hr-total-row td,
+  #bonusReportPrintArea .table th, #bonusReportPrintArea .hr-total-row td,
+  #promoMatrixPrintArea .table th, #promoMatrixPrintArea .hr-total-row td {
     background: transparent;
   }
 
