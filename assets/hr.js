@@ -4410,30 +4410,9 @@ async function loadBonusReport() {
       return;
     }
 
-    // 지사별로 그룹 (첫 등장 순서 유지)
-    const branches = [];
-    const byBranch = {};
-    bonusReportCache.forEach(e => {
-      const b = e.branch || '(미지정)';
-      if (!byBranch[b]) { byBranch[b] = []; branches.push(b); }
-      byBranch[b].push(e);
-    });
-
-    let html = '';
-    branches.forEach(b => {
-      html += byBranch[b].map(e => renderBonusRow(e, locked)).join('');
-      html += `<tr class="hr-total-row bonus-subtotal-row" data-branch="${esc(b)}">
-        <td colspan="9">${esc(b)} 소계 (${byBranch[b].length}명)</td>
-        <td class="num bonus-subtotal-y2">-</td>
-        <td colspan="3"></td>
-        <td class="num bonus-subtotal-y1">-</td>
-        <td colspan="2"></td>
-        <td style="background:#fff9ec;"></td>
-        <td class="num bonus-subtotal-decided" style="background:#fff9ec;">-</td>
-        <td colspan="2" style="background:#fff9ec;"></td>
-        <td></td>
-      </tr>`;
-    });
+    // 지사별 소계 없이, 입사일 기준으로 정렬해서 표시
+    const sorted = [...bonusReportCache].sort((a, b) => (a.hire_date || '').localeCompare(b.hire_date || ''));
+    const html = sorted.map((e, idx) => renderBonusRow({ ...e, seq: idx + 1 }, locked)).join('');
     tbody.innerHTML = html;
 
     document.querySelectorAll('.bonus-decided-input, .bonus-note-input, .bonus-criteria-input').forEach(el => {
@@ -4473,6 +4452,9 @@ function renderBonusRow(e, locked) {
       <td class="num bonus-diff-cell" style="background:#fff9ec;">-</td>
       <td class="num bonus-pct-cell" style="background:#fff9ec;">-</td>
       <td><input type="text" class="hr-input bonus-note-input" style="width:110px;" value="${esc(e.note || '')}" ${locked ? 'disabled' : ''}></td>
+      <td class="bonus-exclude-col" style="text-align:center;">
+        <input type="checkbox" class="bonus-exclude-checkbox" title="체크하면 인쇄에서 이 직원을 제외합니다">
+      </td>
     </tr>
   `;
 }
@@ -4502,30 +4484,14 @@ function updateBonusRowCalc(tr) {
 }
 
 function renderBonusReportTotals() {
-  const branchSums = {}; // branch -> {y2, y1, decided, count}
   let sumY2 = 0, sumY1Bonus = 0, sumDecided = 0;
 
   document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => {
-    const branch = tr.dataset.branch;
     const y2 = Number(tr.dataset.bonusY2 || 0);
     const y1 = Number(tr.dataset.bonusY1 || 0);
     const v = tr.querySelector('.bonus-decided-input').value.trim();
     const decided = v === '' ? 0 : Number(v);
-
-    if (!branchSums[branch]) branchSums[branch] = { y2: 0, y1: 0, decided: 0 };
-    branchSums[branch].y2 += y2;
-    branchSums[branch].y1 += y1;
-    branchSums[branch].decided += decided;
-
     sumY2 += y2; sumY1Bonus += y1; sumDecided += decided;
-  });
-
-  document.querySelectorAll('.bonus-subtotal-row').forEach(row => {
-    const branch = row.dataset.branch;
-    const s = branchSums[branch] || { y2: 0, y1: 0, decided: 0 };
-    row.querySelector('.bonus-subtotal-y2').textContent = fmt(s.y2);
-    row.querySelector('.bonus-subtotal-y1').textContent = fmt(s.y1);
-    row.querySelector('.bonus-subtotal-decided').textContent = fmt(s.decided);
   });
 
   // 전체 합계는 tfoot이 아니라 tbody 맨 끝의 일반 행으로 둠
@@ -4543,6 +4509,7 @@ function renderBonusReportTotals() {
       <td class="num" style="background:#fff9ec;">${fmt(sumDecided)}</td>
       <td colspan="2" style="background:#fff9ec;"></td>
       <td></td>
+      <td class="bonus-exclude-col"></td>
     </tr>
   `);
 }
@@ -4662,6 +4629,37 @@ function _cloneScreenTableForPrint() {
   const clone = original.cloneNode(true);
   clone.removeAttribute('id');
   clone.classList.add('mc-framed-table');
+
+  // "인쇄제외"에 체크된 직원은 인쇄본에서 행 자체를 통째로 제거
+  const excludedIds = new Set();
+  document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => {
+    const cb = tr.querySelector('.bonus-exclude-checkbox');
+    if (cb && cb.checked) excludedIds.add(tr.dataset.empId);
+  });
+  if (excludedIds.size > 0) {
+    Array.from(clone.querySelectorAll('tbody tr[data-emp-id]')).forEach(tr => {
+      if (excludedIds.has(tr.dataset.empId)) tr.remove();
+    });
+    // 제외된 인원이 있으면, 인쇄본 기준(남은 인원만)으로 전체 합계를 다시 계산해서 반영
+    let sumY2 = 0, sumY1 = 0, sumDecided = 0;
+    clone.querySelectorAll('tbody tr[data-emp-id]').forEach(tr => {
+      sumY2 += Number(tr.dataset.bonusY2 || 0);
+      sumY1 += Number(tr.dataset.bonusY1 || 0);
+      const decidedInput = tr.querySelector('.bonus-decided-input');
+      sumDecided += decidedInput && decidedInput.value.trim() !== '' ? Number(decidedInput.value) : 0;
+    });
+    const totalRow = clone.querySelector('.bonus-grand-total-row');
+    if (totalRow) {
+      const cells = Array.from(totalRow.children);
+      if (cells[1]) cells[1].textContent = fmt(sumY2);
+      if (cells[3]) cells[3].textContent = fmt(sumY1);
+      if (cells[6]) cells[6].textContent = fmt(sumDecided);
+    }
+  }
+
+  // 인쇄제외 체크박스 칼럼(헤더+본문)은 화면 조작용이라 인쇄에는 필요없으니 통째로 제거
+  clone.querySelectorAll('.bonus-exclude-col').forEach(el => el.remove());
+
   clone.querySelectorAll('input').forEach(input => {
     const span = document.createElement('span');
     span.textContent = input.value || '';
