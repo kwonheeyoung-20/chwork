@@ -43,6 +43,11 @@
 .settle-row.highlight { background: var(--bg-accent, var(--bg)); padding: 12px 8px; border-radius: var(--radius-sm); border-bottom: none; }
 .hr-total-row td { font-weight: 500; background: var(--bg); border-top: 1.5px solid var(--border-strong); color: var(--text-primary); }
 @media print {
+  /* 브라우저는 기본적으로 "배경색 인쇄"를 꺼둔 채로 인쇄하는 경우가 많아서,
+     CSS로 지정해둔 배경색(당해년도 발생액/불입액 칸의 회색 등)이 인쇄물에 안 나올 수 있음.
+     이 속성으로 강제로 배경색까지 그대로 인쇄되게 함. */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+
   /* 화면의 나머지 부분(사이드바·메인 콘텐츠 전체)을 display:none으로 완전히 렌더 트리에서
      제외해서, 인쇄물 맨 뒤에 빈 페이지가 딸려 나오던 문제를 막음.
      (예전 visibility:hidden 방식은 안 보이기만 하고 실제 차지 공간은 그대로 남아있어서
