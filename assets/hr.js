@@ -4428,9 +4428,10 @@ async function loadBonusReport() {
         <td colspan="3"></td>
         <td class="num bonus-subtotal-y1">-</td>
         <td colspan="2"></td>
+        <td style="background:#fff9ec;"></td>
+        <td class="num bonus-subtotal-decided" style="background:#fff9ec;">-</td>
+        <td colspan="2" style="background:#fff9ec;"></td>
         <td></td>
-        <td class="num bonus-subtotal-decided">-</td>
-        <td colspan="3"></td>
       </tr>`;
     });
     tbody.innerHTML = html;
@@ -4464,13 +4465,13 @@ function renderBonusRow(e, locked) {
       <td class="num" style="background:#f7f9fc;">${fmt(e.bonus_y1)}</td>
       <td class="num">${fmtManwon(e.salary_now)}</td>
       <td class="num">${fmt(e.monthly_now)}</td>
-      <td><input type="text" class="hr-input bonus-criteria-input" style="width:110px;" value="${esc(e.criteria || '')}" ${locked ? 'disabled' : ''}></td>
+      <td style="background:#fff9ec;"><input type="text" class="hr-input bonus-criteria-input" style="width:110px;" value="${esc(e.criteria || '')}" ${locked ? 'disabled' : ''}></td>
       <td style="background:#fff9ec;">
         <input type="number" class="hr-input bonus-decided-input" style="width:120px; text-align:right;"
           value="${e.decided_amount != null ? e.decided_amount : ''}" ${locked ? 'disabled' : ''}>
       </td>
-      <td class="num bonus-diff-cell">-</td>
-      <td class="num bonus-pct-cell">-</td>
+      <td class="num bonus-diff-cell" style="background:#fff9ec;">-</td>
+      <td class="num bonus-pct-cell" style="background:#fff9ec;">-</td>
       <td><input type="text" class="hr-input bonus-note-input" style="width:110px;" value="${esc(e.note || '')}" ${locked ? 'disabled' : ''}></td>
     </tr>
   `;
@@ -4538,9 +4539,10 @@ function renderBonusReportTotals() {
       <td colspan="3"></td>
       <td class="num">${fmt(sumY1Bonus)}</td>
       <td colspan="2"></td>
-      <td></td>
+      <td style="background:#fff9ec;"></td>
       <td class="num" style="background:#fff9ec;">${fmt(sumDecided)}</td>
-      <td colspan="3"></td>
+      <td colspan="2" style="background:#fff9ec;"></td>
+      <td></td>
     </tr>
   `);
 }
@@ -4705,9 +4707,10 @@ function printBonusReportDecision() {
   // (구조: [colspan9][y2][colspan3][y1][colspan2][빈칸=결정기준율][결정합계][colspan3=증감,%,비고])
   const fixTotalRow = (tr) => {
     const cells = Array.from(tr.children);
-    if (cells.length !== 8) return;
+    if (cells.length !== 9) return;
     cells[5].remove(); // 결정기준율 빈칸 제거
-    cells[7].remove(); // 증감,%,비고 자리(colspan=3) 통째로 제거 -> 결정성과급 뒤에 아무것도 안 남게
+    cells[7].remove(); // 증감,% 자리(colspan=2) 제거
+    cells[8].remove(); // 비고 자리 제거
   };
   clone.querySelectorAll('tbody tr.bonus-subtotal-row').forEach(fixTotalRow);
   const grandTotalRow = clone.querySelector('.bonus-grand-total-row');
