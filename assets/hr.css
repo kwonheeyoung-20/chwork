@@ -62,6 +62,12 @@
   border-top: 1.5px solid #999 !important;
 }
 @media print {
+  /* #pensionPrintArea 등 인쇄 영역은 .layout 바깥(= body 바로 아래)에 있는 별도 div라서,
+     .layout을 display:none으로 지워도 body 자체의 배경색(--bg, 옅은 하늘색)은 그대로 남아있음.
+     바로 아래 "print-color-adjust: exact" 규칙이 이 body 배경까지 강제로 인쇄해버려서,
+     표 아래 빈 공간이 전부 하늘색으로 찍히던 원인이었음 → html/body 배경을 흰색으로 강제. */
+  html, body { background: #fff !important; }
+
   /* 화면에서 쓰던 옅은 배경색(표 헤더/합계행의 var(--bg), 옅은 하늘색 계열)은
      인쇄에서는 필요없으니, 앱에 있는 모든 인쇄 영역에 공통으로 투명하게 강제.
      (성과급보고서 등 강조용 배경(#fff9ec 등)은 별도 인라인 스타일이라
