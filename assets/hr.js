@@ -4624,32 +4624,48 @@ async function finalizeBonusReport() {
 }
 
 /* ── 성과급보고서 인쇄 공통 ── */
-function _bonusPrintLandscape(run) {
+function _bonusPrintLandscape() {
   // 가로(landscape) 인쇄 + 실행 공통 로직
   const style = document.createElement('style');
   style.id = 'bonusPrintLandscapeStyle';
   style.textContent = `@page { size: landscape; margin: 10mm; }`;
   document.head.appendChild(style);
   $('bonus_print_asof').textContent = `기준일자: ${new Date().toISOString().slice(0, 10)}`;
-  run();
+
+  const criteriaNote = $('bonusCriteriaNote').value.trim();
+  const existingBlock = document.getElementById('bonus_print_criteria_block');
+  if (existingBlock) existingBlock.remove();
+  if (criteriaNote) {
+    const block = document.createElement('div');
+    block.id = 'bonus_print_criteria_block';
+    block.style.cssText = 'margin-top:16px; padding:10px; border:1px solid #ccc; font-size:11px; white-space:pre-wrap;';
+    block.innerHTML = `<b>[참고] 지급기준표</b><br>${esc(criteriaNote).replace(/\n/g, '<br>')}`;
+    $('bonusReportPrintArea').appendChild(block);
+  }
+
   $('bonusReportPrintArea').style.display = 'block';
   window.print();
   $('bonusReportPrintArea').style.display = 'none';
   document.head.removeChild(style);
 }
 
-function _bonusBranchGroups() {
-  const branches = [];
-  const byBranch = {};
-  bonusReportCache.forEach(e => {
-    const b = e.branch || '(미지정)';
-    if (!byBranch[b]) { byBranch[b] = []; branches.push(b); }
-    byBranch[b].push(e);
+// 화면에 실제로 보이는 표(#bonusReportTable)를 그대로 복제해서 인쇄에 씀
+// -> 화면과 인쇄가 항상 100% 똑같이 유지됨(배경색·선·컬럼구성 전부 화면 그대로).
+// input(결정기준/율, 결정성과급 입력칸)은 인쇄에서는 입력값 텍스트로 바꿔서 보여줌.
+function _cloneScreenTableForPrint() {
+  const original = document.getElementById('bonusReportTable');
+  const clone = original.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.classList.add('mc-framed-table');
+  clone.querySelectorAll('input').forEach(input => {
+    const span = document.createElement('span');
+    span.textContent = input.value || '';
+    input.replaceWith(span);
   });
-  return { branches, byBranch };
+  return clone;
 }
 
-/* ── 인쇄(의사결정용): 참고자료 + "성과급금액" 빈 입력란 하나만 ── */
+/* ── 인쇄(의사결정용): 화면 그대로 + "당해년도 성과급 결정" 4칸 중 결정성과급 한 칸만 남김 ── */
 function printBonusReportDecision() {
   if (bonusReportCache.length === 0) {
     alert('먼저 조회해주세요.');
@@ -4659,70 +4675,47 @@ function printBonusReportDecision() {
   const round = $('bonusRound').value;
   $('bonus_print_title').textContent = `${year}년 성과급 검토표 - ${round}차 (의사결정용)`;
 
-  $('bonus_print_thead').innerHTML = `
-    <tr>
-      <th rowspan="2">순번</th><th rowspan="2">이름</th><th rowspan="2">지사</th><th rowspan="2">부서</th><th rowspan="2">직급</th><th rowspan="2">입사일</th>
-      <th colspan="4" style="text-align:center;">${bonusReportMetaCache.y2}년 이력</th>
-      <th colspan="4" style="text-align:center;">${bonusReportMetaCache.y1}년 이력</th>
-      <th colspan="2" style="text-align:center;">당해년도 현재</th>
-      <th rowspan="2" style="text-align:center; background:#fff3d6; min-width:150px;">성과급금액</th>
-    </tr>
-    <tr>
-      <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
-      <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
-      <th class="num">연봉(천원)</th><th class="num">월급여</th>
-    </tr>
-  `;
-  const { branches, byBranch } = _bonusBranchGroups();
-  const rowHtml = (e) => `
-    <tr>
-      <td class="num">${e.seq}</td><td>${esc(e.name)}</td><td>${esc(e.branch || '-')}</td><td>${esc(e.department || '-')}</td><td>${esc(e.position || '-')}</td><td>${esc(e.hire_date || '-')}</td>
-      <td class="num">${fmtManwon(e.salary_y2)}</td><td class="num">${fmt(e.monthly_y2)}</td><td>${esc(e.criteria_y2 || '-')}</td><td class="num">${fmt(e.bonus_y2)}</td>
-      <td class="num">${fmtManwon(e.salary_y1)}</td><td class="num">${fmt(e.monthly_y1)}</td><td>${esc(e.criteria_y1 || '-')}</td><td class="num">${fmt(e.bonus_y1)}</td>
-      <td class="num">${fmtManwon(e.salary_now)}</td><td class="num">${fmt(e.monthly_now)}</td>
-      <td style="background:#fff9ec;">&nbsp;</td>
-    </tr>
-  `;
-  const subtotalHtml = (branch, arr) => `
-    <tr class="hr-total-row">
-      <td colspan="9">${esc(branch)} 소계 (${arr.length}명)</td>
-      <td class="num">${fmt(arr.reduce((s, e) => s + (e.bonus_y2 || 0), 0))}</td><td colspan="3"></td>
-      <td class="num">${fmt(arr.reduce((s, e) => s + (e.bonus_y1 || 0), 0))}</td><td colspan="2"></td>
-      <td style="background:#fff9ec;"></td>
-    </tr>
-  `;
-  let bodyHtml = '';
-  branches.forEach(b => {
-    bodyHtml += byBranch[b].map(rowHtml).join('');
-    bodyHtml += subtotalHtml(b, byBranch[b]);
+  const clone = _cloneScreenTableForPrint();
+
+  // 헤더 1행: "당해년도 성과급 결정" 그룹(colspan 5 -> 1, 결정성과급만 남김. 비고는 별도 rowspan 컬럼으로 새로 추가)
+  const headRow1 = clone.querySelector('thead tr:nth-child(1)');
+  const decisionGroupTh = headRow1.children[headRow1.children.length - 1]; // 마지막 th = 결정 그룹헤더
+  decisionGroupTh.setAttribute('colspan', '1');
+
+  // 헤더 2행: 결정기준/율(input), 전년대비 증감, 전년대비(%), 비고 서브헤더 중 결정성과급만 남김
+  const headRow2 = clone.querySelector('thead tr:nth-child(2)');
+  const head2Cells = Array.from(headRow2.children);
+  // 0-based 순서: [0~3]y2 [4~7]y1 [8~9]현재 [10]결정기준율 [11]결정성과급 [12]전년대비증감 [13]전년대비% [14]비고
+  [head2Cells[10], head2Cells[12], head2Cells[13], head2Cells[14]].forEach(el => el && el.remove());
+  const decidedTh = headRow2.children[10]; // 위 4개 제거 후 이제 10번째가 "결정 성과급(입력)"
+  if (decidedTh) decidedTh.textContent = '결정 성과급';
+
+  // 데이터 행(개별 직원)만 컬럼 제거: 17,19,20,21번째(1-based) td 제거, 결정성과급(18번째)만 남김
+  Array.from(clone.querySelectorAll('tbody tr')).forEach(tr => {
+    if (tr.classList.contains('bonus-subtotal-row')) return; // 소계행은 아래서 별도 처리
+    const cells = Array.from(tr.children);
+    if (cells.length < 21) return;
+    [cells[16], cells[18], cells[19], cells[20]].forEach(td => td && td.remove()); // 0-based: 16=결정기준율,18=증감,19=%,20=비고
   });
-  const sumY2 = bonusReportCache.reduce((s, e) => s + (e.bonus_y2 || 0), 0);
-  const sumY1 = bonusReportCache.reduce((s, e) => s + (e.bonus_y1 || 0), 0);
-  bodyHtml += `
-    <tr class="hr-total-row">
-      <td colspan="9">전체 합계 (${bonusReportCache.length}명)</td>
-      <td class="num">${fmt(sumY2)}</td><td colspan="3"></td>
-      <td class="num">${fmt(sumY1)}</td><td colspan="2"></td>
-      <td style="background:#fff9ec;"></td>
-    </tr>
-  `;
-  $('bonus_print_tbody').innerHTML = bodyHtml;
 
-  const criteriaNote = $('bonusCriteriaNote').value.trim();
-  const existingBlock = document.getElementById('bonus_print_criteria_block');
-  if (existingBlock) existingBlock.remove();
-  if (criteriaNote) {
-    const block = document.createElement('div');
-    block.id = 'bonus_print_criteria_block';
-    block.style.cssText = 'margin-top:16px; padding:10px; border:1px solid #ccc; font-size:11px; white-space:pre-wrap;';
-    block.innerHTML = `<b>[참고] 지급기준표</b><br>${esc(criteriaNote).replace(/\n/g, '<br>')}`;
-    $('bonusReportPrintArea').appendChild(block);
-  }
+  // 소계행/전체합계행: colspan 구조라 위와 같은 방식으로 정리
+  // (구조: [colspan9][y2][colspan3][y1][colspan2][빈칸=결정기준율][결정합계][colspan3=증감,%,비고])
+  const fixTotalRow = (tr) => {
+    const cells = Array.from(tr.children);
+    if (cells.length !== 8) return;
+    cells[5].remove(); // 결정기준율 빈칸 제거
+    cells[7].remove(); // 증감,%,비고 자리(colspan=3) 통째로 제거 -> 결정성과급 뒤에 아무것도 안 남게
+  };
+  clone.querySelectorAll('tbody tr.bonus-subtotal-row').forEach(fixTotalRow);
+  const tfootRow = clone.querySelector('tfoot tr');
+  if (tfootRow) fixTotalRow(tfootRow);
 
-  _bonusPrintLandscape(() => {});
+  $('bonus_print_table_container').innerHTML = '';
+  $('bonus_print_table_container').appendChild(clone);
+  _bonusPrintLandscape();
 }
 
-/* ── 인쇄(확정 결정내용): 저장된 값 그대로, 모든 항목 ── */
+/* ── 인쇄(확정 결정내용): 화면 표를 그대로(전체 컬럼) 복제 ── */
 function printBonusReportFinal() {
   if (bonusReportCache.length === 0) {
     alert('먼저 조회해주세요.');
@@ -4732,104 +4725,12 @@ function printBonusReportFinal() {
   const round = $('bonusRound').value;
   $('bonus_print_title').textContent = `${year}년 성과급 확정 결정내용 - ${round}차`;
 
-  const inputs = collectBonusReportInputs();
-  const inputMap = {};
-  inputs.forEach(it => { inputMap[it.employee_id] = it; });
-
-  $('bonus_print_thead').innerHTML = `
-    <tr>
-      <th rowspan="2">순번</th><th rowspan="2">이름</th><th rowspan="2">지사</th><th rowspan="2">부서</th><th rowspan="2">직급</th><th rowspan="2">입사일</th>
-      <th colspan="4" style="text-align:center;">${bonusReportMetaCache.y2}년 이력</th>
-      <th colspan="4" style="text-align:center;">${bonusReportMetaCache.y1}년 이력</th>
-      <th colspan="2" style="text-align:center;">당해년도 현재</th>
-      <th colspan="4" style="text-align:center; background:#fff3d6;">당해년도 성과급 결정</th>
-      <th rowspan="2">비고</th>
-    </tr>
-    <tr>
-      <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
-      <th class="num">연봉(천원)</th><th class="num">월급여</th><th>기준/율</th><th class="num">성과급</th>
-      <th class="num">연봉(천원)</th><th class="num">월급여</th>
-      <th style="background:#fff9ec;">결정기준/율</th><th class="num" style="background:#fff9ec;">결정 성과급</th><th class="num" style="background:#fff9ec;">전년대비 증감</th><th class="num" style="background:#fff9ec;">전년대비(%)</th>
-    </tr>
-  `;
-  const { branches, byBranch } = _bonusBranchGroups();
-  const rowHtml = (e) => {
-    const cur = inputMap[e.employee_id] || {};
-    const decided = cur.decided_amount;
-    const diff = decided != null ? decided - (e.bonus_y1 || 0) : null;
-    const pct = (diff != null && e.bonus_y1) ? ((diff / e.bonus_y1) * 100).toFixed(1) + '%' : '-';
-    return `
-      <tr>
-        <td class="num">${e.seq}</td><td>${esc(e.name)}</td><td>${esc(e.branch || '-')}</td><td>${esc(e.department || '-')}</td><td>${esc(e.position || '-')}</td><td>${esc(e.hire_date || '-')}</td>
-        <td class="num">${fmtManwon(e.salary_y2)}</td><td class="num">${fmt(e.monthly_y2)}</td><td>${esc(e.criteria_y2 || '-')}</td><td class="num">${fmt(e.bonus_y2)}</td>
-        <td class="num">${fmtManwon(e.salary_y1)}</td><td class="num">${fmt(e.monthly_y1)}</td><td>${esc(e.criteria_y1 || '-')}</td><td class="num">${fmt(e.bonus_y1)}</td>
-        <td class="num">${fmtManwon(e.salary_now)}</td><td class="num">${fmt(e.monthly_now)}</td>
-        <td style="background:#fff9ec; border-bottom:1px solid #999;">${esc(cur.criteria || '')}</td>
-        <td class="num" style="background:#fff9ec; border-bottom:1px solid #999;">${decided != null ? fmt(decided) : ''}</td>
-        <td class="num" style="background:#fff9ec; border-bottom:1px solid #999;">${diff != null ? fmt(diff) : '-'}</td>
-        <td class="num" style="background:#fff9ec; border-bottom:1px solid #999;">${pct}</td>
-        <td>${esc(cur.note || '')}</td>
-      </tr>
-    `;
-  };
-  const subtotalHtml = (branch, arr) => {
-    const s = arr.reduce((acc, e) => {
-      acc.y2 += e.bonus_y2 || 0;
-      acc.y1 += e.bonus_y1 || 0;
-      const cur = inputMap[e.employee_id] || {};
-      acc.decided += cur.decided_amount != null ? cur.decided_amount : 0;
-      return acc;
-    }, { y2: 0, y1: 0, decided: 0 });
-    return `
-      <tr class="hr-total-row">
-        <td colspan="9">${esc(branch)} 소계 (${arr.length}명)</td>
-        <td class="num">${fmt(s.y2)}</td><td colspan="3"></td>
-        <td class="num">${fmt(s.y1)}</td><td colspan="2"></td>
-        <td style="background:#fff9ec;"></td>
-        <td class="num" style="background:#fff9ec;">${fmt(s.decided)}</td>
-        <td colspan="2" style="background:#fff9ec;"></td>
-        <td></td>
-      </tr>
-    `;
-  };
-
-  let sumY2 = 0, sumY1 = 0, sumDecided = 0;
-  let bodyHtml = '';
-  branches.forEach(b => {
-    bodyHtml += byBranch[b].map(rowHtml).join('');
-    bodyHtml += subtotalHtml(b, byBranch[b]);
-    byBranch[b].forEach(e => {
-      sumY2 += e.bonus_y2 || 0;
-      sumY1 += e.bonus_y1 || 0;
-      const cur = inputMap[e.employee_id] || {};
-      if (cur.decided_amount != null) sumDecided += cur.decided_amount;
-    });
-  });
-  $('bonus_print_tbody').innerHTML = bodyHtml + `
-    <tr class="hr-total-row">
-      <td colspan="9">전체 합계</td>
-      <td class="num">${fmt(sumY2)}</td><td colspan="3"></td>
-      <td class="num">${fmt(sumY1)}</td><td colspan="2"></td>
-      <td style="background:#fff9ec;"></td>
-      <td class="num" style="background:#fff9ec;">${fmt(sumDecided)}</td>
-      <td colspan="2" style="background:#fff9ec;"></td>
-      <td></td>
-    </tr>
-  `;
-
-  const criteriaNote = $('bonusCriteriaNote').value.trim();
-  const existingBlock = document.getElementById('bonus_print_criteria_block');
-  if (existingBlock) existingBlock.remove();
-  if (criteriaNote) {
-    const block = document.createElement('div');
-    block.id = 'bonus_print_criteria_block';
-    block.style.cssText = 'margin-top:16px; padding:10px; border:1px solid #ccc; font-size:11px; white-space:pre-wrap;';
-    block.innerHTML = `<b>[참고] 지급기준표</b><br>${esc(criteriaNote).replace(/\n/g, '<br>')}`;
-    $('bonusReportPrintArea').appendChild(block);
-  }
-
-  _bonusPrintLandscape(() => {});
+  const clone = _cloneScreenTableForPrint();
+  $('bonus_print_table_container').innerHTML = '';
+  $('bonus_print_table_container').appendChild(clone);
+  _bonusPrintLandscape();
 }
+
 
 function initPromotionsTab() {
   if (!$('promoAsOf').value) {
