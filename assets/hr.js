@@ -3022,11 +3022,11 @@ async function printPensionInstallment(fromArg, toArg) {
       </tr>
     `;
     const subtotalHtml = (branch, arr) => `
-      <tr style="font-weight:600; background:#f8f8f8;">
+      <tr class="hr-total-row">
         <td colspan="3">${esc(branch)} 소계 (${arr.length}명)</td>
         <td class="num">${fmt(sumBy(arr,'installment_amount'))}</td>
-        <td class="num" style="background:#eee;">${fmt(sumBy(arr,'ytd_accrual'))}</td>
-        <td class="num" style="background:#eee;">${fmt(sumBy(arr,'ytd_paid'))}</td>
+        <td class="num">${fmt(sumBy(arr,'ytd_accrual'))}</td>
+        <td class="num">${fmt(sumBy(arr,'ytd_paid'))}</td>
       </tr>
     `;
 
@@ -3046,15 +3046,15 @@ async function printPensionInstallment(fromArg, toArg) {
       byBranch[b].forEach(r => { bodyHtml += rowHtml(r); });
       bodyHtml += subtotalHtml(b, byBranch[b]);
     });
-    $('pension_install_print_tbody').innerHTML = bodyHtml;
-    $('pension_install_print_tfoot').innerHTML = `
-      <tr style="font-weight:700; background:#e8e8e8;">
+    bodyHtml += `
+      <tr class="hr-total-row">
         <td colspan="3">전체 합계 (${rows.length}명)</td>
         <td class="num">${fmt(sumInstall)}</td>
-        <td class="num" style="background:#ddd;">${fmt(sumAccrual)}</td>
-        <td class="num" style="background:#ddd;">${fmt(sumPaid)}</td>
+        <td class="num">${fmt(sumAccrual)}</td>
+        <td class="num">${fmt(sumPaid)}</td>
       </tr>
     `;
+    $('pension_install_print_tbody').innerHTML = bodyHtml;
 
     $('pensionInstallPrintArea').style.display = 'block';
     const landscapeStyle = document.createElement('style');
@@ -3104,13 +3104,13 @@ function printPensionRegister() {
     </tr>
   `;
   const subtotalHtml = (branch, arr) => `
-    <tr style="font-weight:600; background:#f8f8f8;">
+    <tr class="hr-total-row">
       <td colspan="5">${esc(branch)} 소계 (${arr.length}명)</td>
       <td class="num">${fmt(sum(arr,'cumulative_estimate'))}</td>
       <td class="num">${fmt(sum(arr,'total_contributed'))}</td>
       <td class="num">${fmt(sum(arr,'balance'))}</td>
-      <td class="num" style="background:#eee;">${fmt(sum(arr,'ytd_accrual'))}</td>
-      <td class="num" style="background:#eee;">${fmt(sum(arr,'ytd_paid'))}</td>
+      <td class="num">${fmt(sum(arr,'ytd_accrual'))}</td>
+      <td class="num">${fmt(sum(arr,'ytd_paid'))}</td>
     </tr>
   `;
 
@@ -3128,13 +3128,13 @@ function printPensionRegister() {
     html += subtotalHtml(b, byBranch[b]);
   });
   html += `
-    <tr style="font-weight:700; background:#e8e8e8;">
+    <tr class="hr-total-row">
       <td colspan="5">전체 합계 (${list.length}명)</td>
       <td class="num">${fmt(sum(list,'cumulative_estimate'))}</td>
       <td class="num">${fmt(sum(list,'total_contributed'))}</td>
       <td class="num">${fmt(sum(list,'balance'))}</td>
-      <td class="num" style="background:#ddd;">${fmt(sum(list,'ytd_accrual'))}</td>
-      <td class="num" style="background:#ddd;">${fmt(sum(list,'ytd_paid'))}</td>
+      <td class="num">${fmt(sum(list,'ytd_accrual'))}</td>
+      <td class="num">${fmt(sum(list,'ytd_paid'))}</td>
     </tr>
   `;
   $('pension_print_tbody').innerHTML = html;
@@ -4407,7 +4407,6 @@ async function loadBonusReport() {
     const locked = data.locked;
     if (bonusReportCache.length === 0) {
       tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
-      $('bonusReportTfoot').innerHTML = '';
       return;
     }
 
@@ -4528,8 +4527,12 @@ function renderBonusReportTotals() {
     row.querySelector('.bonus-subtotal-decided').textContent = fmt(s.decided);
   });
 
-  $('bonusReportTfoot').innerHTML = `
-    <tr class="hr-total-row">
+  // 전체 합계는 tfoot이 아니라 tbody 맨 끝의 일반 행으로 둠
+  // (tfoot으로 하면 표가 여러 페이지로 나뉠 때 브라우저가 매 페이지마다 자동으로 반복 출력해버림)
+  const existingGrandTotal = document.querySelector('.bonus-grand-total-row');
+  if (existingGrandTotal) existingGrandTotal.remove();
+  $('bonusReportTbody').insertAdjacentHTML('beforeend', `
+    <tr class="hr-total-row bonus-grand-total-row">
       <td colspan="9">전체 합계</td>
       <td class="num">${fmt(sumY2)}</td>
       <td colspan="3"></td>
@@ -4539,7 +4542,7 @@ function renderBonusReportTotals() {
       <td class="num" style="background:#fff9ec;">${fmt(sumDecided)}</td>
       <td colspan="3"></td>
     </tr>
-  `;
+  `);
 }
 
 function collectBonusReportInputs() {
@@ -4692,7 +4695,7 @@ function printBonusReportDecision() {
 
   // 데이터 행(개별 직원)만 컬럼 제거: 17,19,20,21번째(1-based) td 제거, 결정성과급(18번째)만 남김
   Array.from(clone.querySelectorAll('tbody tr')).forEach(tr => {
-    if (tr.classList.contains('bonus-subtotal-row')) return; // 소계행은 아래서 별도 처리
+    if (tr.classList.contains('bonus-subtotal-row') || tr.classList.contains('bonus-grand-total-row')) return; // 소계/전체합계행은 아래서 별도 처리
     const cells = Array.from(tr.children);
     if (cells.length < 21) return;
     [cells[16], cells[18], cells[19], cells[20]].forEach(td => td && td.remove()); // 0-based: 16=결정기준율,18=증감,19=%,20=비고
@@ -4707,8 +4710,8 @@ function printBonusReportDecision() {
     cells[7].remove(); // 증감,%,비고 자리(colspan=3) 통째로 제거 -> 결정성과급 뒤에 아무것도 안 남게
   };
   clone.querySelectorAll('tbody tr.bonus-subtotal-row').forEach(fixTotalRow);
-  const tfootRow = clone.querySelector('tfoot tr');
-  if (tfootRow) fixTotalRow(tfootRow);
+  const grandTotalRow = clone.querySelector('.bonus-grand-total-row');
+  if (grandTotalRow) fixTotalRow(grandTotalRow);
 
   $('bonus_print_table_container').innerHTML = '';
   $('bonus_print_table_container').appendChild(clone);
