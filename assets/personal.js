@@ -39,7 +39,7 @@ async function fetchPersonalOccurrencesShared(from, to) {
   const key = `${from}|${to}`;
   if (personalOccurrencePending.has(key)) return personalOccurrencePending.get(key);
   const request = (async () => {
-    const res = await fetch(`${apiBase()}/api/personal_schedule?from=${from}&to=${to}&status=all`, { headers: authHeaders() });
+    const res = await fetch(`${apiBase()}/api/personal_schedule?from=${from}&to=${to}&status=all&skip_prepare=1`, { headers: authHeaders() });
     if (handle401(res)) return [];
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '일정 조회 실패');
@@ -73,20 +73,31 @@ async function perLogin() {
   }
 }
 
-function showMain() {
+async function showMain() {
   $('mainSidebar').style.display = '';
   $('loginPanel').style.display = 'none';
   $('perMain').style.display = 'flex';
   if (sessionStorage.getItem('chwork_hr_role') === 'family') {
     document.querySelectorAll('.admin-only-nav').forEach(el => el.style.display = 'none');
   }
-  loadMembers().then(() => {
-    initPerCalState();
-    loadPersonalReminderBanner();
-    loadPersonalOccurrences();
-    loadPerCalendar();
-  });
-  loadFamilyNotes();
+  await Promise.all([loadMembers(), preparePersonalScheduleData()]);
+  initPerCalState();
+  loadPersonalOccurrences();
+  loadPerCalendar();
+  loadPersonalReminderBanner();
+  const loadNotesLater = () => loadFamilyNotes();
+  if ('requestIdleCallback' in window) requestIdleCallback(loadNotesLater, { timeout: 1200 });
+  else setTimeout(loadNotesLater, 250);
+}
+
+async function preparePersonalScheduleData() {
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_schedule?prepare=1`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    if (!res.ok) throw new Error('일정 준비 실패');
+  } catch (e) {
+    // 조회 화면에서 구체적인 오류를 표시할 수 있도록 여기서는 진행을 막지 않습니다.
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -200,7 +211,7 @@ async function deleteMember(id) {
 async function loadPersonalReminderBanner() {
   const wrap = $('perReminderBannerWrap');
   try {
-    const res = await fetch(`${apiBase()}/api/personal_schedule?upcoming=1`, { headers: authHeaders() });
+    const res = await fetch(`${apiBase()}/api/personal_schedule?upcoming=1&skip_prepare=1`, { headers: authHeaders() });
     if (handle401(res)) return;
     const data = await res.json();
     const list = data.upcoming || [];
