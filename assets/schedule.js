@@ -707,6 +707,19 @@ function initCalendarState() {
   calYear = now.getFullYear();
   calMonth = now.getMonth();
 }
+
+function syncCalMonthPicker() {
+  $('calMonthPicker').value = `${calYear}-${String(calMonth + 1).padStart(2, '0')}`;
+}
+
+function calPickMonth() {
+  const value = $('calMonthPicker').value;
+  if (!/^\d{4}-\d{2}$/.test(value)) return;
+  const [year, month] = value.split('-').map(Number);
+  calYear = year;
+  calMonth = month - 1;
+  loadCalendar();
+}
 initCalendarState();
 
 function calPrevMonth() {
@@ -727,7 +740,7 @@ function calToday() {
 }
 
 async function loadCalendar() {
-  $('calMonthLabel').textContent = `${calYear}년 ${calMonth + 1}월`;
+  syncCalMonthPicker();
 
   const monthStart = new Date(calYear, calMonth, 1);
   const monthEnd = new Date(calYear, calMonth + 1, 0);

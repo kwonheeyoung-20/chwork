@@ -127,12 +127,18 @@ const CATEGORY_EMOJI = {
   '생일': '🎂',
   '기념일': '💝',
   '결제일': '💳',
-  '학원': '📚',
+  '학교': '🏫',
+  '학원': '🏫',
+  '회사': '🏢',
   '일정': '📌',
   '기타': '⭐',
 };
 function categoryEmoji(category) {
   return CATEGORY_EMOJI[category] || '📌';
+}
+
+function personalCategoryLabel(category) {
+  return category === '학원' ? '학교' : (category || '-');
 }
 
 function memberColor(name) {
@@ -227,6 +233,19 @@ function initPerCalState() {
   perCalMonth = now.getMonth();
 }
 
+function syncPerCalMonthPicker() {
+  $('perCalMonthPicker').value = `${perCalYear}-${String(perCalMonth + 1).padStart(2, '0')}`;
+}
+
+function perCalPickMonth() {
+  const value = $('perCalMonthPicker').value;
+  if (!/^\d{4}-\d{2}$/.test(value)) return;
+  const [year, month] = value.split('-').map(Number);
+  perCalYear = year;
+  perCalMonth = month - 1;
+  loadPerCalendar();
+}
+
 function perCalPrevMonth() {
   perCalMonth -= 1;
   if (perCalMonth < 0) { perCalMonth = 11; perCalYear -= 1; }
@@ -243,7 +262,7 @@ function perCalToday() {
 }
 
 async function loadPerCalendar() {
-  $('perCalMonthLabel').textContent = `${perCalYear}년 ${perCalMonth + 1}월`;
+  syncPerCalMonthPicker();
   const monthStart = new Date(perCalYear, perCalMonth, 1);
   const monthEnd = new Date(perCalYear, perCalMonth + 1, 0);
   const fromStr = toISO(monthStart);
@@ -293,8 +312,18 @@ let perCalByDate = {};
 function renderPerCalendar(occurrences, monthStart, monthEnd) {
   const byDate = {};
   occurrences.forEach(o => {
-    if (!byDate[o.due_date]) byDate[o.due_date] = [];
-    byDate[o.due_date].push(o);
+    const task = o.personal_schedule_tasks || {};
+    const isPeriod = task.recurrence_type === 'once' && task.end_date && task.end_date >= o.due_date;
+    let cursor = new Date(o.due_date + 'T00:00:00');
+    const last = isPeriod ? new Date(task.end_date + 'T00:00:00') : cursor;
+    while (cursor <= last) {
+      const date = toISO(cursor);
+      if (date >= toISO(monthStart) && date <= toISO(monthEnd)) {
+        if (!byDate[date]) byDate[date] = [];
+        byDate[date].push(o);
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
   });
   perCalByDate = byDate;
   const todayStr = toISO(new Date());
@@ -420,8 +449,8 @@ async function loadPersonalOccurrences() {
         <tr>
           <td>${esc(o.due_date)}${task.date_type === 'lunar' ? ' <span style="font-size:10px; color:var(--accent);">(음력)</span>' : ''}</td>
           <td><span class="member-chip" style="background:${color}; font-size:11px;">${esc(task.member_name || '-')}</span></td>
-          <td>${categoryEmoji(task.category)} ${esc(task.category || '-')}</td>
-          <td>${esc(task.title || '-')}${task.is_private ? ' 🔒' : ''}</td>
+          <td>${categoryEmoji(task.category)} ${esc(personalCategoryLabel(task.category))}</td>
+          <td>${esc(task.title || '-')}${task.recurrence_type === 'once' && task.end_date && task.end_date > o.due_date ? ` <span style="font-size:11px; color:var(--text-muted);">(~${esc(task.end_date)})</span>` : ''}${task.is_private ? ' 🔒' : ''}</td>
           <td style="font-size:12px; color:var(--text-secondary);">${[task.note ? esc(task.note) : null, o.completed_note ? '완료메모: ' + esc(o.completed_note) : null].filter(Boolean).join('<br>') || '-'}</td>
           <td>${statusLabel}</td>
           <td style="white-space:nowrap;">${actionsHtml}</td>
@@ -511,10 +540,12 @@ async function deletePersonalTaskDirect(taskId) {
 
 /* ── 일정 추가 ── */
 function togglePersonalRecurrenceFields() {
+  const isOnce = $('pe_recurrence').value === 'once';
   const isWeekly = $('pe_recurrence').value === 'weekly';
   const isYearly = $('pe_recurrence').value === 'yearly';
   $('peIntervalWrap').style.display = isWeekly ? 'inline' : 'none';
   $('peLunarWrap').style.display = isYearly ? 'flex' : 'none';
+  $('peEndDateLabel').firstChild.textContent = isOnce ? '기간 종료일(선택) ' : '반복 종료일(선택) ';
   if (!isYearly) $('pe_is_lunar').checked = false;
   updateLunarPreview();
 }
@@ -571,7 +602,7 @@ async function editPersonalTask(taskId) {
     $('personalEventModalTitle').textContent = '일정 수정';
     $('personalEventDeleteBtn').style.display = 'inline-block';
     $('pe_member').value = t.member_name;
-    $('pe_category').value = t.category || '일정';
+    $('pe_category').value = t.category === '학원' ? '학교' : (t.category || '일정');
     $('pe_title').value = t.title || '';
     const uiRecurrence = (t.recurrence_type === 'monthly' && t.interval_value === 12) ? 'yearly' : t.recurrence_type;
     $('pe_recurrence').value = uiRecurrence;
@@ -619,6 +650,11 @@ async function savePersonalEvent() {
   if (uiRecurrence === 'yearly') { recurrence_type = 'monthly'; interval_value = 12; }
   else if (uiRecurrence === 'weekly') { interval_value = Number($('pe_interval').value) || 1; }
   const isLunar = uiRecurrence === 'yearly' && $('pe_is_lunar').checked;
+  const endDate = $('pe_end_date').value || null;
+  if (uiRecurrence === 'once' && endDate && endDate < anchorDate) {
+    $('personalEventModalMsg').textContent = '기간 종료일은 시작일보다 빠를 수 없습니다.';
+    return;
+  }
 
   const payload = {
     member_name: memberName,
@@ -628,7 +664,7 @@ async function savePersonalEvent() {
     interval_value,
     anchor_date: anchorDate,
     date_type: isLunar ? 'lunar' : 'solar',
-    end_date: $('pe_end_date').value || null,
+    end_date: endDate,
     reminder_days_before: Number($('pe_reminder_days').value) || 0,
     note: $('pe_note').value.trim() || null,
     is_private: $('pe_is_private').checked,

@@ -195,7 +195,7 @@ async function loadContractAlerts() {
 
 /* ── 개인 일정관리 알림 ── */
 async function loadPersonalAlerts() {
-  const CATEGORY_EMOJI = { '생일': '🎂', '기념일': '💝', '결제일': '💳', '학원': '📚', '일정': '📌', '기타': '⭐' };
+  const CATEGORY_EMOJI = { '생일': '🎂', '기념일': '💝', '결제일': '💳', '학교': '🏫', '학원': '🏫', '회사': '🏢', '일정': '📌', '기타': '⭐' };
   const catEmoji = c => CATEGORY_EMOJI[c] || '📌';
   const wrap = $('personalAlertWrap');
   try {
@@ -295,6 +295,7 @@ function renderTodoGroup(containerId, items) {
     <div class="todo-item ${t.done ? 'done' : ''}">
       <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTodo('${t.id}', this.checked)">
       <span class="todo-text">${esc(t.content)}</span>
+      <span class="todo-del" onclick="editTodo('${t.id}')">수정</span>
       ${!t.done ? `<span class="todo-del" onclick="carryOverTodo('${t.id}')">다음날로 이월</span>` : ''}
       <span class="todo-del" onclick="deleteTodo('${t.id}')">삭제</span>
     </div>
@@ -346,6 +347,25 @@ async function toggleTodo(id, done) {
     loadTodos();
   } catch (e) {
     alert('처리 중 오류가 발생했습니다.');
+  }
+}
+
+async function editTodo(id) {
+  const item = (todoItemsCache || []).find(t => t.id === id);
+  if (!item) return;
+  const content = prompt('할 일 문구를 수정해주세요.', item.content || '');
+  if (content === null) return;
+  const trimmed = content.trim();
+  if (!trimmed) { alert('할 일 문구는 비워둘 수 없습니다.'); return; }
+  if (trimmed === item.content) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/daily_todos?id=${id}`, {
+      method: 'PATCH', headers: authHeaders(true), body: JSON.stringify({ content: trimmed }),
+    });
+    if (!res.ok) throw new Error('failed');
+    loadTodos();
+  } catch (e) {
+    alert('수정 중 오류가 발생했습니다.');
   }
 }
 
