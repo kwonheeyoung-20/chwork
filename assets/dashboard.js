@@ -294,10 +294,16 @@ function renderTodoGroup(containerId, items) {
   el.innerHTML = items.map(t => `
     <div class="todo-item ${t.done ? 'done' : ''}">
       <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTodo('${t.id}', this.checked)">
-      <span class="todo-text">${esc(t.content)}</span>
-      <span class="todo-del" onclick="editTodo('${t.id}')">수정</span>
-      ${!t.done ? `<span class="todo-del" onclick="carryOverTodo('${t.id}')">다음날로 이월</span>` : ''}
-      <span class="todo-del" onclick="deleteTodo('${t.id}')">삭제</span>
+      ${editingTodoId === t.id ? `
+        <input id="todoEditInput" class="hr-input" value="${esc(t.content)}" style="flex:1; min-width:0; padding:5px 8px;" onkeydown="if(event.key==='Enter') saveTodoEdit('${t.id}'); if(event.key==='Escape') cancelTodoEdit();">
+        <span class="todo-del" style="color:var(--accent); font-weight:600;" onclick="saveTodoEdit('${t.id}')">저장</span>
+        <span class="todo-del" onclick="cancelTodoEdit()">취소</span>
+      ` : `
+        <span class="todo-text">${esc(t.content)}</span>
+        <span class="todo-del" onclick="startTodoEdit('${t.id}')">수정</span>
+        ${!t.done ? `<span class="todo-del" onclick="carryOverTodo('${t.id}')">다음날로 이월</span>` : ''}
+        <span class="todo-del" onclick="deleteTodo('${t.id}')">삭제</span>
+      `}
     </div>
   `).join('');
 }
@@ -350,19 +356,37 @@ async function toggleTodo(id, done) {
   }
 }
 
-async function editTodo(id) {
+let editingTodoId = null;
+
+function startTodoEdit(id) {
   const item = (todoItemsCache || []).find(t => t.id === id);
   if (!item) return;
-  const content = prompt('할 일 문구를 수정해주세요.', item.content || '');
-  if (content === null) return;
-  const trimmed = content.trim();
+  editingTodoId = id;
+  renderTodos(todoItemsCache);
+  requestAnimationFrame(() => {
+    const input = $('todoEditInput');
+    if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+  });
+}
+
+function cancelTodoEdit() {
+  editingTodoId = null;
+  renderTodos(todoItemsCache);
+}
+
+async function saveTodoEdit(id) {
+  const item = (todoItemsCache || []).find(t => t.id === id);
+  const input = $('todoEditInput');
+  if (!item || !input) return;
+  const trimmed = input.value.trim();
   if (!trimmed) { alert('할 일 문구는 비워둘 수 없습니다.'); return; }
-  if (trimmed === item.content) return;
+  if (trimmed === item.content) { cancelTodoEdit(); return; }
   try {
     const res = await fetch(`${apiBase()}/api/daily_todos?id=${id}`, {
       method: 'PATCH', headers: authHeaders(true), body: JSON.stringify({ content: trimmed }),
     });
     if (!res.ok) throw new Error('failed');
+    editingTodoId = null;
     loadTodos();
   } catch (e) {
     alert('수정 중 오류가 발생했습니다.');
