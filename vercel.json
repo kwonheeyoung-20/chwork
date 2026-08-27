@@ -47,6 +47,11 @@
       "config": { "maxLambdaSize": "50mb" }
     },
     {
+      "src": "api/hr_storage_backup.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "50mb" }
+    },
+    {
       "src": "api/workspace.py",
       "use": "@vercel/python",
       "config": { "maxLambdaSize": "50mb" }
@@ -87,6 +92,7 @@
     { "src": "/api/hr_payroll", "dest": "api/hr_payroll.py" },
     { "src": "/api/hr_other_payments", "dest": "api/hr_other_payments.py" },
     { "src": "/api/hr_backup", "dest": "api/hr_backup.py" },
+    { "src": "/api/hr_storage_backup", "dest": "api/hr_storage_backup.py" },
     { "src": "/api/schedule", "dest": "api/workspace.py?resource=schedule" },
     { "src": "/api/contacts", "dest": "api/workspace.py?resource=contacts" },
     { "src": "/api/contract_docs", "dest": "api/workspace.py?resource=contractdocs" },
