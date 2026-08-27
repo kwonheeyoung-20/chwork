@@ -311,18 +311,24 @@ let perCalByDate = {};
 
 function renderPerCalendar(occurrences, monthStart, monthEnd) {
   const byDate = {};
+  const visibleStart = new Date(toISO(monthStart) + 'T00:00:00');
+  const visibleEnd = new Date(toISO(monthEnd) + 'T00:00:00');
   occurrences.forEach(o => {
     const task = o.personal_schedule_tasks || {};
     const isPeriod = task.recurrence_type === 'once' && task.end_date && task.end_date >= o.due_date;
-    let cursor = new Date(o.due_date + 'T00:00:00');
-    const last = isPeriod ? new Date(task.end_date + 'T00:00:00') : cursor;
-    while (cursor <= last) {
+    const eventStart = new Date(o.due_date + 'T00:00:00');
+    const eventEnd = isPeriod ? new Date(task.end_date + 'T00:00:00') : eventStart;
+    // 기간 전체를 순회하지 않고 현재 보이는 달과 겹치는 최대 31일만 계산합니다.
+    // 기존 데이터에 비정상적으로 먼 종료일이 있어도 브라우저가 멈추지 않습니다.
+    let cursor = new Date(Math.max(eventStart.getTime(), visibleStart.getTime()));
+    const last = new Date(Math.min(eventEnd.getTime(), visibleEnd.getTime()));
+    let renderedDays = 0;
+    while (cursor <= last && renderedDays < 31) {
       const date = toISO(cursor);
-      if (date >= toISO(monthStart) && date <= toISO(monthEnd)) {
-        if (!byDate[date]) byDate[date] = [];
-        byDate[date].push(o);
-      }
+      if (!byDate[date]) byDate[date] = [];
+      byDate[date].push(o);
       cursor.setDate(cursor.getDate() + 1);
+      renderedDays += 1;
     }
   });
   perCalByDate = byDate;
