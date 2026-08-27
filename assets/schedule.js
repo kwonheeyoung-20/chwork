@@ -45,7 +45,6 @@ function showMain() {
   setPresetRange('thisMonth');
   loadReminderBanner();
   loadTasks();
-  loadOccurrences();
   loadCalendar();
 }
 

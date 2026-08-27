@@ -1162,8 +1162,11 @@ async function calcSettlement() {
   const retireDate = $('s_retire_date').value;
   if (!employeeId || !retireDate) {
     $('settlementResult').style.display = 'none';
+    $('settlementMsg').textContent = '';
     return;
   }
+  $('settlementMsg').textContent = '퇴사일 기준 정산금액을 계산하고 있습니다…';
+  $('settlementResult').style.opacity = '0.55';
   try {
     const res = await fetch(`${apiBase()}/api/hr_settlement?employee_id=${employeeId}&retire_date=${retireDate}`, {
       headers: { 'X-HR-Password': hrPassword() },
@@ -1185,10 +1188,14 @@ async function calcSettlement() {
     $('settlementResult').dataset.add = data.additional_payment;
     $('settlementResult').dataset.yearly = JSON.stringify(data.yearly || []);
     $('settlementResult').style.display = 'block';
+    $('settlementResult').style.opacity = '1';
+    $('settlementMsg').textContent = '';
     renderYearlyTable(data.yearly || []);
     calcNet();
   } catch (e) {
     $('settlementMsg').textContent = '계산 중 오류가 발생했습니다.';
+  } finally {
+    $('settlementResult').style.opacity = '1';
   }
 }
 
@@ -3976,10 +3983,24 @@ function renderDocFileLinks(files) {
   // 파일이 여러 개면 <br>로 세로로 쌓으면 그 행만 세로로 길어져서(가로스크롤 표라 안 보이는 채로)
   // 표 전체 줄 간격이 이상하게 벌어져 보이는 문제가 있어, 한 줄로 이어서 표시하고 필요하면 가로 스크롤로 보게 함.
   return files.map(f =>
-    f.view_url
-      ? `<a href="${esc(f.view_url)}" target="_blank" rel="noopener" download="${esc(f.file_name || '')}" class="hr-file-link">📎 ${esc(f.file_name || '보기')}</a>`
-      : `${esc(f.file_name || '')} (만료된 링크, 새로고침 필요)`
+    `<a href="#" onclick="openContractDocFile('${f.id}'); return false;" class="hr-file-link">📎 ${esc(f.file_name || '보기')}</a>`
   ).join(' ');
+}
+
+async function openContractDocFile(fileId) {
+  const popup = window.open('', '_blank');
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs?file_id=${encodeURIComponent(fileId)}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok || !data.view_url) throw new Error(data.error || '파일 열기 실패');
+    if (popup) popup.location.href = data.view_url;
+    else window.location.href = data.view_url;
+  } catch (e) {
+    if (popup) popup.close();
+    alert(e.message || '첨부파일을 열지 못했습니다.');
+  }
 }
 
 function contractDocStatus(c) {
@@ -4196,7 +4217,7 @@ function renderExistingFilesList(docId, files) {
   $('cdExistingFilesWrap').style.display = 'block';
   $('cdExistingFilesList').innerHTML = files.map(f => `
     <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 8px; background:var(--bg); border-radius:var(--radius-sm); font-size:12px;">
-      <a href="${esc(f.view_url || '#')}" target="_blank" rel="noopener" download="${esc(f.file_name || '')}" class="hr-edit-link">${esc(f.file_name || '파일')}</a>
+      <a href="#" onclick="openContractDocFile('${f.id}'); return false;" class="hr-edit-link">${esc(f.file_name || '파일')}</a>
       <a class="hr-edit-link" onclick="deleteContractDocFile('${f.id}', '${docId}')" style="color:var(--red); flex-shrink:0;">삭제</a>
     </div>
   `).join('');

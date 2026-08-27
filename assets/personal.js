@@ -69,7 +69,6 @@ function showMain() {
     loadPersonalOccurrences();
     loadPerCalendar();
   });
-  loadTimetable();
   loadFamilyNotes();
 }
 
@@ -82,6 +81,10 @@ function switchPerTab(name) {
   document.querySelectorAll('[data-persub]').forEach(b => b.classList.toggle('active', b.dataset.persub === name));
   $('perFamilyView').style.display = name === 'family' ? 'block' : 'none';
   $('perTimetableView').style.display = name === 'timetable' ? 'block' : 'none';
+  if (name === 'timetable' && $('perTimetableView').dataset.loaded !== '1') {
+    $('perTimetableView').dataset.loaded = '1';
+    loadTimetable();
+  }
 }
 
 /* ── 가족 구성원 ── */
