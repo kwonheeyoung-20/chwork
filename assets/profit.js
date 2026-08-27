@@ -522,7 +522,7 @@ async function finalizeMonthlyClosing() {
     note: input.value.trim() || null,
   }));
 
-  if (!confirm('이 내용으로 확정(마감)하시겠습니까? 확정하면 저장 목록에 등록됩니다.')) return;
+  if (!await appConfirm('이 내용으로 확정(마감)하시겠습니까? 확정하면 저장 목록에 등록됩니다.', '월마감 확정')) return;
 
   const btn = $('mcFinalizeBtn');
   if (btn) btn.disabled = true;

@@ -560,7 +560,7 @@ async function loadContractExpiring() {
 }
 
 async function convertContractToRegular(empId, name) {
-  const month = prompt(`${name} 님을 정규직으로 전환할 시작월을 입력해주세요 (예: 2026-08)`);
+  const month = await appPrompt(`${name} 님을 정규직으로 전환할 시작월을 입력해주세요 (예: 2026-08)`, '', '정규직 전환');
   if (!month) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_employees`, {

@@ -3,6 +3,7 @@
 function openSettingsModal() {
   updateThemeToggleUI();
   initFontSelectUI();
+  syncSettingsBackupRow();
   $('settingsModal').style.display = 'flex';
 }
 function closeSettingsModal() {
@@ -16,6 +17,26 @@ function openDataBackupSettings() {
   } else {
     window.location.href = 'hr.html#data-backup';
   }
+}
+
+function syncSettingsBackupRow() {
+  const settingsModal = document.getElementById('settingsModal');
+  if (!settingsModal) return;
+  const existingRow = settingsModal.querySelector('[data-settings-backup="1"]');
+  const isAdmin = sessionStorage.getItem('chwork_hr_role') === 'admin';
+  if (!isAdmin) {
+    if (existingRow) existingRow.remove();
+    return;
+  }
+  if (existingRow) return;
+  const logoutRow = settingsModal.querySelector('button[onclick="logoutUser()"]');
+  if (!logoutRow) return;
+  const backupRow = document.createElement('button');
+  backupRow.className = 'settings-row';
+  backupRow.dataset.settingsBackup = '1';
+  backupRow.onclick = openDataBackupSettings;
+  backupRow.innerHTML = '<span>💾 데이터 백업</span>';
+  logoutRow.parentNode.insertBefore(backupRow, logoutRow);
 }
 
 function applyFont(font) {
@@ -45,6 +66,95 @@ function updateThemeToggleUI() {
 }
 
 let appConfirmResolver = null;
+let appPromptResolver = null;
+const appAlertQueue = [];
+let appAlertVisible = false;
+
+function ensureAppAlertModal() {
+  if (document.getElementById('appAlertModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'appAlertModal';
+  modal.className = 'hr-modal-backdrop';
+  modal.style.display = 'none';
+  modal.innerHTML = `
+    <div class="hr-modal" style="width:460px; max-width:calc(100vw - 32px);">
+      <h2 id="appAlertTitle" style="margin-bottom:10px;">안내</h2>
+      <div id="appAlertMessage" style="font-size:13px; line-height:1.65; color:var(--text-secondary); white-space:pre-wrap; word-break:keep-all;"></div>
+      <div style="display:flex; justify-content:flex-end; margin-top:20px;">
+        <button class="primary" onclick="finishAppAlert()">확인</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function appAlert(message, title = '안내') {
+  appAlertQueue.push({ message: String(message ?? ''), title });
+  showNextAppAlert();
+}
+
+function showNextAppAlert() {
+  if (appAlertVisible || appAlertQueue.length === 0) return;
+  ensureAppAlertModal();
+  const next = appAlertQueue.shift();
+  document.getElementById('appAlertTitle').textContent = next.title;
+  document.getElementById('appAlertMessage').textContent = next.message;
+  document.getElementById('appAlertModal').style.display = 'flex';
+  appAlertVisible = true;
+}
+
+function finishAppAlert() {
+  const modal = document.getElementById('appAlertModal');
+  if (modal) modal.style.display = 'none';
+  appAlertVisible = false;
+  showNextAppAlert();
+}
+
+// 기존의 모든 완료·오류 문구는 유지하고 표시 방식만 앱 안내창으로 통일합니다.
+window.alert = appAlert;
+
+function ensureAppPromptModal() {
+  if (document.getElementById('appPromptModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'appPromptModal';
+  modal.className = 'hr-modal-backdrop';
+  modal.style.display = 'none';
+  modal.innerHTML = `
+    <div class="hr-modal" style="width:440px; max-width:calc(100vw - 32px);">
+      <h2 id="appPromptTitle" style="margin-bottom:10px;">입력</h2>
+      <div id="appPromptMessage" style="font-size:13px; line-height:1.65; color:var(--text-secondary); white-space:pre-wrap; word-break:keep-all; margin-bottom:12px;"></div>
+      <input id="appPromptInput" class="hr-input" style="width:100%;" autocomplete="off">
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:20px;">
+        <button class="secondary" onclick="finishAppPrompt(null)">취소</button>
+        <button class="primary" onclick="finishAppPrompt(document.getElementById('appPromptInput').value)">확인</button>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) finishAppPrompt(null); });
+  modal.querySelector('#appPromptInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') finishAppPrompt(e.target.value);
+    if (e.key === 'Escape') finishAppPrompt(null);
+  });
+  document.body.appendChild(modal);
+}
+
+function appPrompt(message, defaultValue = '', title = '입력') {
+  ensureAppPromptModal();
+  if (appPromptResolver) appPromptResolver(null);
+  document.getElementById('appPromptTitle').textContent = title;
+  document.getElementById('appPromptMessage').textContent = message;
+  const input = document.getElementById('appPromptInput');
+  input.value = defaultValue;
+  document.getElementById('appPromptModal').style.display = 'flex';
+  requestAnimationFrame(() => input.focus());
+  return new Promise(resolve => { appPromptResolver = resolve; });
+}
+
+function finishAppPrompt(result) {
+  const modal = document.getElementById('appPromptModal');
+  if (modal) modal.style.display = 'none';
+  const resolve = appPromptResolver;
+  appPromptResolver = null;
+  if (resolve) resolve(result);
+}
 
 function ensureAppConfirmModal() {
   if (document.getElementById('appConfirmModal')) return;
@@ -99,17 +209,7 @@ function toggleMobileSidebar() {
 
 document.addEventListener('DOMContentLoaded', () => {
   updateThemeToggleUI();
-  const settingsModal = document.getElementById('settingsModal');
-  const logoutRow = settingsModal && settingsModal.querySelector('button[onclick="logoutUser()"]');
-  const isAdmin = sessionStorage.getItem('chwork_hr_role') === 'admin';
-  if (isAdmin && logoutRow && !settingsModal.querySelector('[data-settings-backup="1"]')) {
-    const backupRow = document.createElement('button');
-    backupRow.className = 'settings-row';
-    backupRow.dataset.settingsBackup = '1';
-    backupRow.onclick = openDataBackupSettings;
-    backupRow.innerHTML = '<span>💾 데이터 백업</span>';
-    logoutRow.parentNode.insertBefore(backupRow, logoutRow);
-  }
+  syncSettingsBackupRow();
   document.querySelectorAll('.nav a').forEach(a => {
     a.addEventListener('click', () => {
       const sidebar = document.getElementById('mainSidebar');
