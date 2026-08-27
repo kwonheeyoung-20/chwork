@@ -412,7 +412,7 @@ async function carryOverTodo(id) {
   const nextDay = new Date(todoDate);
   nextDay.setDate(nextDay.getDate() + 1);
   const nextDayStr = localISO(nextDay);
-  if (!confirm(`이 할 일을 ${nextDayStr}(다음날)로 이월하시겠습니까?\n오늘 목록에서는 사라지고, 다음날 목록에 그대로 추가됩니다.`)) return;
+  if (!await appConfirm(`이 할 일을 ${nextDayStr}(다음날)로 이월하시겠습니까?\n오늘 목록에서는 사라지고, 다음날 목록에 그대로 추가됩니다.`, '할 일 이월')) return;
   try {
     const createRes = await fetch(`${apiBase()}/api/daily_todos`, {
       method: 'POST',

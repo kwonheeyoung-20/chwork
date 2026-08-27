@@ -651,7 +651,7 @@ function populateFieldDatalists(list) {
 }
 
 async function deleteEmployee(id, name) {
-  if (!confirm(`${name} 님을 삭제하시겠습니까?\n\n(이미 급여·연봉·퇴직연금 등 처리된 기록이 있으면 서버에서 자동으로 삭제가 거부됩니다. 완전히 빈 상태(예: 실수로 중복 등록)인 경우에만 실제로 삭제됩니다.)`)) return;
+  if (!await appConfirm(`${name} 님을 삭제하시겠습니까?\n\n(이미 급여·연봉·퇴직연금 등 처리된 기록이 있으면 서버에서 자동으로 삭제가 거부됩니다. 완전히 빈 상태(예: 실수로 중복 등록)인 경우에만 실제로 삭제됩니다.)`, '직원 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_employees?employee_id=${id}`, {
       method: 'DELETE',
@@ -1259,7 +1259,7 @@ async function saveSettlement() {
     note: $('s_note').value.trim() || null,
   };
 
-  if (!confirm('정산을 확정하시겠습니까? 저장 후 해당 직원은 "퇴사" 상태로 자동 변경되고, 추가불입액은 불입 기록에도 자동 등록됩니다.')) return;
+  if (!await appConfirm('정산을 확정하시겠습니까? 저장 후 해당 직원은 "퇴사" 상태로 자동 변경되고, 추가불입액은 불입 기록에도 자동 등록됩니다.', '퇴사자 정산 확정')) return;
 
   try {
     const res = await fetch(`${apiBase()}/api/hr_settlement`, {
@@ -1313,7 +1313,7 @@ async function loadSettlementHistory() {
 }
 
 async function revertSettlement(id, name) {
-  if (!confirm(`${name}님의 정산 확정을 되돌리시겠습니까?\n이 정산 기록과, 이때 자동 등록됐던 불입 기록이 함께 삭제되고, 해당 직원은 다시 "재직" 상태로 복구됩니다.`)) return;
+  if (!await appConfirm(`${name}님의 정산 확정을 되돌리시겠습니까?\n이 정산 기록과, 이때 자동 등록됐던 불입 기록이 함께 삭제되고, 해당 직원은 다시 "재직" 상태로 복구됩니다.`, '정산 확정 되돌리기')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_settlement?id=${id}`, {
       method: 'DELETE',
@@ -1456,7 +1456,7 @@ async function saveBulkContributions() {
     alert('입력된 금액이 없습니다. "발생액으로 채우기" 또는 "잔액으로 채우기"를 먼저 눌러주세요.');
     return;
   }
-  if (!confirm(`${items.length}명에게 총 ${fmt(items.reduce((s, i) => s + i.amount, 0))}원을 ${date}자로 저장하시겠습니까?`)) return;
+  if (!await appConfirm(`${items.length}명에게 총 ${fmt(items.reduce((s, i) => s + i.amount, 0))}원을 ${date}자로 저장하시겠습니까?`, '퇴직연금 일괄 저장')) return;
 
   try {
     const res = await fetch(`${apiBase()}/api/hr_pension`, {
@@ -1604,7 +1604,7 @@ async function saveMultiplier() {
 }
 
 async function deleteMultiplier(id, employeeId) {
-  if (!confirm('이 배수 설정을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 배수 설정을 삭제하시겠습니까?', '배수 설정 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_pension?id=${id}&type=multiplier`, {
       method: 'DELETE',
@@ -1649,7 +1649,7 @@ function closeHistoryModal() {
 }
 
 async function deleteContribution(contribId, employeeId, name) {
-  if (!confirm('이 불입 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.')) return;
+  if (!await appConfirm('이 불입 기록을 삭제하시겠습니까? 되돌릴 수 없습니다.', '불입 기록 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_pension?id=${contribId}`, {
       method: 'DELETE',
@@ -1847,7 +1847,7 @@ function renderPayroll(list, savedMode) {
 
 async function deletePayrollRecord(employeeId, name) {
   const ym = payrollYearMonthDate();
-  if (!confirm(`${name} 님의 ${$('payrollMonth').value} 급여 기록을 삭제하시겠습니까?\n(직원 자체는 삭제되지 않고, 이 달의 급여 저장 기록만 지워집니다. 이후 삭제 안 되던 직원이 삭제 가능해질 수 있어요.)`)) return;
+  if (!await appConfirm(`${name} 님의 ${$('payrollMonth').value} 급여 기록을 삭제하시겠습니까?\n(직원 자체는 삭제되지 않고, 이 달의 급여 저장 기록만 지워집니다. 이후 삭제 안 되던 직원이 삭제 가능해질 수 있어요.)`, '급여 기록 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?payroll_employee_id=${employeeId}&payroll_month=${ym}`, {
       method: 'DELETE',
@@ -1864,7 +1864,7 @@ async function deletePayrollRecord(employeeId, name) {
 async function generatePayroll() {
   const ym = payrollYearMonthDate();
   if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
-  if (!confirm(`${$('payrollMonth').value} 급여명세를 생성/저장하시겠습니까? (이미 생성된 달이면 최신 계산값으로 덮어씁니다)`)) return;
+  if (!await appConfirm(`${$('payrollMonth').value} 급여명세를 생성/저장하시겠습니까? (이미 생성된 달이면 최신 계산값으로 덮어씁니다)`, '급여명세 생성·저장')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll`, {
       method: 'POST',
@@ -1972,7 +1972,7 @@ async function saveAdjustment() {
 }
 
 async function deleteAdjustment(id) {
-  if (!confirm('이 보정 내역을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 보정 내역을 삭제하시겠습니까?', '보정 내역 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_pension?id=${id}&type=adjustment`, {
       method: 'DELETE',
@@ -2057,7 +2057,7 @@ async function fetchLocks(apiPath) {
 async function lockPensionYear(locked) {
   const year = $('pensionLockYear').value;
   if (!year) return;
-  if (!confirm(`${year}년 퇴직연금 자료를 ${locked ? '마감' : '마감해제'} 하시겠습니까?`)) return;
+  if (!await appConfirm(`${year}년 퇴직연금 자료를 ${locked ? '마감' : '마감해제'} 하시겠습니까?`, '퇴직연금 마감 관리')) return;
   const ok = await lockPeriod('/api/hr_pension', year, locked);
   if (ok) refreshPensionLockStatus();
 }
@@ -2076,7 +2076,7 @@ async function refreshPensionLockStatus() {
 async function lockPayrollMonth(locked) {
   const ym = $('payrollMonth').value;
   if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
-  if (!confirm(`${ym} 급여 자료를 ${locked ? '마감' : '마감해제'} 하시겠습니까?`)) return;
+  if (!await appConfirm(`${ym} 급여 자료를 ${locked ? '마감' : '마감해제'} 하시겠습니까?`, '급여 마감 관리')) return;
   const ok = await lockPeriod('/api/hr_payroll', ym, locked);
   if (ok) refreshPayrollLockStatus();
 }
@@ -2095,7 +2095,7 @@ async function refreshPayrollLockStatus() {
 async function lockOtherPayYear(locked) {
   const year = $('otherpayYear').value;
   if (!year) return;
-  if (!confirm(`${year}년 성과급/기타지급 자료를 ${locked ? '마감' : '마감해제'} 하시겠습니까?`)) return;
+  if (!await appConfirm(`${year}년 성과급/기타지급 자료를 ${locked ? '마감' : '마감해제'} 하시겠습니까?`, '성과급 마감 관리')) return;
   const ok = await lockPeriod('/api/hr_other_payments', year, locked);
   if (ok) refreshOtherPayLockStatus();
 }
@@ -2227,7 +2227,7 @@ async function saveOtherPayment() {
 }
 
 async function deleteOtherPayment(id) {
-  if (!confirm('이 지급 내역을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 지급 내역을 삭제하시겠습니까?', '지급 내역 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_other_payments?id=${id}`, {
       method: 'DELETE',
@@ -2370,7 +2370,7 @@ async function saveBulkOtherPayments() {
     $('otherPayBulkMsg').textContent = '입력된 금액이 없습니다.';
     return;
   }
-  if (!confirm(`${items.length}명에게 "${paymentType}" ${fmt(items.reduce((s,i)=>s+i.amount,0))}원을 ${date.slice(0,7)}월로 저장하시겠습니까?`)) return;
+  if (!await appConfirm(`${items.length}명에게 "${paymentType}" ${fmt(items.reduce((s,i)=>s+i.amount,0))}원을 ${date.slice(0,7)}월로 저장하시겠습니까?`, '지급 내역 일괄 저장')) return;
 
   try {
     const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
@@ -2506,7 +2506,7 @@ async function saveRetroAdjustments() {
     return;
   }
   const uniqueEmployees = new Set(items.map(i => i.employee_id)).size;
-  if (!confirm(`${uniqueEmployees}명, 총 ${fmt(items.reduce((s,i)=>s+i.amount,0))}원을 ${targetMonth} 급여명세에 소급인상분으로 반영하시겠습니까?`)) return;
+  if (!await appConfirm(`${uniqueEmployees}명, 총 ${fmt(items.reduce((s,i)=>s+i.amount,0))}원을 ${targetMonth} 급여명세에 소급인상분으로 반영하시겠습니까?`, '소급인상분 반영')) return;
 
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll`, {
@@ -2598,7 +2598,7 @@ function toggleRetroLogDetail(empId) {
 }
 
 async function revertRetroLog(logId) {
-  if (!confirm('이 소급 지급 기록을 되돌리시겠습니까? 해당 급여명세월의 소급인상분에서 이 금액만큼 차감됩니다.')) return;
+  if (!await appConfirm('이 소급 지급 기록을 되돌리시겠습니까? 해당 급여명세월의 소급인상분에서 이 금액만큼 차감됩니다.', '소급 지급 되돌리기')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?retro_log_id=${logId}`, {
       method: 'DELETE',
@@ -2613,7 +2613,7 @@ async function revertRetroLog(logId) {
 }
 
 async function revertEmployeeRetroLog(empId, name) {
-  if (!confirm(`${name}님의 소급 지급 기록을 전부 되돌리시겠습니까? (마감된 달은 제외되고 나머지만 처리됩니다)`)) return;
+  if (!await appConfirm(`${name}님의 소급 지급 기록을 전부 되돌리시겠습니까? (마감된 달은 제외되고 나머지만 처리됩니다)`, '소급 지급 전체 되돌리기')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?revert_employee_id=${empId}`, {
       method: 'DELETE',
@@ -2631,7 +2631,7 @@ async function revertEmployeeRetroLog(empId, name) {
 }
 
 async function revertAllRetroLog() {
-  if (!confirm('모든 직원의 소급 지급 기록을 전부 되돌리시겠습니까? (마감된 달은 제외되고 나머지만 처리됩니다)')) return;
+  if (!await appConfirm('모든 직원의 소급 지급 기록을 전부 되돌리시겠습니까? (마감된 달은 제외되고 나머지만 처리됩니다)', '전체 소급 지급 되돌리기')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?revert_all=1`, {
       method: 'DELETE',
@@ -2717,7 +2717,7 @@ async function saveSalaryHistoryEdit(id) {
 }
 
 async function deleteSalaryHistoryRow(id, employeeId) {
-  if (!confirm('이 연봉 이력을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 연봉 이력을 삭제하시겠습니까?', '연봉 이력 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_employees?salary_history_id=${id}`, {
       method: 'DELETE',
@@ -2777,7 +2777,7 @@ async function saveBulkSalary() {
     $('bulkSalaryMsg').textContent = '입력된 인원이 없습니다.';
     return;
   }
-  if (!confirm(`${items.length}명의 연봉을 ${month}부터 새 금액으로 반영하시겠습니까?`)) return;
+  if (!await appConfirm(`${items.length}명의 연봉을 ${month}부터 새 금액으로 반영하시겠습니까?`, '연봉 일괄 반영')) return;
 
   try {
     const res = await fetch(`${apiBase()}/api/hr_employees`, {
@@ -2832,7 +2832,7 @@ async function loadSettingsHistoryInModal(employeeId) {
 }
 
 async function deleteSettingsHistoryRow(id, employeeId) {
-  if (!confirm('이 급여 요율 이력을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 급여 요율 이력을 삭제하시겠습니까?', '급여 요율 이력 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?settings_id=${id}`, {
       method: 'DELETE',
@@ -3005,7 +3005,7 @@ async function saveLeaveAdjustment() {
 }
 
 async function deleteLeaveAdjustment(id) {
-  if (!confirm('이 조정 내역을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 조정 내역을 삭제하시겠습니까?', '조정 내역 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?leave_adjustment_id=${id}`, {
       method: 'DELETE',
@@ -3866,7 +3866,7 @@ async function saveContact() {
 }
 
 async function deleteContact(id, name) {
-  if (!confirm(`"${name}" 거래처를 삭제하시겠습니까?`)) return;
+  if (!await appConfirm(`"${name}" 거래처를 삭제하시겠습니까?`, '거래처 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/contacts?id=${id}`, {
       method: 'DELETE',
@@ -3935,7 +3935,7 @@ async function loadContractDocsBanner() {
 }
 
 async function dismissContractAlert(id) {
-  if (!confirm('이 서류의 만료 알림을 그만 보시겠습니까? (서류 자체는 삭제되지 않습니다)')) return;
+  if (!await appConfirm('이 서류의 만료 알림을 그만 보시겠습니까? (서류 자체는 삭제되지 않습니다)', '만료 알림 해제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/contract_docs`, {
       method: 'POST',
@@ -4236,7 +4236,7 @@ function renderExistingFilesList(docId, files) {
 }
 
 async function deleteContractDocFile(fileId, docId) {
-  if (!confirm('이 첨부파일을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 첨부파일을 삭제하시겠습니까?', '첨부파일 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/contract_docs?file_id=${fileId}`, {
       method: 'DELETE',
@@ -4415,7 +4415,7 @@ async function saveContractDoc() {
 }
 
 async function deleteContractDoc(id, name) {
-  if (!confirm(`"${name}" 서류를 삭제하시겠습니까? 첨부된 파일도 함께 삭제됩니다.`)) return;
+  if (!await appConfirm(`"${name}" 서류를 삭제하시겠습니까? 첨부된 파일도 함께 삭제됩니다.`, '서류 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/contract_docs?id=${id}`, {
       method: 'DELETE',
@@ -4470,7 +4470,7 @@ async function confirmTerminate() {
 }
 
 async function reactivateContractDoc(id) {
-  if (!confirm('이 계약의 해지 처리를 취소하고 "계약유지중"으로 되돌리시겠습니까?')) return;
+  if (!await appConfirm('이 계약의 해지 처리를 취소하고 "계약유지중"으로 되돌리시겠습니까?', '계약 해지 취소')) return;
   try {
     const res = await fetch(`${apiBase()}/api/contract_docs`, {
       method: 'POST',
@@ -4775,7 +4775,7 @@ async function finalizeBonusReport() {
   const round = Number($('bonusRound').value);
   const payDate = $('bonusPayDate').value;
   if (!payDate) { alert('지급일자를 먼저 선택해주세요.'); return; }
-  if (!confirm(`${year}년 ${round}차 성과급을 확정(마감)하시겠습니까?\n결정된 금액이 "성과급/기타지급"에 자동 등록되고, 이 차수는 잠깁니다.`)) return;
+  if (!await appConfirm(`${year}년 ${round}차 성과급을 확정(마감)하시겠습니까?\n결정된 금액이 "성과급/기타지급"에 자동 등록되고, 이 차수는 잠깁니다.`, '성과급 확정')) return;
 
   const items = collectBonusReportInputs();
   try {
@@ -5152,7 +5152,7 @@ function downloadPromotionReportExcel(id) {
 }
 
 async function deletePromotionReport(id) {
-  if (!confirm('이 보고서를 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 보고서를 삭제하시겠습니까?', '보고서 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/promotions?id=${id}&type=report`, {
       method: 'DELETE',
@@ -5268,8 +5268,8 @@ async function addPositionHistory() {
   }
 }
 
-function unlockPositionHistoryRow(id) {
-  if (!confirm('이미 지난 시점(지난달 이전)의 직급이력이에요.\n이미 지급된 급여명세서의 계산 근거가 흔들릴 수 있으니 신중하게 진행해주세요.\n\n정말로 이 건을 급여반영/삭제하시겠습니까?')) return;
+async function unlockPositionHistoryRow(id) {
+  if (!await appConfirm('이미 지난 시점(지난달 이전)의 직급이력이에요.\n이미 지급된 급여명세서의 계산 근거가 흔들릴 수 있으니 신중하게 진행해주세요.\n\n정말로 이 건을 급여반영/삭제하시겠습니까?', '과거 직급이력 변경')) return;
   const h = promoHistoryCache.find(x => x.id === id);
   if (!h) return;
   const span = document.querySelector(`.promo-history-locked-actions[data-history-id="${id}"]`);
@@ -5281,7 +5281,7 @@ function unlockPositionHistoryRow(id) {
 }
 
 async function deletePositionHistory(id) {
-  if (!confirm('이 직급이력을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 직급이력을 삭제하시겠습니까?', '직급이력 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/promotions?id=${id}`, {
       method: 'DELETE',
@@ -5394,7 +5394,7 @@ async function savePositionStandard() {
 }
 
 async function deletePositionStandard(id) {
-  if (!confirm('이 직급 기준을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 직급 기준을 삭제하시겠습니까?', '직급 기준 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/promotions?id=${id}&type=standard`, {
       method: 'DELETE',

@@ -292,7 +292,7 @@ async function setCompleteStatus(occId, done, note) {
 }
 
 async function skipOccurrence(occId) {
-  if (!confirm('이 일정을 건너뛰시겠습니까? (완료가 아니라 "해당 없음/생략" 처리됩니다)')) return;
+  if (!await appConfirm('이 일정을 건너뛰시겠습니까? (완료가 아니라 "해당 없음/생략" 처리됩니다)', '일정 건너뛰기')) return;
   try {
     const res = await fetch(`${apiBase()}/api/schedule`, {
       method: 'POST',
@@ -309,7 +309,7 @@ async function skipOccurrence(occId) {
 }
 
 async function deleteOccurrence(occId) {
-  if (!confirm('이 일정(마감일 1건)을 삭제하시겠습니까?\n반복 업무라면 다음 조회시 같은 날짜로 다시 생성될 수 있습니다 (완전히 없애려면 아래 "업무 원본 관리"에서 삭제하세요).')) return;
+  if (!await appConfirm('이 일정(마감일 1건)을 삭제하시겠습니까?\n반복 업무라면 다음 조회시 같은 날짜로 다시 생성될 수 있습니다 (완전히 없애려면 아래 "업무 원본 관리"에서 삭제하세요).', '일정 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/schedule?occurrence_id=${occId}`, {
       method: 'DELETE',
@@ -413,7 +413,7 @@ async function toggleTaskActive(id, newActive) {
 }
 
 async function deleteTask(id, title) {
-  if (!confirm(`"${title}" 업무를 완전히 삭제하시겠습니까?\n이 업무의 모든 마감일 기록(완료 이력 포함)이 함께 삭제됩니다. 되돌릴 수 없습니다.\n\n(과거 이력은 남기고 앞으로만 안 나오게 하려면 삭제 대신 "중지"를 사용하세요.)`)) return;
+  if (!await appConfirm(`"${title}" 업무를 완전히 삭제하시겠습니까?\n이 업무의 모든 마감일 기록(완료 이력 포함)이 함께 삭제됩니다. 되돌릴 수 없습니다.\n\n(과거 이력은 남기고 앞으로만 안 나오게 하려면 삭제 대신 "중지"를 사용하세요.)`, '업무 완전 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/schedule?id=${id}`, {
       method: 'DELETE',
@@ -673,7 +673,7 @@ function handleScheduleUploadFile(event) {
       }
       let confirmMsg = `${items.length}건을 등록하시겠습니까?`;
       if (errors.length > 0) confirmMsg += `\n\n(형식 오류로 제외되는 ${errors.length}건)\n` + errors.join('\n');
-      if (!confirm(confirmMsg)) return;
+      if (!await appConfirm(confirmMsg, '일정 일괄등록')) return;
 
       const res = await fetch(`${apiBase()}/api/schedule`, {
         method: 'POST',

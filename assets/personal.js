@@ -198,7 +198,7 @@ async function saveMember() {
 }
 
 async function deleteMember(id) {
-  if (!confirm('이 구성원을 삭제하시겠습니까? (등록된 일정은 그대로 남습니다)')) return;
+  if (!await appConfirm('이 구성원을 삭제하시겠습니까? (등록된 일정은 그대로 남습니다)', '구성원 삭제')) return;
   try {
     await fetch(`${apiBase()}/api/personal_schedule?member_id=${id}`, { method: 'DELETE', headers: authHeaders() });
     await loadMembers();
@@ -507,7 +507,7 @@ async function confirmPerComplete() {
 }
 
 async function perSkip(occId) {
-  if (!confirm('이 일정을 건너뛰시겠습니까?')) return;
+  if (!await appConfirm('이 일정을 건너뛰시겠습니까?', '일정 건너뛰기')) return;
   try {
     const res = await fetch(`${apiBase()}/api/personal_schedule`, {
       method: 'POST', headers: authHeaders(true),
@@ -525,7 +525,7 @@ async function perSkip(occId) {
 }
 
 async function deletePersonalOccurrence(occId) {
-  if (!confirm('이 날짜의 일정을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 날짜의 일정을 삭제하시겠습니까?', '일정 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/personal_schedule?occurrence_id=${occId}`, { method: 'DELETE', headers: authHeaders() });
     if (!res.ok) {
@@ -540,7 +540,7 @@ async function deletePersonalOccurrence(occId) {
 }
 
 async function deletePersonalTaskDirect(taskId) {
-  if (!confirm('이 일정을 완전히 삭제하시겠습니까? (반복되는 모든 날짜가 함께 삭제됩니다)')) return;
+  if (!await appConfirm('이 일정을 완전히 삭제하시겠습니까? (반복되는 모든 날짜가 함께 삭제됩니다)', '일정 전체 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/personal_schedule?id=${taskId}`, { method: 'DELETE', headers: authHeaders() });
     if (!res.ok) {
@@ -640,7 +640,7 @@ async function editPersonalTask(taskId) {
 
 async function deletePersonalTaskFromModal() {
   if (!editingPersonalTaskId) return;
-  if (!confirm('이 일정을 완전히 삭제하시겠습니까? (반복되는 모든 날짜가 함께 삭제됩니다)')) return;
+  if (!await appConfirm('이 일정을 완전히 삭제하시겠습니까? (반복되는 모든 날짜가 함께 삭제됩니다)', '일정 전체 삭제')) return;
   try {
     await fetch(`${apiBase()}/api/personal_schedule?id=${editingPersonalTaskId}`, { method: 'DELETE', headers: authHeaders() });
     closePersonalEventModal();
@@ -961,13 +961,13 @@ async function savePeriod() {
 
 async function deletePeriodFromModal() {
   if (!editingPeriodId) return;
-  if (!confirm('이 교시를 삭제하시겠습니까? (배정된 과목도 함께 정리해주세요)')) return;
+  if (!await appConfirm('이 교시를 삭제하시겠습니까? (배정된 과목도 함께 정리해주세요)', '교시 삭제')) return;
   await quickDeletePeriod(editingPeriodId);
   closePeriodModal();
 }
 
 async function quickDeletePeriod(id) {
-  if (!confirm('이 교시를 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 교시를 삭제하시겠습니까?', '교시 삭제')) return;
   try {
     await fetch(`${apiBase()}/api/timetable?id=${id}&type=period`, { method: 'DELETE', headers: authHeaders() });
     loadTimetable();
@@ -1067,7 +1067,7 @@ async function saveTimetableEntry() {
 async function deleteTimetableEntryFromModal() {
   if (!editingTimetableEntryId) return;
   const isWholeRow = WHOLE_ROW_PERIODS.includes(pendingEntryPeriodLabel);
-  if (!confirm(isWholeRow ? '이 교시(월~금 전체)를 삭제하시겠습니까?' : '이 칸의 과목을 삭제하시겠습니까?')) return;
+  if (!await appConfirm(isWholeRow ? '이 교시(월~금 전체)를 삭제하시겠습니까?' : '이 칸의 과목을 삭제하시겠습니까?', '시간표 삭제')) return;
   try {
     if (isWholeRow) {
       const all = entriesCache.filter(x => x.period_label === pendingEntryPeriodLabel);
@@ -1268,7 +1268,7 @@ async function saveTeacher() {
 }
 
 async function deleteTeacher(id) {
-  if (!confirm('이 선생님 정보를 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 선생님 정보를 삭제하시겠습니까?', '선생님 정보 삭제')) return;
   try {
     await fetch(`${apiBase()}/api/timetable?id=${id}&type=teacher`, { method: 'DELETE', headers: authHeaders() });
     loadTeachers();
@@ -1402,7 +1402,7 @@ async function setFamilyNoteStatus(id, status) {
 }
 
 async function deleteFamilyNote(id) {
-  if (!confirm('이 메모를 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 메모를 삭제하시겠습니까?', '메모 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/family_notes?id=${id}`, { method: 'DELETE', headers: authHeaders() });
     if (!res.ok) {
