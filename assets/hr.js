@@ -33,6 +33,16 @@ async function downloadFullBackup() {
       throw new Error(detail);
     }
     const blob = await res.blob();
+    let backupInfo = null;
+    try {
+      backupInfo = JSON.parse(await blob.text());
+    } catch (parseErr) {
+      throw new Error('백업 파일 검증 실패 — 내려받은 자료가 올바른 JSON 형식이 아닙니다.');
+    }
+    if (!backupInfo || !backupInfo.tables || !backupInfo.summary) {
+      throw new Error('백업 파일 검증 실패 — 전체 데이터 백업 요약정보가 없습니다.');
+    }
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const today = new Date().toISOString().slice(0, 10);
@@ -45,8 +55,20 @@ async function downloadFullBackup() {
 
     const now = new Date();
     const stamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    localStorage.setItem('chwork_last_backup', stamp);
+    const summary = backupInfo.summary;
+    const warningCount = Number(summary.warning_table_count || 0);
+    const statusText = summary.complete
+      ? `완료 ${summary.successful_table_count}개 테이블, 총 ${Number(summary.total_row_count || 0).toLocaleString('ko-KR')}건${warningCount ? `, 선택항목 경고 ${warningCount}개` : ''}`
+      : `일부 오류 ${summary.failed_table_count}개 테이블`;
+    localStorage.setItem('chwork_last_backup', `${stamp} · ${statusText}`);
     refreshLastBackupLabel();
+
+    if (summary.complete) {
+      alert(`전체 데이터 백업이 완료되었습니다.\n\n정상 테이블: ${summary.successful_table_count}개\n데이터: 총 ${Number(summary.total_row_count || 0).toLocaleString('ko-KR')}건${warningCount ? `\n선택항목 경고: ${warningCount}개` : ''}\n\n※ Storage의 실제 첨부파일은 별도로 백업해야 합니다.`);
+    } else {
+      const failedNames = Object.keys(backupInfo._errors || {}).join(', ') || '확인 불가';
+      alert(`백업 파일은 내려받았지만 일부 테이블을 읽지 못했습니다.\n\n실패: ${summary.failed_table_count}개\n대상: ${failedNames}\n\n이 파일만으로는 완전한 백업이 아니므로 오류를 확인해주세요.`);
+    }
   } catch (e) {
     alert('백업 다운로드 중 오류가 발생했습니다: ' + (e.message || ''));
   } finally {
