@@ -33,6 +33,23 @@ function toISO(d) {
   return `${y}-${m}-${day}`;
 }
 
+const personalOccurrencePending = new Map();
+
+async function fetchPersonalOccurrencesShared(from, to) {
+  const key = `${from}|${to}`;
+  if (personalOccurrencePending.has(key)) return personalOccurrencePending.get(key);
+  const request = (async () => {
+    const res = await fetch(`${apiBase()}/api/personal_schedule?from=${from}&to=${to}&status=all`, { headers: authHeaders() });
+    if (handle401(res)) return [];
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '일정 조회 실패');
+    return data.occurrences || [];
+  })();
+  personalOccurrencePending.set(key, request);
+  request.finally(() => { setTimeout(() => personalOccurrencePending.delete(key), 0); });
+  return request;
+}
+
 /* ── 로그인 ── */
 async function perLogin() {
   const pw = $('pwInput').value;
@@ -232,10 +249,8 @@ async function loadPerCalendar() {
   const fromStr = toISO(monthStart);
   const toStr = toISO(monthEnd);
   try {
-    const res = await fetch(`${apiBase()}/api/personal_schedule?from=${fromStr}&to=${toStr}&status=all`, { headers: authHeaders() });
-    if (handle401(res)) return;
-    const data = await res.json();
-    renderPerCalendar(data.occurrences || [], monthStart, monthEnd);
+    const list = await fetchPersonalOccurrencesShared(fromStr, toStr);
+    renderPerCalendar(list, monthStart, monthEnd);
   } catch (e) {
     $('perCalGrid').innerHTML = `<div style="grid-column:1/-1; text-align:center; color:var(--red); padding:16px;">달력 불러오기 실패</div>`;
   }
@@ -376,12 +391,13 @@ async function loadPersonalOccurrences() {
   const from = $('perRangeFrom').value;
   const to = $('perRangeTo').value;
   try {
-    let url = `${apiBase()}/api/personal_schedule?from=${from}&to=${to}&status=${status}`;
-    if (member) url += `&member=${encodeURIComponent(member)}`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (handle401(res)) return;
-    const data = await res.json();
-    const list = data.occurrences || [];
+    let list = await fetchPersonalOccurrencesShared(from, to);
+    if (member) list = list.filter(o => (o.personal_schedule_tasks || {}).member_name === member);
+    if (status !== 'all') list = list.filter(o => o.status === status);
+    if (status === 'pending') {
+      const today = toISO(new Date());
+      list = list.filter(o => (o.personal_schedule_tasks || {}).category === '결제일' || o.due_date >= today);
+    }
     $('perOccCount').textContent = `총 ${list.length}건`;
     if (list.length === 0) {
       tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 일정이 없습니다.</td></tr>`;
@@ -651,21 +667,20 @@ async function loadTimetable() {
   const tbody = $('ttTbody');
   tbody.innerHTML = `<tr><td colspan="6" style="padding:24px; color:var(--text-muted);">불러오는 중…</td></tr>`;
   try {
-    const [periodsRes, entriesRes] = await Promise.all([
-      fetch(`${apiBase()}/api/timetable?periods=1`, { headers: authHeaders() }),
-      fetch(`${apiBase()}/api/timetable`, { headers: authHeaders() }),
-    ]);
-    if (handle401(periodsRes)) return;
-    const periodsData = await periodsRes.json();
-    const entriesData = await entriesRes.json();
-    periodsCache = periodsData.periods || [];
-    entriesCache = entriesData.entries || [];
+    const child = $('te_child') ? ($('te_child').value.trim() || '하진') : '하진';
+    const res = await fetch(`${apiBase()}/api/timetable?bundle=1&child=${encodeURIComponent(child)}`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '시간표 조회 실패');
+    periodsCache = data.periods || [];
+    entriesCache = data.entries || [];
+    teachersCache = data.teachers || [];
     renderTimetable(periodsCache, entriesCache);
     renderPeriodList(periodsCache);
+    renderTeachers();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="6" style="padding:24px; color:var(--red);">불러오기 실패</td></tr>`;
   }
-  loadTeachers();
 }
 
 let periodsCache = [];
@@ -1108,6 +1123,14 @@ async function loadTeachers() {
     if (handle401(res)) return;
     const data = await res.json();
     teachersCache = data.teachers || [];
+    renderTeachers();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function renderTeachers() {
+    const tbody = $('teacherTbody');
     $('subjectNameList').innerHTML = teachersCache.map(t => `<option value="${esc(t.subject_name)}">`).join('');
     if (teachersCache.length === 0) {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 선생님이 없습니다.</td></tr>`;
@@ -1132,9 +1155,6 @@ async function loadTeachers() {
         </td>
       </tr>
     `).join('');
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
-  }
 }
 
 function openTeacherModal() {
