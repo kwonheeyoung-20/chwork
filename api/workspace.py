@@ -772,6 +772,19 @@ class handler(BaseHTTPRequestHandler):
         return self._send(200, {"contacts": rows})
 
     def _get_contractdocs(self, qs):
+        file_id = qs.get("file_id", [None])[0]
+        if file_id:
+            rows = rest_request(
+                "GET", f"contract_document_files?id=eq.{file_id}&select=id,file_name,storage_path"
+            ) or []
+            if not rows:
+                return self._send(404, {"error": "첨부파일을 찾을 수 없습니다."})
+            row = rows[0]
+            view_url = storage_sign_url(row.get("storage_path"))
+            if not view_url:
+                return self._send(502, {"error": "첨부파일 열람주소를 만들지 못했습니다."})
+            return self._send(200, {"file_name": row.get("file_name"), "view_url": view_url})
+
         if qs.get("history", ["0"])[0] == "1":
             doc_id = qs.get("id", [None])[0]
             if not doc_id:
@@ -811,8 +824,6 @@ class handler(BaseHTTPRequestHandler):
         ) or []
         for r in rows:
             files = r.get("contract_document_files") or []
-            for f in files:
-                f["view_url"] = storage_sign_url(f.get("storage_path"))
             r["files"] = files
         return self._send(200, {"documents": rows})
 
