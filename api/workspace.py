@@ -1632,11 +1632,31 @@ class handler(BaseHTTPRequestHandler):
 
         path = (
             "personal_schedule_occurrences?due_date=gte." + from_date + "&due_date=lte." + to_date
-            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,note,date_type,is_private,created_by_role)&order=due_date.asc"
+            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,anchor_date,end_date,note,date_type,is_private,created_by_role)&order=due_date.asc"
         )
         if status_filter and status_filter != "all":
             path += "&status=eq." + status_filter
         rows = rest_request("GET", path) or []
+        # 이전 달에 시작해 조회 월까지 이어지는 일회성 기간 일정도 달력에 포함합니다.
+        spanning_tasks = rest_request(
+            "GET", "personal_schedule_tasks?recurrence_type=eq.once&end_date=gte." + from_date
+            + "&anchor_date=lt." + from_date
+            + "&select=id,title,category,member_name,recurrence_type,anchor_date,end_date,note,date_type,is_private,created_by_role"
+        ) or []
+        if spanning_tasks:
+            task_ids = ",".join(t["id"] for t in spanning_tasks)
+            spanning_occurrences = rest_request(
+                "GET", f"personal_schedule_occurrences?task_id=in.({task_ids})&select=*&order=due_date.asc"
+            ) or []
+            task_by_id = {t["id"]: t for t in spanning_tasks}
+            existing_ids = {r.get("id") for r in rows}
+            for occurrence in spanning_occurrences:
+                if occurrence.get("id") in existing_ids:
+                    continue
+                if status_filter and status_filter != "all" and occurrence.get("status") != status_filter:
+                    continue
+                occurrence["personal_schedule_tasks"] = task_by_id.get(occurrence.get("task_id")) or {}
+                rows.append(occurrence)
         if role == "family":
             rows = [r for r in rows if not (r.get("personal_schedule_tasks") or {}).get("is_private")]
         if member_filter:
@@ -1653,6 +1673,7 @@ class handler(BaseHTTPRequestHandler):
                     and r["due_date"] < today_iso
                 )
             ]
+        rows.sort(key=lambda r: (r.get("due_date") or "", r.get("id") or ""))
         return self._send(200, {"occurrences": rows})
 
     def _post_personal(self, payload):
