@@ -47,7 +47,8 @@ def _request(method, url, body=None, timeout=25):
 
 
 def _rest_rows():
-    path = "contract_document_files?select=id,document_id,file_name,storage_path,created_at&order=created_at.asc"
+    # 운영 테이블에는 created_at 컬럼이 없으므로 실제 저장에 사용하는 열만 조회합니다.
+    path = "contract_document_files?select=id,document_id,file_name,storage_path,file_size,content_type&order=id.asc"
     safe = urllib.parse.quote(path, safe="?&=,.*:()!~%")
     return _request("GET", f"{SUPABASE_URL}/rest/v1/{safe}") or []
 
