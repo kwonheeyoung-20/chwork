@@ -9,6 +9,15 @@ function closeSettingsModal() {
   $('settingsModal').style.display = 'none';
 }
 
+function openDataBackupSettings() {
+  closeSettingsModal();
+  if (typeof openDataBackupModal === 'function') {
+    openDataBackupModal();
+  } else {
+    window.location.href = 'hr.html#data-backup';
+  }
+}
+
 function applyFont(font) {
   document.documentElement.setAttribute('data-font', font);
   localStorage.setItem('chwork_font', font);
@@ -52,6 +61,16 @@ function toggleMobileSidebar() {
 
 document.addEventListener('DOMContentLoaded', () => {
   updateThemeToggleUI();
+  const settingsModal = document.getElementById('settingsModal');
+  const logoutRow = settingsModal && settingsModal.querySelector('button[onclick="logoutUser()"]');
+  if (logoutRow && !settingsModal.querySelector('[data-settings-backup="1"]')) {
+    const backupRow = document.createElement('button');
+    backupRow.className = 'settings-row';
+    backupRow.dataset.settingsBackup = '1';
+    backupRow.onclick = openDataBackupSettings;
+    backupRow.innerHTML = '<span>💾 데이터 백업</span>';
+    logoutRow.parentNode.insertBefore(backupRow, logoutRow);
+  }
   document.querySelectorAll('.nav a').forEach(a => {
     a.addEventListener('click', () => {
       const sidebar = document.getElementById('mainSidebar');

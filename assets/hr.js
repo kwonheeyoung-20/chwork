@@ -13,6 +13,15 @@ function refreshLastBackupLabel() {
   $('lastBackupLabel').textContent = saved ? `마지막 백업: ${saved}` : '아직 백업한 적 없음';
 }
 
+function openDataBackupModal() {
+  refreshLastBackupLabel();
+  $('dataBackupModal').style.display = 'flex';
+}
+
+function closeDataBackupModal() {
+  $('dataBackupModal').style.display = 'none';
+}
+
 async function downloadFullBackup() {
   const btn = $('backupBtn');
   const original = btn.textContent;
@@ -360,6 +369,7 @@ function switchMenuGroup(group) {
   // 매뉴얼 버튼 — 급여/퇴직급여 화면에서만 표시
   currentManualModule = (group === 'payroll') ? 'payroll' : (group === 'pension') ? 'pension' : null;
   $('manualBtn').style.display = currentManualModule ? 'inline-flex' : 'none';
+  $('manualToolsWrap').style.display = currentManualModule ? 'flex' : 'none';
 
   // 상단 탭바 렌더링 — "입력" 그룹과 "자료(조회)" 그룹 사이에 라벨+구분선을 넣어 구분
   const bar = $('hrTabBar');
@@ -458,11 +468,13 @@ function populateYearSelect(elId) {
 
 /* 페이지 로드시 이미 로그인된 세션이면 바로 목록 표시 */
 window.addEventListener('DOMContentLoaded', () => {
+  const openBackupAfterLogin = window.location.hash === '#data-backup';
   if (hrPassword() && sessionStorage.getItem('chwork_hr_role') !== 'family') { showMain(); }
   else if (hrPassword()) { window.location.href = 'personal.html'; return; }
   else { $('loginPanel').style.display = 'block'; }
   $('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') hrLogin(); });
   refreshLastBackupLabel();
+  if (openBackupAfterLogin && hrPassword()) openDataBackupModal();
 });
 
 /* ── 직원 목록 ── */
