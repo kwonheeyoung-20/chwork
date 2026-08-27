@@ -149,7 +149,13 @@ async function downloadStorageBackup() {
       headers: { 'X-HR-Password': hrPassword() },
       cache: 'no-store',
     });
-    const info = await res.json();
+    const responseText = await res.text();
+    let info;
+    try {
+      info = JSON.parse(responseText);
+    } catch (parseErr) {
+      throw new Error(`백업 API 응답 오류 (상태코드 ${res.status}). Vercel 배포에서 hr_storage_backup API 등록 여부를 확인해주세요.`);
+    }
     if (!res.ok) throw new Error(info.detail || info.error || `상태코드 ${res.status}`);
     if (!Array.isArray(info.files) || !info.files.length) throw new Error('contracts 버킷에 백업할 파일이 없습니다.');
     if ((info.missing_storage_paths || []).length) {
@@ -229,7 +235,6 @@ function showMain() {
   const validGroups = ['home', 'payroll', 'pension', 'contacts', 'contractdocs'];
   const hashGroup = (window.location.hash || '').replace('#', '');
   switchMenuGroup(validGroups.includes(hashGroup) ? hashGroup : 'home');
-  loadEmployees();
 }
 
 /* ── 탭 전환 ── */
@@ -394,6 +399,7 @@ function switchHrTab(name) {
   $('tab-salary_increase_report').style.display = name === 'salary_increase_report' ? 'block' : 'none';
   $('tab-contacts').style.display = name === 'contacts' ? 'block' : 'none';
   $('tab-contractdocs').style.display = name === 'contractdocs' ? 'block' : 'none';
+  if (name === 'employees') { loadEmployees(); }
   if (name === 'pension') { loadPensionStatus(); }
   if (name === 'pension_input') { populateYearSelect('pensionLockYear'); loadPension(); refreshPensionLockStatus(); loadPensionInstallmentList(); }
   if (name === 'settlement') { populateSettlementEmployeeSelect(); loadSettlementHistory(); }
@@ -460,7 +466,36 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ── 직원 목록 ── */
+const employeeLookupCache = { active: null, all: null };
+const employeeLookupPending = { active: null, all: null };
+
+function invalidateEmployeeLookupCache() {
+  employeeLookupCache.active = null;
+  employeeLookupCache.all = null;
+  employeeLookupPending.active = null;
+  employeeLookupPending.all = null;
+  document.querySelectorAll('select[data-employee-lookup="1"]').forEach(sel => { delete sel.dataset.loaded; });
+}
+
+async function getEmployeeLookup(includeAll = false) {
+  const key = includeAll ? 'all' : 'active';
+  if (employeeLookupCache[key]) return employeeLookupCache[key];
+  if (employeeLookupPending[key]) return employeeLookupPending[key];
+  employeeLookupPending[key] = (async () => {
+    const res = await fetch(`${apiBase()}/api/hr_employees${includeAll ? '?all=1' : ''}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    if (!res.ok) throw new Error(`직원 목록 조회 실패 (${res.status})`);
+    const data = await res.json();
+    const list = data.employees || [];
+    employeeLookupCache[key] = list;
+    return list;
+  })().finally(() => { employeeLookupPending[key] = null; });
+  return employeeLookupPending[key];
+}
+
 async function loadEmployees() {
+  invalidateEmployeeLookupCache();
   const showAll = $('showAllToggle').checked;
   const tbody = $('empTbody');
   tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
@@ -477,7 +512,9 @@ async function loadEmployees() {
       return;
     }
     const data = await res.json();
-    renderEmployees(data.employees || []);
+    const list = data.employees || [];
+    employeeLookupCache[showAll ? 'all' : 'active'] = list;
+    renderEmployees(list);
     loadContractExpiring();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
@@ -1110,13 +1147,10 @@ async function populateSettlementEmployeeSelect() {
   const sel = $('s_employee_id');
   if (sel.dataset.loaded === '1') return;
   try {
-    const res = await fetch(`${apiBase()}/api/hr_employees?all=1`, {
-      headers: { 'X-HR-Password': hrPassword() },
-    });
-    const data = await res.json();
-    const list = (data.employees || []).filter(e => e.pension_enrolled);
+    const list = (await getEmployeeLookup(true)).filter(e => e.pension_enrolled);
     sel.innerHTML = '<option value="">-- 직원 선택 --</option>' +
       list.map(e => `<option value="${e.id}">${esc(e.name)} (${esc(e.status)})</option>`).join('');
+    sel.dataset.employeeLookup = '1';
     sel.dataset.loaded = '1';
   } catch (e) {
     sel.innerHTML = '<option value="">불러오기 실패</option>';
@@ -2062,11 +2096,9 @@ async function populateOtherPayEmployeeSelect() {
   const sel = $('op_employee_id');
   if (sel.dataset.loaded === '1') return;
   try {
-    const res = await fetch(`${apiBase()}/api/hr_employees?all=1`, {
-      headers: { 'X-HR-Password': hrPassword() },
-    });
-    const data = await res.json();
-    sel.innerHTML = (data.employees || []).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+    const list = await getEmployeeLookup(true);
+    sel.innerHTML = list.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+    sel.dataset.employeeLookup = '1';
     sel.dataset.loaded = '1';
   } catch (e) {
     sel.innerHTML = '<option value="">불러오기 실패</option>';
@@ -2856,11 +2888,9 @@ async function populateEmployeeSelectById(elId) {
   const sel = $(elId);
   if (!sel || sel.dataset.loaded === '1') return;
   try {
-    const res = await fetch(`${apiBase()}/api/hr_employees`, {
-      headers: { 'X-HR-Password': hrPassword() },
-    });
-    const data = await res.json();
-    sel.innerHTML = (data.employees || []).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+    const list = await getEmployeeLookup(false);
+    sel.innerHTML = list.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+    sel.dataset.employeeLookup = '1';
     sel.dataset.loaded = '1';
   } catch (e) {
     sel.innerHTML = '<option value="">불러오기 실패</option>';
@@ -5107,12 +5137,10 @@ async function populatePromoHistoryEmployeeSelect() {
   const sel = $('promoHistoryEmployeeSelect');
   if (sel.dataset.loaded === '1') return;
   try {
-    const res = await fetch(`${apiBase()}/api/hr_employees?all=1`, {
-      headers: { 'X-HR-Password': hrPassword() },
-    });
-    const data = await res.json();
+    const list = await getEmployeeLookup(true);
     sel.innerHTML = '<option value="">-- 직원 선택 --</option>' +
-      (data.employees || []).map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+      list.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+    sel.dataset.employeeLookup = '1';
     sel.dataset.loaded = '1';
   } catch (e) {
     sel.innerHTML = '<option value="">불러오기 실패</option>';
