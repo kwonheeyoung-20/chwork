@@ -26,6 +26,7 @@ import datetime
 import urllib.request
 import urllib.parse
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs, quote
 
 
@@ -1920,6 +1921,29 @@ class handler(BaseHTTPRequestHandler):
 
     def _get_timetable(self, qs):
         child = qs.get("child", ["하진"])[0]
+
+        if qs.get("bundle", ["0"])[0] == "1":
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                periods_future = pool.submit(
+                    rest_request, "GET",
+                    f"timetable_period_times?child_name=eq.{quote(child)}&select=*&order=sort_order.asc",
+                )
+                entries_future = pool.submit(
+                    rest_request, "GET", f"timetable_entries?child_name=eq.{quote(child)}&select=*"
+                )
+                teachers_future = pool.submit(
+                    rest_request, "GET",
+                    f"timetable_teachers?child_name=eq.{quote(child)}&select=*&order=subject_name.asc",
+                )
+                periods = periods_future.result() or []
+                entries = entries_future.result() or []
+                teachers = teachers_future.result() or []
+            teacher_by_subject = {t["subject_name"]: t for t in teachers}
+            for e in entries:
+                t = teacher_by_subject.get(e["subject_name"])
+                e["teacher_name"] = t.get("teacher_name") if t else None
+                e["teacher_phone"] = t.get("teacher_phone") if t else None
+            return self._send(200, {"periods": periods, "entries": entries, "teachers": teachers})
 
         if qs.get("periods", ["0"])[0] == "1":
             rows = rest_request(
