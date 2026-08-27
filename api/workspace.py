@@ -1583,8 +1583,16 @@ class handler(BaseHTTPRequestHandler):
             rows = rest_request("GET", "personal_schedule_members?select=*&order=sort_order.asc")
             return self._send(200, {"members": rows})
 
-        rpc("generate_personal_schedule_occurrences", {})
-        self._generate_lunar_occurrences()
+        if qs.get("prepare", ["0"])[0] == "1":
+            rpc("generate_personal_schedule_occurrences", {})
+            self._generate_lunar_occurrences()
+            return self._send(200, {"ok": True})
+
+        # 첫 화면에서는 prepare=1로 한 번만 생성한 뒤, 나머지 병렬 조회가
+        # skip_prepare=1을 사용해 같은 생성 작업을 반복하지 않습니다.
+        if qs.get("skip_prepare", ["0"])[0] != "1":
+            rpc("generate_personal_schedule_occurrences", {})
+            self._generate_lunar_occurrences()
 
         if qs.get("tasks", ["0"])[0] == "1":
             rows = rest_request(
