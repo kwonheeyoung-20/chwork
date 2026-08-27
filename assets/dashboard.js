@@ -195,7 +195,7 @@ async function loadContractAlerts() {
 
 /* ── 개인 일정관리 알림 ── */
 async function loadPersonalAlerts() {
-  const CATEGORY_EMOJI = { '생일': '🎂', '기념일': '💝', '결제일': '💳', '학원': '📚', '일정': '📌', '기타': '⭐' };
+  const CATEGORY_EMOJI = { '생일': '🎂', '기념일': '💝', '결제일': '💳', '학교': '🏫', '학원': '🏫', '회사': '🏢', '일정': '📌', '기타': '⭐' };
   const catEmoji = c => CATEGORY_EMOJI[c] || '📌';
   const wrap = $('personalAlertWrap');
   try {
@@ -294,9 +294,16 @@ function renderTodoGroup(containerId, items) {
   el.innerHTML = items.map(t => `
     <div class="todo-item ${t.done ? 'done' : ''}">
       <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTodo('${t.id}', this.checked)">
-      <span class="todo-text">${esc(t.content)}</span>
-      ${!t.done ? `<span class="todo-del" onclick="carryOverTodo('${t.id}')">다음날로 이월</span>` : ''}
-      <span class="todo-del" onclick="deleteTodo('${t.id}')">삭제</span>
+      ${editingTodoId === t.id ? `
+        <input id="todoEditInput" class="hr-input" value="${esc(t.content)}" style="flex:1; min-width:0; padding:5px 8px;" onkeydown="if(event.key==='Enter') saveTodoEdit('${t.id}'); if(event.key==='Escape') cancelTodoEdit();">
+        <span class="todo-del" style="color:var(--accent); font-weight:600;" onclick="saveTodoEdit('${t.id}')">저장</span>
+        <span class="todo-del" onclick="cancelTodoEdit()">취소</span>
+      ` : `
+        <span class="todo-text">${esc(t.content)}</span>
+        <span class="todo-del" onclick="startTodoEdit('${t.id}')">수정</span>
+        ${!t.done ? `<span class="todo-del" onclick="carryOverTodo('${t.id}')">다음날로 이월</span>` : ''}
+        <span class="todo-del" onclick="deleteTodo('${t.id}')">삭제</span>
+      `}
     </div>
   `).join('');
 }
@@ -349,6 +356,43 @@ async function toggleTodo(id, done) {
   }
 }
 
+let editingTodoId = null;
+
+function startTodoEdit(id) {
+  const item = (todoItemsCache || []).find(t => t.id === id);
+  if (!item) return;
+  editingTodoId = id;
+  renderTodos(todoItemsCache);
+  requestAnimationFrame(() => {
+    const input = $('todoEditInput');
+    if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+  });
+}
+
+function cancelTodoEdit() {
+  editingTodoId = null;
+  renderTodos(todoItemsCache);
+}
+
+async function saveTodoEdit(id) {
+  const item = (todoItemsCache || []).find(t => t.id === id);
+  const input = $('todoEditInput');
+  if (!item || !input) return;
+  const trimmed = input.value.trim();
+  if (!trimmed) { alert('할 일 문구는 비워둘 수 없습니다.'); return; }
+  if (trimmed === item.content) { cancelTodoEdit(); return; }
+  try {
+    const res = await fetch(`${apiBase()}/api/daily_todos?id=${id}`, {
+      method: 'PATCH', headers: authHeaders(true), body: JSON.stringify({ content: trimmed }),
+    });
+    if (!res.ok) throw new Error('failed');
+    editingTodoId = null;
+    loadTodos();
+  } catch (e) {
+    alert('수정 중 오류가 발생했습니다.');
+  }
+}
+
 async function deleteTodo(id) {
   try {
     const res = await fetch(`${apiBase()}/api/daily_todos?id=${id}`, {
@@ -368,7 +412,7 @@ async function carryOverTodo(id) {
   const nextDay = new Date(todoDate);
   nextDay.setDate(nextDay.getDate() + 1);
   const nextDayStr = localISO(nextDay);
-  if (!confirm(`이 할 일을 ${nextDayStr}(다음날)로 이월하시겠습니까?\n오늘 목록에서는 사라지고, 다음날 목록에 그대로 추가됩니다.`)) return;
+  if (!await appConfirm(`이 할 일을 ${nextDayStr}(다음날)로 이월하시겠습니까?\n오늘 목록에서는 사라지고, 다음날 목록에 그대로 추가됩니다.`, '할 일 이월')) return;
   try {
     const createRes = await fetch(`${apiBase()}/api/daily_todos`, {
       method: 'POST',

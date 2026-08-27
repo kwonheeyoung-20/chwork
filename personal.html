@@ -301,7 +301,7 @@
           <section class="panel">
             <div class="sch-cal-header">
               <button class="sch-cal-nav-btn" onclick="perCalPrevMonth()">◀</button>
-              <h3 id="perCalMonthLabel">2026년 8월</h3>
+              <input id="perCalMonthPicker" type="month" class="hr-input" style="width:150px; font-weight:600;" onchange="perCalPickMonth()">
               <button class="sch-cal-nav-btn" onclick="perCalNextMonth()">▶</button>
               <button class="secondary" onclick="perCalToday()" style="margin-left:6px;">오늘</button>
               <button class="primary" onclick="openPersonalEventModal()" style="margin-left:auto;">+ 일정 추가</button>
@@ -503,7 +503,8 @@
           <option value="생일">생일</option>
           <option value="기념일">기념일</option>
           <option value="결제일">결제일</option>
-          <option value="학원">학원</option>
+          <option value="학교">학교</option>
+          <option value="회사">회사</option>
           <option value="기타">기타</option>
         </select>
       </label>
@@ -527,7 +528,7 @@
         </label>
         <div id="lunarPreview" style="font-size:11px; color:var(--text-muted); margin-left:22px;"></div>
       </span>
-      <label>종료일(선택) <input id="pe_end_date" type="date" class="hr-input"></label>
+      <label id="peEndDateLabel">기간 종료일(선택) <input id="pe_end_date" type="date" class="hr-input"></label>
       <label class="hr-span2">사전 알림(며칠 전부터) <input id="pe_reminder_days" type="number" class="hr-input" value="1" min="0"></label>
       <label class="hr-span2">비고 <input id="pe_note" class="hr-input"></label>
       <label class="hr-span2" style="flex-direction:row; align-items:center; gap:6px;">

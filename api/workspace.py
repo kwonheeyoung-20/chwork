@@ -26,6 +26,7 @@ import datetime
 import urllib.request
 import urllib.parse
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs, quote
 
 
@@ -772,6 +773,19 @@ class handler(BaseHTTPRequestHandler):
         return self._send(200, {"contacts": rows})
 
     def _get_contractdocs(self, qs):
+        file_id = qs.get("file_id", [None])[0]
+        if file_id:
+            rows = rest_request(
+                "GET", f"contract_document_files?id=eq.{file_id}&select=id,file_name,storage_path"
+            ) or []
+            if not rows:
+                return self._send(404, {"error": "첨부파일을 찾을 수 없습니다."})
+            row = rows[0]
+            view_url = storage_sign_url(row.get("storage_path"))
+            if not view_url:
+                return self._send(502, {"error": "첨부파일 열람주소를 만들지 못했습니다."})
+            return self._send(200, {"file_name": row.get("file_name"), "view_url": view_url})
+
         if qs.get("history", ["0"])[0] == "1":
             doc_id = qs.get("id", [None])[0]
             if not doc_id:
@@ -811,8 +825,6 @@ class handler(BaseHTTPRequestHandler):
         ) or []
         for r in rows:
             files = r.get("contract_document_files") or []
-            for f in files:
-                f["view_url"] = storage_sign_url(f.get("storage_path"))
             r["files"] = files
         return self._send(200, {"documents": rows})
 
@@ -1571,8 +1583,16 @@ class handler(BaseHTTPRequestHandler):
             rows = rest_request("GET", "personal_schedule_members?select=*&order=sort_order.asc")
             return self._send(200, {"members": rows})
 
-        rpc("generate_personal_schedule_occurrences", {})
-        self._generate_lunar_occurrences()
+        if qs.get("prepare", ["0"])[0] == "1":
+            rpc("generate_personal_schedule_occurrences", {})
+            self._generate_lunar_occurrences()
+            return self._send(200, {"ok": True})
+
+        # 첫 화면에서는 prepare=1로 한 번만 생성한 뒤, 나머지 병렬 조회가
+        # skip_prepare=1을 사용해 같은 생성 작업을 반복하지 않습니다.
+        if qs.get("skip_prepare", ["0"])[0] != "1":
+            rpc("generate_personal_schedule_occurrences", {})
+            self._generate_lunar_occurrences()
 
         if qs.get("tasks", ["0"])[0] == "1":
             rows = rest_request(
@@ -1620,11 +1640,31 @@ class handler(BaseHTTPRequestHandler):
 
         path = (
             "personal_schedule_occurrences?due_date=gte." + from_date + "&due_date=lte." + to_date
-            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,note,date_type,is_private,created_by_role)&order=due_date.asc"
+            + "&select=*,personal_schedule_tasks(title,category,member_name,recurrence_type,anchor_date,end_date,note,date_type,is_private,created_by_role)&order=due_date.asc"
         )
         if status_filter and status_filter != "all":
             path += "&status=eq." + status_filter
         rows = rest_request("GET", path) or []
+        # 이전 달에 시작해 조회 월까지 이어지는 일회성 기간 일정도 달력에 포함합니다.
+        spanning_tasks = rest_request(
+            "GET", "personal_schedule_tasks?recurrence_type=eq.once&end_date=gte." + from_date
+            + "&anchor_date=lt." + from_date
+            + "&select=id,title,category,member_name,recurrence_type,anchor_date,end_date,note,date_type,is_private,created_by_role"
+        ) or []
+        if spanning_tasks:
+            task_ids = ",".join(t["id"] for t in spanning_tasks)
+            spanning_occurrences = rest_request(
+                "GET", f"personal_schedule_occurrences?task_id=in.({task_ids})&select=*&order=due_date.asc"
+            ) or []
+            task_by_id = {t["id"]: t for t in spanning_tasks}
+            existing_ids = {r.get("id") for r in rows}
+            for occurrence in spanning_occurrences:
+                if occurrence.get("id") in existing_ids:
+                    continue
+                if status_filter and status_filter != "all" and occurrence.get("status") != status_filter:
+                    continue
+                occurrence["personal_schedule_tasks"] = task_by_id.get(occurrence.get("task_id")) or {}
+                rows.append(occurrence)
         if role == "family":
             rows = [r for r in rows if not (r.get("personal_schedule_tasks") or {}).get("is_private")]
         if member_filter:
@@ -1641,6 +1681,7 @@ class handler(BaseHTTPRequestHandler):
                     and r["due_date"] < today_iso
                 )
             ]
+        rows.sort(key=lambda r: (r.get("due_date") or "", r.get("id") or ""))
         return self._send(200, {"occurrences": rows})
 
     def _post_personal(self, payload):
@@ -1909,6 +1950,29 @@ class handler(BaseHTTPRequestHandler):
 
     def _get_timetable(self, qs):
         child = qs.get("child", ["하진"])[0]
+
+        if qs.get("bundle", ["0"])[0] == "1":
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                periods_future = pool.submit(
+                    rest_request, "GET",
+                    f"timetable_period_times?child_name=eq.{quote(child)}&select=*&order=sort_order.asc",
+                )
+                entries_future = pool.submit(
+                    rest_request, "GET", f"timetable_entries?child_name=eq.{quote(child)}&select=*"
+                )
+                teachers_future = pool.submit(
+                    rest_request, "GET",
+                    f"timetable_teachers?child_name=eq.{quote(child)}&select=*&order=subject_name.asc",
+                )
+                periods = periods_future.result() or []
+                entries = entries_future.result() or []
+                teachers = teachers_future.result() or []
+            teacher_by_subject = {t["subject_name"]: t for t in teachers}
+            for e in entries:
+                t = teacher_by_subject.get(e["subject_name"])
+                e["teacher_name"] = t.get("teacher_name") if t else None
+                e["teacher_phone"] = t.get("teacher_phone") if t else None
+            return self._send(200, {"periods": periods, "entries": entries, "teachers": teachers})
 
         if qs.get("periods", ["0"])[0] == "1":
             rows = rest_request(

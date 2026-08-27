@@ -15,6 +15,7 @@ import traceback
 import urllib.request
 import urllib.parse
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -117,20 +118,30 @@ class handler(BaseHTTPRequestHandler):
             if not employee_id or not retire_date:
                 return self._send(400, {"error": "employee_id, retire_date는 필수입니다"})
 
-            cumulative_estimate = rpc("pension_cumulative_estimate", {
-                "p_employee_id": employee_id, "p_as_of": retire_date,
-            })
-            total_contributed = rpc("pension_contributed_as_of", {
-                "p_employee_id": employee_id, "p_as_of": retire_date,
-            })
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                estimate_future = pool.submit(rpc, "pension_cumulative_estimate", {
+                    "p_employee_id": employee_id, "p_as_of": retire_date,
+                })
+                contributed_future = pool.submit(rpc, "pension_contributed_as_of", {
+                    "p_employee_id": employee_id, "p_as_of": retire_date,
+                })
+                employee_future = pool.submit(
+                    rest_request, "GET", f"employees?id=eq.{employee_id}&select=hire_date"
+                )
+                history_future = pool.submit(
+                    rest_request, "GET",
+                    f"pension_cumulative_history?employee_id=eq.{employee_id}&select=year,cumulative_estimate"
+                )
+                cumulative_estimate = estimate_future.result()
+                total_contributed = contributed_future.result()
+                emp_row = employee_future.result() or []
+                history = history_future.result() or []
             cumulative_estimate = cumulative_estimate or 0
             total_contributed = total_contributed or 0
             additional_payment = round(cumulative_estimate - total_contributed)
 
-            emp_row = rest_request("GET", f"employees?id=eq.{employee_id}&select=hire_date")
             hire_date = emp_row[0]["hire_date"] if emp_row else None
-
-            yearly = self._build_yearly_breakdown(employee_id, retire_date)
+            yearly = self._build_yearly_breakdown(employee_id, retire_date, hire_date, history)
 
             return self._send(200, {
                 "hire_date": hire_date,
@@ -144,40 +155,38 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
 
-    def _build_yearly_breakdown(self, employee_id, retire_date):
-        emp = rest_request("GET", f"employees?id=eq.{employee_id}&select=hire_date")
-        if not emp:
+    def _build_yearly_breakdown(self, employee_id, retire_date, hire_date, history):
+        if not hire_date:
             return []
-        hire_date = emp[0]["hire_date"]
         hire_year = int(hire_date[:4])
         retire_year = int(retire_date[:4])
 
-        history = rest_request(
-            "GET", f"pension_cumulative_history?employee_id=eq.{employee_id}&select=year,cumulative_estimate"
-        ) or []
         history_by_year = {h["year"]: h["cumulative_estimate"] for h in history}
         earliest_known_year = min(history_by_year.keys()) if history_by_year else 2026
 
         start_year = max(hire_year, earliest_known_year)
 
-        rows = []
-        for y in range(start_year, retire_year + 1):
-            if y in history_by_year:
-                cum_estimate = history_by_year[y]
-            else:
-                as_of = retire_date if y == retire_year else f"{y}-12-31"
-                cum_estimate = rpc("pension_cumulative_estimate", {"p_employee_id": employee_id, "p_as_of": as_of}) or 0
+        years = list(range(start_year, retire_year + 1))
 
-            as_of_paid = retire_date if y == retire_year else f"{y}-12-31"
-            cum_paid = rpc("pension_contributed_as_of", {"p_employee_id": employee_id, "p_as_of": as_of_paid}) or 0
-
-            rows.append({
+        def calculate_year(y):
+            as_of = retire_date if y == retire_year else f"{y}-12-31"
+            cum_estimate = history_by_year.get(y)
+            if cum_estimate is None:
+                cum_estimate = rpc("pension_cumulative_estimate", {
+                    "p_employee_id": employee_id, "p_as_of": as_of,
+                }) or 0
+            cum_paid = rpc("pension_contributed_as_of", {
+                "p_employee_id": employee_id, "p_as_of": as_of,
+            }) or 0
+            return {
                 "year": y,
                 "cumulative_estimate": round(cum_estimate),
                 "cumulative_paid": round(cum_paid),
                 "balance": round(cum_estimate - cum_paid),
-            })
-        return rows
+            }
+
+        with ThreadPoolExecutor(max_workers=min(8, max(1, len(years)))) as pool:
+            return list(pool.map(calculate_year, years))
 
     def do_POST(self):
         try:

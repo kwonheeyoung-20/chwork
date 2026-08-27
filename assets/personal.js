@@ -33,6 +33,23 @@ function toISO(d) {
   return `${y}-${m}-${day}`;
 }
 
+const personalOccurrencePending = new Map();
+
+async function fetchPersonalOccurrencesShared(from, to) {
+  const key = `${from}|${to}`;
+  if (personalOccurrencePending.has(key)) return personalOccurrencePending.get(key);
+  const request = (async () => {
+    const res = await fetch(`${apiBase()}/api/personal_schedule?from=${from}&to=${to}&status=all&skip_prepare=1`, { headers: authHeaders() });
+    if (handle401(res)) return [];
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '일정 조회 실패');
+    return data.occurrences || [];
+  })();
+  personalOccurrencePending.set(key, request);
+  request.finally(() => { setTimeout(() => personalOccurrencePending.delete(key), 0); });
+  return request;
+}
+
 /* ── 로그인 ── */
 async function perLogin() {
   const pw = $('pwInput').value;
@@ -56,21 +73,47 @@ async function perLogin() {
   }
 }
 
-function showMain() {
+async function showMain() {
   $('mainSidebar').style.display = '';
   $('loginPanel').style.display = 'none';
   $('perMain').style.display = 'flex';
   if (sessionStorage.getItem('chwork_hr_role') === 'family') {
     document.querySelectorAll('.admin-only-nav').forEach(el => el.style.display = 'none');
   }
-  loadMembers().then(() => {
-    initPerCalState();
+  initPerCalState();
+  setInitialPersonalListRange();
+  $('perOccTbody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">달력을 먼저 불러오고 있습니다…</td></tr>`;
+
+  // 구성원 정보는 달력 조회와 동시에 시작하되, 달력 표시를 막지 않습니다.
+  const membersPromise = loadMembers();
+  const calendarList = await loadPerCalendar();
+  await membersPromise;
+
+  // 첫 화면의 일정목록은 달력에서 이미 받은 이번 달 자료를 재사용합니다.
+  if (calendarList) renderPersonalOccurrences(calendarList);
+  else loadPersonalOccurrences();
+
+  // 부가 자료와 반복일정 준비는 첫 화면이 표시된 뒤 순차적으로 처리합니다.
+  const loadSecondaryData = async () => {
     loadPersonalReminderBanner();
-    loadPersonalOccurrences();
-    loadPerCalendar();
-  });
-  loadTimetable();
-  loadFamilyNotes();
+    loadFamilyNotes();
+    await preparePersonalScheduleData();
+    await loadPerCalendar();
+    await loadPersonalOccurrences();
+    loadPersonalReminderBanner();
+  };
+  if ('requestIdleCallback' in window) requestIdleCallback(loadSecondaryData, { timeout: 1200 });
+  else setTimeout(loadSecondaryData, 250);
+}
+
+async function preparePersonalScheduleData() {
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_schedule?prepare=1`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    if (!res.ok) throw new Error('일정 준비 실패');
+  } catch (e) {
+    // 조회 화면에서 구체적인 오류를 표시할 수 있도록 여기서는 진행을 막지 않습니다.
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -82,6 +125,10 @@ function switchPerTab(name) {
   document.querySelectorAll('[data-persub]').forEach(b => b.classList.toggle('active', b.dataset.persub === name));
   $('perFamilyView').style.display = name === 'family' ? 'block' : 'none';
   $('perTimetableView').style.display = name === 'timetable' ? 'block' : 'none';
+  if (name === 'timetable' && $('perTimetableView').dataset.loaded !== '1') {
+    $('perTimetableView').dataset.loaded = '1';
+    loadTimetable();
+  }
 }
 
 /* ── 가족 구성원 ── */
@@ -107,12 +154,18 @@ const CATEGORY_EMOJI = {
   '생일': '🎂',
   '기념일': '💝',
   '결제일': '💳',
-  '학원': '📚',
+  '학교': '🏫',
+  '학원': '🏫',
+  '회사': '🏢',
   '일정': '📌',
   '기타': '⭐',
 };
 function categoryEmoji(category) {
   return CATEGORY_EMOJI[category] || '📌';
+}
+
+function personalCategoryLabel(category) {
+  return category === '학원' ? '학교' : (category || '-');
 }
 
 function memberColor(name) {
@@ -161,7 +214,7 @@ async function saveMember() {
 }
 
 async function deleteMember(id) {
-  if (!confirm('이 구성원을 삭제하시겠습니까? (등록된 일정은 그대로 남습니다)')) return;
+  if (!await appConfirm('이 구성원을 삭제하시겠습니까? (등록된 일정은 그대로 남습니다)', '구성원 삭제')) return;
   try {
     await fetch(`${apiBase()}/api/personal_schedule?member_id=${id}`, { method: 'DELETE', headers: authHeaders() });
     await loadMembers();
@@ -174,7 +227,7 @@ async function deleteMember(id) {
 async function loadPersonalReminderBanner() {
   const wrap = $('perReminderBannerWrap');
   try {
-    const res = await fetch(`${apiBase()}/api/personal_schedule?upcoming=1`, { headers: authHeaders() });
+    const res = await fetch(`${apiBase()}/api/personal_schedule?upcoming=1&skip_prepare=1`, { headers: authHeaders() });
     if (handle401(res)) return;
     const data = await res.json();
     const list = data.upcoming || [];
@@ -207,6 +260,19 @@ function initPerCalState() {
   perCalMonth = now.getMonth();
 }
 
+function syncPerCalMonthPicker() {
+  $('perCalMonthPicker').value = `${perCalYear}-${String(perCalMonth + 1).padStart(2, '0')}`;
+}
+
+function perCalPickMonth() {
+  const value = $('perCalMonthPicker').value;
+  if (!/^\d{4}-\d{2}$/.test(value)) return;
+  const [year, month] = value.split('-').map(Number);
+  perCalYear = year;
+  perCalMonth = month - 1;
+  loadPerCalendar();
+}
+
 function perCalPrevMonth() {
   perCalMonth -= 1;
   if (perCalMonth < 0) { perCalMonth = 11; perCalYear -= 1; }
@@ -223,18 +289,18 @@ function perCalToday() {
 }
 
 async function loadPerCalendar() {
-  $('perCalMonthLabel').textContent = `${perCalYear}년 ${perCalMonth + 1}월`;
+  syncPerCalMonthPicker();
   const monthStart = new Date(perCalYear, perCalMonth, 1);
   const monthEnd = new Date(perCalYear, perCalMonth + 1, 0);
   const fromStr = toISO(monthStart);
   const toStr = toISO(monthEnd);
   try {
-    const res = await fetch(`${apiBase()}/api/personal_schedule?from=${fromStr}&to=${toStr}&status=all`, { headers: authHeaders() });
-    if (handle401(res)) return;
-    const data = await res.json();
-    renderPerCalendar(data.occurrences || [], monthStart, monthEnd);
+    const list = await fetchPersonalOccurrencesShared(fromStr, toStr);
+    renderPerCalendar(list, monthStart, monthEnd);
+    return list;
   } catch (e) {
     $('perCalGrid').innerHTML = `<div style="grid-column:1/-1; text-align:center; color:var(--red); padding:16px;">달력 불러오기 실패</div>`;
+    return null;
   }
 }
 
@@ -274,9 +340,25 @@ let perCalByDate = {};
 
 function renderPerCalendar(occurrences, monthStart, monthEnd) {
   const byDate = {};
+  const visibleStart = new Date(toISO(monthStart) + 'T00:00:00');
+  const visibleEnd = new Date(toISO(monthEnd) + 'T00:00:00');
   occurrences.forEach(o => {
-    if (!byDate[o.due_date]) byDate[o.due_date] = [];
-    byDate[o.due_date].push(o);
+    const task = o.personal_schedule_tasks || {};
+    const isPeriod = task.recurrence_type === 'once' && task.end_date && task.end_date >= o.due_date;
+    const eventStart = new Date(o.due_date + 'T00:00:00');
+    const eventEnd = isPeriod ? new Date(task.end_date + 'T00:00:00') : eventStart;
+    // 기간 전체를 순회하지 않고 현재 보이는 달과 겹치는 최대 31일만 계산합니다.
+    // 기존 데이터에 비정상적으로 먼 종료일이 있어도 브라우저가 멈추지 않습니다.
+    let cursor = new Date(Math.max(eventStart.getTime(), visibleStart.getTime()));
+    const last = new Date(Math.min(eventEnd.getTime(), visibleEnd.getTime()));
+    let renderedDays = 0;
+    while (cursor <= last && renderedDays < 31) {
+      const date = toISO(cursor);
+      if (!byDate[date]) byDate[date] = [];
+      byDate[date].push(o);
+      cursor.setDate(cursor.getDate() + 1);
+      renderedDays += 1;
+    }
   });
   perCalByDate = byDate;
   const todayStr = toISO(new Date());
@@ -360,6 +442,55 @@ function setPerRangePreset(kind) {
   loadPersonalOccurrences();
 }
 
+function setInitialPersonalListRange() {
+  const today = new Date();
+  $('perRangeFrom').value = toISO(new Date(today.getFullYear(), today.getMonth(), 1));
+  $('perRangeTo').value = toISO(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+}
+
+function renderPersonalOccurrences(sourceList) {
+  const tbody = $('perOccTbody');
+  const status = $('perStatusFilter').value;
+  const member = $('perMemberFilter').value;
+  let list = Array.isArray(sourceList) ? [...sourceList] : [];
+  if (member) list = list.filter(o => (o.personal_schedule_tasks || {}).member_name === member);
+  if (status !== 'all') list = list.filter(o => o.status === status);
+  if (status === 'pending') {
+    const today = toISO(new Date());
+    list = list.filter(o => (o.personal_schedule_tasks || {}).category === '결제일' || o.due_date >= today);
+  }
+  $('perOccCount').textContent = `총 ${list.length}건`;
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 일정이 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = list.map(o => {
+    const task = o.personal_schedule_tasks || {};
+    const color = memberColor(task.member_name);
+    const statusLabel = task.category !== '결제일' ? '-'
+      : (o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료'));
+    const currentRole = sessionStorage.getItem('chwork_hr_role') === 'family' ? 'family' : 'admin';
+    const lockedForOther = currentRole !== 'admin' && task.created_by_role && task.created_by_role !== currentRole;
+    const actionsHtml = lockedForOther
+      ? `<span style="color:var(--text-muted); font-size:12px;">🔒 등록한 분만 수정 가능</span>`
+      : `${(o.status === 'pending' && task.category === '결제일') ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> ` : ''}
+          <a class="hr-edit-link" onclick="editPersonalTask('${o.task_id}')">수정</a>
+          <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">이 날짜만 삭제</a>
+          <a class="hr-edit-link" onclick="deletePersonalTaskDirect('${o.task_id}')" style="color:var(--red);">전체 삭제</a>`;
+    return `
+      <tr>
+        <td>${esc(o.due_date)}${task.date_type === 'lunar' ? ' <span style="font-size:10px; color:var(--accent);">(음력)</span>' : ''}</td>
+        <td><span class="member-chip" style="background:${color}; font-size:11px;">${esc(task.member_name || '-')}</span></td>
+        <td>${categoryEmoji(task.category)} ${esc(personalCategoryLabel(task.category))}</td>
+        <td>${esc(task.title || '-')}${task.recurrence_type === 'once' && task.end_date && task.end_date > o.due_date ? ` <span style="font-size:11px; color:var(--text-muted);">(~${esc(task.end_date)})</span>` : ''}${task.is_private ? ' 🔒' : ''}</td>
+        <td style="font-size:12px; color:var(--text-secondary);">${[task.note ? esc(task.note) : null, o.completed_note ? '완료메모: ' + esc(o.completed_note) : null].filter(Boolean).join('<br>') || '-'}</td>
+        <td>${statusLabel}</td>
+        <td style="white-space:nowrap;">${actionsHtml}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
 async function loadPersonalOccurrences() {
   const tbody = $('perOccTbody');
   tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
@@ -373,42 +504,8 @@ async function loadPersonalOccurrences() {
   const from = $('perRangeFrom').value;
   const to = $('perRangeTo').value;
   try {
-    let url = `${apiBase()}/api/personal_schedule?from=${from}&to=${to}&status=${status}`;
-    if (member) url += `&member=${encodeURIComponent(member)}`;
-    const res = await fetch(url, { headers: authHeaders() });
-    if (handle401(res)) return;
-    const data = await res.json();
-    const list = data.occurrences || [];
-    $('perOccCount').textContent = `총 ${list.length}건`;
-    if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">등록된 일정이 없습니다.</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = list.map(o => {
-      const task = o.personal_schedule_tasks || {};
-      const color = memberColor(task.member_name);
-      const statusLabel = task.category !== '결제일' ? '-'
-        : (o.status === 'done' ? '완료' : (o.status === 'skipped' ? '건너뜀' : '미완료'));
-      const currentRole = sessionStorage.getItem('chwork_hr_role') === 'family' ? 'family' : 'admin';
-      const lockedForOther = currentRole !== 'admin' && task.created_by_role && task.created_by_role !== currentRole;
-      const actionsHtml = lockedForOther
-        ? `<span style="color:var(--text-muted); font-size:12px;">🔒 등록한 분만 수정 가능</span>`
-        : `${(o.status === 'pending' && task.category === '결제일') ? `<a class="hr-edit-link" onclick="openPerCompleteModal('${o.id}')">완료</a> <a class="hr-edit-link" onclick="perSkip('${o.id}')">건너뜀</a> ` : ''}
-            <a class="hr-edit-link" onclick="editPersonalTask('${o.task_id}')">수정</a>
-            <a class="hr-edit-link" onclick="deletePersonalOccurrence('${o.id}')">이 날짜만 삭제</a>
-            <a class="hr-edit-link" onclick="deletePersonalTaskDirect('${o.task_id}')" style="color:var(--red);">전체 삭제</a>`;
-      return `
-        <tr>
-          <td>${esc(o.due_date)}${task.date_type === 'lunar' ? ' <span style="font-size:10px; color:var(--accent);">(음력)</span>' : ''}</td>
-          <td><span class="member-chip" style="background:${color}; font-size:11px;">${esc(task.member_name || '-')}</span></td>
-          <td>${categoryEmoji(task.category)} ${esc(task.category || '-')}</td>
-          <td>${esc(task.title || '-')}${task.is_private ? ' 🔒' : ''}</td>
-          <td style="font-size:12px; color:var(--text-secondary);">${[task.note ? esc(task.note) : null, o.completed_note ? '완료메모: ' + esc(o.completed_note) : null].filter(Boolean).join('<br>') || '-'}</td>
-          <td>${statusLabel}</td>
-          <td style="white-space:nowrap;">${actionsHtml}</td>
-        </tr>
-      `;
-    }).join('');
+    const list = await fetchPersonalOccurrencesShared(from, to);
+    renderPersonalOccurrences(list);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
@@ -442,7 +539,7 @@ async function confirmPerComplete() {
 }
 
 async function perSkip(occId) {
-  if (!confirm('이 일정을 건너뛰시겠습니까?')) return;
+  if (!await appConfirm('이 일정을 건너뛰시겠습니까?', '일정 건너뛰기')) return;
   try {
     const res = await fetch(`${apiBase()}/api/personal_schedule`, {
       method: 'POST', headers: authHeaders(true),
@@ -460,7 +557,7 @@ async function perSkip(occId) {
 }
 
 async function deletePersonalOccurrence(occId) {
-  if (!confirm('이 날짜의 일정을 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 날짜의 일정을 삭제하시겠습니까?', '일정 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/personal_schedule?occurrence_id=${occId}`, { method: 'DELETE', headers: authHeaders() });
     if (!res.ok) {
@@ -475,7 +572,7 @@ async function deletePersonalOccurrence(occId) {
 }
 
 async function deletePersonalTaskDirect(taskId) {
-  if (!confirm('이 일정을 완전히 삭제하시겠습니까? (반복되는 모든 날짜가 함께 삭제됩니다)')) return;
+  if (!await appConfirm('이 일정을 완전히 삭제하시겠습니까? (반복되는 모든 날짜가 함께 삭제됩니다)', '일정 전체 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/personal_schedule?id=${taskId}`, { method: 'DELETE', headers: authHeaders() });
     if (!res.ok) {
@@ -492,10 +589,12 @@ async function deletePersonalTaskDirect(taskId) {
 
 /* ── 일정 추가 ── */
 function togglePersonalRecurrenceFields() {
+  const isOnce = $('pe_recurrence').value === 'once';
   const isWeekly = $('pe_recurrence').value === 'weekly';
   const isYearly = $('pe_recurrence').value === 'yearly';
   $('peIntervalWrap').style.display = isWeekly ? 'inline' : 'none';
   $('peLunarWrap').style.display = isYearly ? 'flex' : 'none';
+  $('peEndDateLabel').firstChild.textContent = isOnce ? '기간 종료일(선택) ' : '반복 종료일(선택) ';
   if (!isYearly) $('pe_is_lunar').checked = false;
   updateLunarPreview();
 }
@@ -552,7 +651,7 @@ async function editPersonalTask(taskId) {
     $('personalEventModalTitle').textContent = '일정 수정';
     $('personalEventDeleteBtn').style.display = 'inline-block';
     $('pe_member').value = t.member_name;
-    $('pe_category').value = t.category || '일정';
+    $('pe_category').value = t.category === '학원' ? '학교' : (t.category || '일정');
     $('pe_title').value = t.title || '';
     const uiRecurrence = (t.recurrence_type === 'monthly' && t.interval_value === 12) ? 'yearly' : t.recurrence_type;
     $('pe_recurrence').value = uiRecurrence;
@@ -573,7 +672,7 @@ async function editPersonalTask(taskId) {
 
 async function deletePersonalTaskFromModal() {
   if (!editingPersonalTaskId) return;
-  if (!confirm('이 일정을 완전히 삭제하시겠습니까? (반복되는 모든 날짜가 함께 삭제됩니다)')) return;
+  if (!await appConfirm('이 일정을 완전히 삭제하시겠습니까? (반복되는 모든 날짜가 함께 삭제됩니다)', '일정 전체 삭제')) return;
   try {
     await fetch(`${apiBase()}/api/personal_schedule?id=${editingPersonalTaskId}`, { method: 'DELETE', headers: authHeaders() });
     closePersonalEventModal();
@@ -600,6 +699,11 @@ async function savePersonalEvent() {
   if (uiRecurrence === 'yearly') { recurrence_type = 'monthly'; interval_value = 12; }
   else if (uiRecurrence === 'weekly') { interval_value = Number($('pe_interval').value) || 1; }
   const isLunar = uiRecurrence === 'yearly' && $('pe_is_lunar').checked;
+  const endDate = $('pe_end_date').value || null;
+  if (uiRecurrence === 'once' && endDate && endDate < anchorDate) {
+    $('personalEventModalMsg').textContent = '기간 종료일은 시작일보다 빠를 수 없습니다.';
+    return;
+  }
 
   const payload = {
     member_name: memberName,
@@ -609,7 +713,7 @@ async function savePersonalEvent() {
     interval_value,
     anchor_date: anchorDate,
     date_type: isLunar ? 'lunar' : 'solar',
-    end_date: $('pe_end_date').value || null,
+    end_date: endDate,
     reminder_days_before: Number($('pe_reminder_days').value) || 0,
     note: $('pe_note').value.trim() || null,
     is_private: $('pe_is_private').checked,
@@ -648,21 +752,20 @@ async function loadTimetable() {
   const tbody = $('ttTbody');
   tbody.innerHTML = `<tr><td colspan="6" style="padding:24px; color:var(--text-muted);">불러오는 중…</td></tr>`;
   try {
-    const [periodsRes, entriesRes] = await Promise.all([
-      fetch(`${apiBase()}/api/timetable?periods=1`, { headers: authHeaders() }),
-      fetch(`${apiBase()}/api/timetable`, { headers: authHeaders() }),
-    ]);
-    if (handle401(periodsRes)) return;
-    const periodsData = await periodsRes.json();
-    const entriesData = await entriesRes.json();
-    periodsCache = periodsData.periods || [];
-    entriesCache = entriesData.entries || [];
+    const child = $('te_child') ? ($('te_child').value.trim() || '하진') : '하진';
+    const res = await fetch(`${apiBase()}/api/timetable?bundle=1&child=${encodeURIComponent(child)}`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '시간표 조회 실패');
+    periodsCache = data.periods || [];
+    entriesCache = data.entries || [];
+    teachersCache = data.teachers || [];
     renderTimetable(periodsCache, entriesCache);
     renderPeriodList(periodsCache);
+    renderTeachers();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="6" style="padding:24px; color:var(--red);">불러오기 실패</td></tr>`;
   }
-  loadTeachers();
 }
 
 let periodsCache = [];
@@ -890,13 +993,13 @@ async function savePeriod() {
 
 async function deletePeriodFromModal() {
   if (!editingPeriodId) return;
-  if (!confirm('이 교시를 삭제하시겠습니까? (배정된 과목도 함께 정리해주세요)')) return;
+  if (!await appConfirm('이 교시를 삭제하시겠습니까? (배정된 과목도 함께 정리해주세요)', '교시 삭제')) return;
   await quickDeletePeriod(editingPeriodId);
   closePeriodModal();
 }
 
 async function quickDeletePeriod(id) {
-  if (!confirm('이 교시를 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 교시를 삭제하시겠습니까?', '교시 삭제')) return;
   try {
     await fetch(`${apiBase()}/api/timetable?id=${id}&type=period`, { method: 'DELETE', headers: authHeaders() });
     loadTimetable();
@@ -996,7 +1099,7 @@ async function saveTimetableEntry() {
 async function deleteTimetableEntryFromModal() {
   if (!editingTimetableEntryId) return;
   const isWholeRow = WHOLE_ROW_PERIODS.includes(pendingEntryPeriodLabel);
-  if (!confirm(isWholeRow ? '이 교시(월~금 전체)를 삭제하시겠습니까?' : '이 칸의 과목을 삭제하시겠습니까?')) return;
+  if (!await appConfirm(isWholeRow ? '이 교시(월~금 전체)를 삭제하시겠습니까?' : '이 칸의 과목을 삭제하시겠습니까?', '시간표 삭제')) return;
   try {
     if (isWholeRow) {
       const all = entriesCache.filter(x => x.period_label === pendingEntryPeriodLabel);
@@ -1105,6 +1208,14 @@ async function loadTeachers() {
     if (handle401(res)) return;
     const data = await res.json();
     teachersCache = data.teachers || [];
+    renderTeachers();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
+  }
+}
+
+function renderTeachers() {
+    const tbody = $('teacherTbody');
     $('subjectNameList').innerHTML = teachersCache.map(t => `<option value="${esc(t.subject_name)}">`).join('');
     if (teachersCache.length === 0) {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">등록된 선생님이 없습니다.</td></tr>`;
@@ -1129,9 +1240,6 @@ async function loadTeachers() {
         </td>
       </tr>
     `).join('');
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
-  }
 }
 
 function openTeacherModal() {
@@ -1192,7 +1300,7 @@ async function saveTeacher() {
 }
 
 async function deleteTeacher(id) {
-  if (!confirm('이 선생님 정보를 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 선생님 정보를 삭제하시겠습니까?', '선생님 정보 삭제')) return;
   try {
     await fetch(`${apiBase()}/api/timetable?id=${id}&type=teacher`, { method: 'DELETE', headers: authHeaders() });
     loadTeachers();
@@ -1326,7 +1434,7 @@ async function setFamilyNoteStatus(id, status) {
 }
 
 async function deleteFamilyNote(id) {
-  if (!confirm('이 메모를 삭제하시겠습니까?')) return;
+  if (!await appConfirm('이 메모를 삭제하시겠습니까?', '메모 삭제')) return;
   try {
     const res = await fetch(`${apiBase()}/api/family_notes?id=${id}`, { method: 'DELETE', headers: authHeaders() });
     if (!res.ok) {
