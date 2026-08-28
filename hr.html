@@ -19,6 +19,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="WORKS">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
   <style>
     .sch-banner { border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px; font-size: 13px; }
@@ -225,10 +226,7 @@
         <div style="display:flex; align-items:center; gap:6px; background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px;">
           <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🛠 도구</span>
           <button class="secondary" id="manualBtn" style="display:none;" onclick="openManualModal()">📖 매뉴얼</button>
-          <button class="secondary" onclick="downloadFullBackup()" id="backupBtn">전체 데이터 백업</button>
         </div>
-        <span id="lastBackupLabel" style="font-size:12px; color:var(--text-muted);"></span>
-        <!-- pill removed -->
       </div>
     </header>
 
@@ -1880,12 +1878,48 @@
           <option value="scdream" style="font-family:'SCoreDream', sans-serif;">에스코어드림</option>
         </select>
       </div>
+      <button class="settings-row" onclick="closeSettingsModal(); openBackupModal();">
+        <span>💾 데이터 백업</span>
+      </button>
       <button class="settings-row" style="color:var(--red);" onclick="logoutUser()">
         <span>🚪 로그아웃</span>
       </button>
     </div>
     <div style="display:flex; justify-content:flex-end; margin-top:18px;">
       <button class="secondary" onclick="closeSettingsModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 데이터 백업 모달 -->
+<div id="backupModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:440px;">
+    <h2>데이터 백업</h2>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">
+      급여/인사뿐 아니라 업무일정·개인일정·계약증빙·거래처 등 앱에 있는 모든 데이터를 대상으로 합니다.
+    </p>
+
+    <div style="padding:14px; background:var(--bg); border-radius:var(--radius-sm); margin-bottom:12px;">
+      <div style="font-weight:600; margin-bottom:4px;">📄 전체 데이터 백업</div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        모든 업무 데이터를 JSON 파일 하나로 내려받습니다. (첨부파일 원본은 포함되지 않고, 파일 경로 정보만 포함됩니다)
+      </p>
+      <button class="primary" onclick="downloadFullBackup()" id="backupBtn" style="width:100%;">전체 데이터 백업 다운로드</button>
+    </div>
+
+    <div style="padding:14px; background:var(--bg); border-radius:var(--radius-sm); margin-bottom:12px;">
+      <div style="font-weight:600; margin-bottom:4px;">🗂 첨부파일 zip 백업</div>
+      <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">
+        계약/증빙서류, 월결산서 산출물 등 실제 업로드된 파일 원본을 zip 하나로 묶어 내려받습니다. 파일이 많으면 다소 시간이 걸릴 수 있어요.
+      </p>
+      <button class="primary" onclick="downloadZipBackup()" id="zipBackupBtn" style="width:100%;">첨부파일 zip 다운로드</button>
+      <div id="zipBackupProgress" style="font-size:12px; color:var(--text-muted); margin-top:8px;"></div>
+    </div>
+
+    <span id="lastBackupLabel" style="font-size:12px; color:var(--text-muted);"></span>
+
+    <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+      <button class="secondary" onclick="closeBackupModal()">닫기</button>
     </div>
   </div>
 </div>
