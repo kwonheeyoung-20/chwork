@@ -127,8 +127,13 @@ class handler(BaseHTTPRequestHandler):
             key = (emp_id, yr)
             salary_by_emp_year[key] = r["annual_salary_thousand"]  # asc 정렬이라 뒤에 값이 마지막 값으로 남음
 
+        # 과거 이력(2024/2025년 등)의 성과급 금액은 반드시 "지금 보고 있는 차수(1차/2차)"에
+        # 해당하는 타입만 가져와야 함 — 예전에는 payment_type=like.*성과급*로 1차/2차를
+        # 둘 다 가져와서 합쳐버리는 바람에, 1차 보고서를 봐도 2차 금액까지 합산된 값이
+        # 나오는 버그가 있었음(사용자 신고로 발견).
+        bonus_type = f"성과급{round_no}차"
         bonus_rows = rest_request(
-            "GET", "other_payments?payment_type=like.*성과급*&select=employee_id,payment_date,amount,note&order=payment_date.asc"
+            "GET", f"other_payments?payment_type=eq.{bonus_type}&select=employee_id,payment_date,amount,note&order=payment_date.asc"
         ) or []
         bonus_by_emp_year = {}
         note_by_emp_year = {}  # 과거 성과급의 "기준/율"을 note에 적어두신 경우 그대로 보여줌(맨 마지막 건 기준)
