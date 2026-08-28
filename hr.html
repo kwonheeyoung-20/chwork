@@ -1051,8 +1051,8 @@
                   <th rowspan="2">입사일</th>
                   <th colspan="4" id="bonusY2GroupHeader" style="text-align: center; background:#eef3fa;">2024년 이력</th>
                   <th colspan="4" id="bonusY1GroupHeader" style="text-align: center; background:#eafaf0;">2025년 이력</th>
-                  <th colspan="2" style="text-align: center; background:#f2f2f2;">당해년도 현재 급여</th>
-                  <th colspan="5" style="text-align: center; background:#fff3d6;">당해년도 성과급 결정</th>
+                  <th colspan="2" id="bonusNowGroupHeader" style="text-align: center; background:#f2f2f2;">당해년도 현재 급여</th>
+                  <th colspan="5" id="bonusDecisionGroupHeader" style="text-align: center; background:#fff3d6;">당해년도 성과급 결정</th>
                   <th rowspan="2" class="bonus-exclude-col" style="background:#f0f0f0; min-width:60px;">인쇄<br>제외</th>
                 </tr>
                 <tr>
@@ -1890,9 +1890,6 @@
   <div class="hr-modal" style="width:360px;">
     <h2>설정</h2>
     <div style="display:flex; flex-direction:column; gap:4px; margin-top:10px;">
-      <button class="settings-row" onclick="closeSettingsModal(); openDataBackupModal();">
-        <span>💾 데이터 백업</span>
-      </button>
       <button class="settings-row" onclick="toggleTheme()">
         <span id="settingsThemeLabel">🌙 다크 모드로 전환</span>
       </button>
