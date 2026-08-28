@@ -14,12 +14,15 @@ function refreshLastBackupLabel() {
   if (label) label.textContent = saved ? `마지막 백업: ${saved}` : '아직 백업한 적 없음';
 }
 
-function openBackupModal() {
+function openDataBackupModal() {
+  if (sessionStorage.getItem('chwork_hr_role') !== 'admin') return;
   refreshLastBackupLabel();
-  $('zipBackupProgress').textContent = '';
-  $('backupModal').style.display = 'flex';
+  $('dataBackupModal').style.display = 'flex';
 }
-function closeBackupModal() { $('backupModal').style.display = 'none'; }
+
+function closeDataBackupModal() {
+  $('dataBackupModal').style.display = 'none';
+}
 
 async function downloadFullBackup() {
   const btn = $('backupBtn');
@@ -41,6 +44,15 @@ async function downloadFullBackup() {
       throw new Error(detail);
     }
     const blob = await res.blob();
+    let backupInfo = null;
+    try {
+      backupInfo = JSON.parse(await blob.text());
+    } catch (parseErr) {
+      throw new Error('백업 파일 검증 실패 — 내려받은 자료가 올바른 JSON 형식이 아닙니다.');
+    }
+    if (!backupInfo || !backupInfo.tables || !backupInfo.summary) {
+      throw new Error('백업 파일 검증 실패 — 전체 데이터 백업 요약정보가 없습니다.');
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const today = new Date().toISOString().slice(0, 10);
@@ -53,8 +65,20 @@ async function downloadFullBackup() {
 
     const now = new Date();
     const stamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    localStorage.setItem('chwork_last_backup', stamp);
+    const summary = backupInfo.summary;
+    const warningCount = Number(summary.warning_table_count || 0);
+    const statusText = summary.complete
+      ? `완료 ${summary.successful_table_count}개 테이블, 총 ${Number(summary.total_row_count || 0).toLocaleString('ko-KR')}건${warningCount ? `, 선택항목 경고 ${warningCount}개` : ''}`
+      : `일부 오류 ${summary.failed_table_count}개 테이블`;
+    localStorage.setItem('chwork_last_backup', `${stamp} · ${statusText}`);
     refreshLastBackupLabel();
+
+    if (summary.complete) {
+      alert(`전체 데이터 백업이 완료되었습니다.\n\n정상 테이블: ${summary.successful_table_count}개\n데이터: 총 ${Number(summary.total_row_count || 0).toLocaleString('ko-KR')}건${warningCount ? `\n선택항목 경고: ${warningCount}개` : ''}\n\n※ Storage의 실제 첨부파일은 별도로 백업해야 합니다.`);
+    } else {
+      const failedNames = Object.keys(backupInfo._errors || {}).join(', ') || '확인 불가';
+      alert(`백업 파일은 내려받았지만 일부 테이블을 읽지 못했습니다.\n\n실패: ${summary.failed_table_count}개\n대상: ${failedNames}\n\n이 파일만으로는 완전한 백업이 아니므로 오류를 확인해주세요.`);
+    }
   } catch (e) {
     alert('백업 다운로드 중 오류가 발생했습니다: ' + (e.message || ''));
   } finally {
@@ -63,66 +87,128 @@ async function downloadFullBackup() {
   }
 }
 
-/* 첨부파일 전체를 zip 하나로 묶어서 다운로드.
-   api/hr_storage_backup은 버킷 안 파일 목록 + 임시(1시간) 다운로드 주소만 돌려주므로,
-   여기서 하나씩 실제로 받아와 JSZip으로 묶어 브라우저에서 압축함. */
-async function downloadZipBackup() {
-  const btn = $('zipBackupBtn');
-  const progress = $('zipBackupProgress');
+/* ── contracts Storage 실제 첨부파일 ZIP 백업 ── */
+function storageBackupCrc32(bytes) {
+  if (!storageBackupCrc32.table) {
+    storageBackupCrc32.table = Array.from({ length: 256 }, (_, n) => {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+      return c >>> 0;
+    });
+  }
+  let crc = 0xffffffff;
+  for (const b of bytes) crc = storageBackupCrc32.table[(crc ^ b) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function storageBackupDosTime(date) {
+  const year = Math.max(1980, date.getFullYear());
+  return {
+    time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+    date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
+  };
+}
+
+function storageBackupZip(entries) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const now = storageBackupDosTime(new Date());
+  const u16 = (view, pos, value) => view.setUint16(pos, value, true);
+  const u32 = (view, pos, value) => view.setUint32(pos, value >>> 0, true);
+
+  for (const entry of entries) {
+    const name = encoder.encode(entry.name);
+    const data = entry.data;
+    const crc = storageBackupCrc32(data);
+    const local = new Uint8Array(30 + name.length);
+    const lv = new DataView(local.buffer);
+    u32(lv, 0, 0x04034b50); u16(lv, 4, 20); u16(lv, 6, 0x0800); u16(lv, 8, 0);
+    u16(lv, 10, now.time); u16(lv, 12, now.date); u32(lv, 14, crc);
+    u32(lv, 18, data.length); u32(lv, 22, data.length); u16(lv, 26, name.length); u16(lv, 28, 0);
+    local.set(name, 30);
+    localParts.push(local, data);
+
+    const central = new Uint8Array(46 + name.length);
+    const cv = new DataView(central.buffer);
+    u32(cv, 0, 0x02014b50); u16(cv, 4, 20); u16(cv, 6, 20); u16(cv, 8, 0x0800); u16(cv, 10, 0);
+    u16(cv, 12, now.time); u16(cv, 14, now.date); u32(cv, 16, crc);
+    u32(cv, 20, data.length); u32(cv, 24, data.length); u16(cv, 28, name.length);
+    u16(cv, 30, 0); u16(cv, 32, 0); u16(cv, 34, 0); u16(cv, 36, 0); u32(cv, 38, 0); u32(cv, 42, offset);
+    central.set(name, 46);
+    centralParts.push(central);
+    offset += local.length + data.length;
+  }
+
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  u32(ev, 0, 0x06054b50); u16(ev, 4, 0); u16(ev, 6, 0);
+  u16(ev, 8, entries.length); u16(ev, 10, entries.length); u32(ev, 12, centralSize); u32(ev, 16, offset); u16(ev, 20, 0);
+  return new Blob([...localParts, ...centralParts, end], { type: 'application/zip' });
+}
+
+async function downloadStorageBackup() {
+  const btn = $('storageBackupBtn');
   const original = btn.textContent;
   btn.disabled = true;
+  btn.textContent = '첨부파일 확인 중…';
   try {
-    btn.textContent = '파일 목록 불러오는 중…';
-    progress.textContent = '';
-    const listRes = await fetch(`${apiBase()}/api/hr_storage_backup`, {
+    const res = await fetch(`${apiBase()}/api/hr_storage_backup`, {
       headers: { 'X-HR-Password': hrPassword() },
+      cache: 'no-store',
     });
-    const listData = await listRes.json();
-    if (!listRes.ok) throw new Error(listData.error || listData.detail || `목록 조회 실패 (상태코드 ${listRes.status})`);
-
-    const files = listData.files || [];
-    if (files.length === 0) {
-      alert('백업할 첨부파일이 없습니다.');
-      return;
+    const responseText = await res.text();
+    let info;
+    try {
+      info = JSON.parse(responseText);
+    } catch (parseErr) {
+      throw new Error(`백업 API 응답 오류 (상태코드 ${res.status}). Vercel 배포에서 hr_storage_backup API 등록 여부를 확인해주세요.`);
     }
-    if (listData.missing_storage_paths && listData.missing_storage_paths.length > 0) {
-      progress.textContent = `⚠ DB에는 있지만 실제 파일이 없는 항목 ${listData.missing_storage_paths.length}건은 제외하고 진행합니다.`;
-    }
-
-    const zip = new JSZip();
-    let done = 0;
-    for (const f of files) {
-      btn.textContent = `파일 받는 중… (${done + 1}/${files.length})`;
-      try {
-        const fileRes = await fetch(f.signed_url);
-        if (!fileRes.ok) throw new Error('다운로드 실패');
-        const blob = await fileRes.blob();
-        zip.file(f.zip_name, blob);
-      } catch (fileErr) {
-        progress.textContent = `⚠ "${f.file_name}" 파일을 못 받아서 건너뜀`;
-      }
-      done += 1;
+    if (!res.ok) throw new Error(info.detail || info.error || `상태코드 ${res.status}`);
+    if (!Array.isArray(info.files) || !info.files.length) throw new Error('contracts 버킷에 백업할 파일이 없습니다.');
+    if ((info.missing_storage_paths || []).length) {
+      throw new Error(`DB 기록 중 Storage에서 찾지 못한 파일이 ${info.missing_storage_paths.length}개 있습니다.`);
     }
 
-    btn.textContent = 'zip 압축 중…';
-    const zipBlob = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(zipBlob);
+    const entries = [];
+    for (let i = 0; i < info.files.length; i++) {
+      const file = info.files[i];
+      btn.textContent = `첨부파일 받는 중 ${i + 1}/${info.files.length}`;
+      const fileRes = await fetch(file.signed_url, { cache: 'no-store' });
+      if (!fileRes.ok) throw new Error(`${file.file_name} 다운로드 실패 (${fileRes.status})`);
+      entries.push({ name: `contracts/${file.zip_name}`, data: new Uint8Array(await fileRes.arrayBuffer()) });
+    }
+
+    const manifest = { ...info, files: info.files.map(({ signed_url, ...file }) => file) };
+    entries.push({
+      name: 'contracts_backup_manifest.json',
+      data: new TextEncoder().encode(JSON.stringify(manifest, null, 2)),
+    });
+    btn.textContent = 'ZIP 만드는 중…';
+    const blob = storageBackupZip(entries);
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const today = new Date().toISOString().slice(0, 10);
     a.href = url;
-    a.download = `chwork_files_${today}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    progress.textContent = `완료: 총 ${files.length}개 파일 (${(listData.total_size / 1024 / 1024).toFixed(1)}MB)`;
+    a.download = `chwork_contracts_files_${today}.zip`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    alert(`첨부파일 ZIP 백업이 완료되었습니다.\n\n파일: ${info.file_count}개\n용량: ${formatStorageBackupBytes(blob.size)}\n\nZIP 파일을 회사 보안 저장공간에 보관해주세요.`);
   } catch (e) {
-    alert('zip 백업 중 오류가 발생했습니다: ' + (e.message || ''));
+    alert('첨부파일 백업 중 오류가 발생했습니다: ' + (e.message || ''));
   } finally {
     btn.disabled = false;
     btn.textContent = original;
   }
+}
+
+function formatStorageBackupBytes(bytes) {
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = Number(bytes || 0), unit = 0;
+  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+  return `${value.toFixed(unit ? 1 : 0)} ${units[unit]}`;
 }
 
 async function hrLogin() {
@@ -282,9 +368,11 @@ function switchMenuGroup(group) {
   $('topbarTitle').textContent = topText.title;
   $('topbarDesc').textContent = topText.desc;
 
-  // 매뉴얼 버튼 — 급여/퇴직급여 화면에서만 표시
+  // 매뉴얼 버튼 — 급여/퇴직급여 화면에서만 표시. 매뉴얼이 없는 화면(직원마스터 등)에서는
+  // 빈 "도구" 상자만 남아있지 않도록, 감싸는 박스(manualToolsWrap)째로 같이 숨김/표시함
   currentManualModule = (group === 'payroll') ? 'payroll' : (group === 'pension') ? 'pension' : null;
   $('manualBtn').style.display = currentManualModule ? 'inline-flex' : 'none';
+  $('manualToolsWrap').style.display = currentManualModule ? 'flex' : 'none';
 
   // 상단 탭바 렌더링 — "입력" 그룹과 "자료(조회)" 그룹 사이에 라벨+구분선을 넣어 구분
   const bar = $('hrTabBar');

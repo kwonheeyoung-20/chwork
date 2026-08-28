@@ -134,9 +134,19 @@ function switchPerTab(name) {
   document.querySelectorAll('[data-persub]').forEach(b => b.classList.toggle('active', b.dataset.persub === name));
   $('perFamilyView').style.display = name === 'family' ? 'block' : 'none';
   $('perTimetableView').style.display = name === 'timetable' ? 'block' : 'none';
+  $('perNoticeView').style.display = name === 'notice' ? 'block' : 'none';
+  $('perAlbumView').style.display = name === 'album' ? 'block' : 'none';
   if (name === 'timetable' && $('perTimetableView').dataset.loaded !== '1') {
     $('perTimetableView').dataset.loaded = '1';
     loadTimetable();
+  }
+  if (name === 'notice' && $('perNoticeView').dataset.loaded !== '1') {
+    $('perNoticeView').dataset.loaded = '1';
+    loadPersonalMedia('notice');
+  }
+  if (name === 'album' && $('perAlbumView').dataset.loaded !== '1') {
+    $('perAlbumView').dataset.loaded = '1';
+    loadPersonalMedia('album');
   }
 }
 
@@ -1454,5 +1464,191 @@ async function deleteFamilyNote(id) {
     loadFamilyNotes();
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다.');
+  }
+}
+
+/* ── 하진이 알림장 / 사진 앨범 (personal_media) ── */
+let noticeMediaCache = [];
+let albumMediaCache = [];
+let pendingMediaUploadCategory = null;
+
+function fileTypeIcon(contentType) {
+  if ((contentType || '').startsWith('image/')) return '🖼️';
+  if (contentType === 'application/pdf') return '📄';
+  return '📎';
+}
+
+async function loadPersonalMedia(category) {
+  const listEl = category === 'notice' ? $('noticeList') : $('albumGrid');
+  listEl.innerHTML = `<div class="dash-empty">불러오는 중…</div>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_media?category=${category}`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '불러오기 실패');
+    const items = data.items || [];
+    if (category === 'notice') {
+      noticeMediaCache = items;
+      $('noticeCount').textContent = `총 ${items.length}건`;
+      renderNoticeList(items);
+    } else {
+      albumMediaCache = items;
+      $('albumCount').textContent = `총 ${items.length}장`;
+      renderAlbumGrid(items);
+    }
+  } catch (e) {
+    listEl.innerHTML = `<div class="dash-empty" style="color:var(--red);">불러오기 실패</div>`;
+  }
+}
+
+function mediaCanDelete(item) {
+  const role = currentAccountRole();
+  return role === 'admin' || item.uploaded_by_role === role;
+}
+
+function renderNoticeList(items) {
+  const listEl = $('noticeList');
+  if (items.length === 0) {
+    listEl.innerHTML = `<div class="dash-empty">등록된 자료가 없습니다.</div>`;
+    return;
+  }
+  listEl.innerHTML = items.map(it => {
+    const isImage = (it.content_type || '').startsWith('image/');
+    const isPdf = it.content_type === 'application/pdf';
+    const uploaderLabel = it.uploaded_by_role === 'family' ? '가족' : '나';
+    const dateLabel = new Date(it.created_at).toLocaleString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' });
+    const previewHtml = isImage && it.view_url
+      ? `<img src="${esc(it.view_url)}" style="width:100%; max-width:260px; border-radius:var(--radius-sm); display:block; margin-bottom:8px; cursor:pointer;" onclick="openAlbumViewerUrl('${esc(it.view_url)}')">`
+      : isPdf
+        ? `<a class="hr-edit-link" onclick="openPersonalMediaFile('${it.id}')" style="display:inline-block; margin-bottom:6px;">📄 PDF 미리보기</a>`
+        : '';
+    return `
+      <div style="padding:12px; background:var(--bg); border-radius:var(--radius-sm);">
+        ${previewHtml}
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span>${fileTypeIcon(it.content_type)} ${esc(it.file_name)}</span>
+          <span style="font-size:11px; color:var(--text-muted); margin-left:auto;">등록: ${uploaderLabel} · ${dateLabel}</span>
+        </div>
+        ${it.note ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">${esc(it.note)}</div>` : ''}
+        <div style="margin-top:8px; display:flex; gap:10px;">
+          ${!isImage ? `<a class="hr-edit-link" onclick="openPersonalMediaFile('${it.id}')">${isPdf ? '미리보기' : '다운로드'}</a>` : ''}
+          ${mediaCanDelete(it) ? `<a class="hr-edit-link" style="color:var(--red);" onclick="deletePersonalMedia('${it.id}', '${it.category}')">삭제</a>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderAlbumGrid(items) {
+  const grid = $('albumGrid');
+  if (items.length === 0) {
+    grid.innerHTML = `<div class="dash-empty">등록된 사진이 없습니다.</div>`;
+    return;
+  }
+  grid.innerHTML = items.map(it => `
+    <div style="position:relative;">
+      <img src="${esc(it.view_url || '')}" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:var(--radius-sm); cursor:pointer; background:var(--bg);"
+           onclick="openAlbumViewerUrl('${esc(it.view_url || '')}')">
+      ${mediaCanDelete(it) ? `<a class="hr-edit-link" style="position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.55); color:#fff; border:none; padding:2px 8px; border-radius:10px; font-size:11px;" onclick="event.stopPropagation(); deletePersonalMedia('${it.id}', 'album')">삭제</a>` : ''}
+    </div>
+  `).join('');
+}
+
+function openAlbumViewerUrl(url) {
+  if (!url) return;
+  $('albumViewerImg').src = url;
+  $('albumViewerModal').style.display = 'flex';
+}
+function closeAlbumViewer() { $('albumViewerModal').style.display = 'none'; }
+
+async function openPersonalMediaFile(id) {
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_media?category=notice&file_id=${id}`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '열람 실패');
+    window.open(data.view_url, '_blank');
+  } catch (e) {
+    alert('파일을 여는 중 오류가 발생했습니다: ' + (e.message || ''));
+  }
+}
+
+function openMediaUploadModal(category) {
+  pendingMediaUploadCategory = category;
+  $('mediaUploadModalTitle').textContent = category === 'notice' ? '알림장 자료 추가' : '앨범 사진 추가';
+  $('mediaUploadFileLabel').firstChild.textContent = category === 'notice'
+    ? '파일 선택 (이미지/PDF/문서, 8MB 이하) '
+    : '사진 선택 (여러 장 가능, 각 8MB 이하) ';
+  $('mu_file').value = '';
+  $('mu_file').multiple = category === 'album';
+  $('mu_file').accept = category === 'album' ? 'image/*' : '';
+  $('mu_note').value = '';
+  $('mediaUploadModalMsg').textContent = '';
+  $('mediaUploadModal').style.display = 'flex';
+}
+function closeMediaUploadModal() { $('mediaUploadModal').style.display = 'none'; }
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function saveMediaUpload() {
+  const files = Array.from($('mu_file').files || []);
+  if (files.length === 0) {
+    $('mediaUploadModalMsg').textContent = '파일을 선택해주세요.';
+    return;
+  }
+  const note = $('mu_note').value.trim() || null;
+  const btn = $('mediaUploadSaveBtn');
+  btn.disabled = true;
+  let okCount = 0;
+  for (const file of files) {
+    if (file.size > 8 * 1024 * 1024) {
+      $('mediaUploadModalMsg').textContent = `"${file.name}" 파일이 8MB를 넘어서 건너뛰었습니다.`;
+      continue;
+    }
+    try {
+      const base64 = await fileToBase64(file);
+      const res = await fetch(`${apiBase()}/api/personal_media`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        body: JSON.stringify({
+          category: pendingMediaUploadCategory,
+          file_name: file.name,
+          content_type: file.type,
+          file_base64: base64,
+          note,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '업로드 실패');
+      okCount += 1;
+    } catch (e) {
+      $('mediaUploadModalMsg').textContent = `"${file.name}" 업로드 중 오류: ${e.message || ''}`;
+    }
+  }
+  btn.disabled = false;
+  if (okCount > 0) {
+    closeMediaUploadModal();
+    loadPersonalMedia(pendingMediaUploadCategory);
+  }
+}
+
+async function deletePersonalMedia(id, category) {
+  if (!await appConfirm('이 자료를 삭제하시겠습니까?', '자료 삭제')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_media?id=${id}`, {
+      method: 'DELETE', headers: authHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '삭제 실패');
+    loadPersonalMedia(category);
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다: ' + (e.message || ''));
   }
 }
