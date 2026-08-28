@@ -222,10 +222,12 @@
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
-        <div id="manualToolsWrap" style="display:none; align-items:center; gap:6px; background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px;">
+        <div style="display:flex; align-items:center; gap:6px; background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px;">
           <span style="font-size:10px; color:var(--text-muted); font-weight:600; white-space:nowrap;">🛠 도구</span>
           <button class="secondary" id="manualBtn" style="display:none;" onclick="openManualModal()">📖 매뉴얼</button>
+          <button class="secondary" onclick="downloadFullBackup()" id="backupBtn">전체 데이터 백업</button>
         </div>
+        <span id="lastBackupLabel" style="font-size:12px; color:var(--text-muted);"></span>
         <!-- pill removed -->
       </div>
     </header>
@@ -1077,8 +1079,22 @@
               <h3 style="font-size:14px; margin:0;">📌 [참고] 지급기준표</h3>
               <button class="secondary" onclick="saveBonusCriteriaNote()" style="font-size:11px; padding:3px 8px;">저장</button>
             </div>
+
             <p style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
-              직급별 지급 기준을 참고용으로 적어두는 칸이에요. 여기서 수정하시면 저장되고, 인쇄물에도 그대로 나가요.
+              직급마다 금액 단위가 달라서(임원은 천단위, 그 외는 다르게 등) 표로 정리해두면 한눈에 비교하기 쉬워요. 행 추가/삭제하면서 자유롭게 수정하세요.
+            </p>
+            <div class="table-wrap" style="margin-bottom:12px;">
+              <table class="table" id="bonusCriteriaTable" style="width:100%;">
+                <thead>
+                  <tr><th style="min-width:120px;">직급</th><th>기준(자유 입력 — 예: 2,000~10,000천원)</th><th style="width:60px;"></th></tr>
+                </thead>
+                <tbody id="bonusCriteriaTableBody"></tbody>
+              </table>
+            </div>
+            <button class="secondary" onclick="addBonusCriteriaRow()" style="font-size:12px; margin-bottom:16px;">+ 행 추가</button>
+
+            <p style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
+              표로 정리하기 애매한 추가 설명이나 예외사항은 아래에 자유롭게 적어두세요.
             </p>
             <textarea id="bonusCriteriaNote" class="hr-input" rows="6" style="width:100%; resize:vertical;"
               placeholder="예: 임원 2,000~10,000천원 / 부장 2,000~2,500천원 / 차장·과장 1,500~2,000천원 / 대리 1,500천원 / 1년미만 300천원(2개월 이상 근무자)"></textarea>
@@ -1565,10 +1581,13 @@
   <table class="table mc-framed-table" style="width:100%; font-size:11px;">
     <thead>
       <tr>
-        <th>이름</th><th>지사</th><th>부서</th>
-        <th class="num" style="background:#fff3d6;">이번 차수 지급액</th>
+        <th style="white-space:nowrap;">이름</th><th style="white-space:nowrap;">지사</th><th style="white-space:nowrap;">부서</th><th style="white-space:nowrap;">직급</th><th style="white-space:nowrap;">가입일</th>
+        <th class="num">누적추계액(현재기준)</th>
+        <th class="num">실불입액 합계</th>
+        <th class="num">잔액</th>
         <th class="num" style="background:#f2f2f2;">당해년도 발생액</th>
         <th class="num" style="background:#f2f2f2;">당해년도 불입액 합계</th>
+        <th class="num" style="background:#fff3d6;">이번 차수 지급액</th>
       </tr>
     </thead>
     <tbody id="pension_install_print_tbody"></tbody>
@@ -1840,30 +1859,6 @@
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
       <button class="secondary" onclick="closeApplyStandardModal()">취소</button>
       <button class="primary" onclick="confirmApplyStandard()">반영</button>
-    </div>
-  </div>
-</div>
-
-<!-- 데이터 백업 모달 -->
-<div id="dataBackupModal" class="hr-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeDataBackupModal()">
-  <div class="hr-modal" style="width:520px;">
-    <h2>💾 데이터 백업</h2>
-    <p style="font-size:12px; color:var(--text-secondary); line-height:1.6; margin:8px 0 16px;">
-      회사 업무 데이터와 계약 첨부파일을 각각 내려받습니다. 백업 파일에는 민감한 정보가 포함되므로 회사 보안 저장공간에 보관해주세요.
-    </p>
-    <div style="display:flex; flex-direction:column; gap:10px;">
-      <div class="settings-row" style="cursor:default; display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <div><b>전체 데이터 백업</b><div style="font-size:11px; color:var(--text-muted); margin-top:3px;">직원·급여·일정·연락처·계약 등 전체 업무자료(JSON)</div></div>
-        <button class="primary" onclick="downloadFullBackup()" id="backupBtn">다운로드</button>
-      </div>
-      <div class="settings-row" style="cursor:default; display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <div><b>첨부파일 ZIP 백업</b><div style="font-size:11px; color:var(--text-muted); margin-top:3px;">계약/증빙관리의 실제 첨부파일과 백업 명세</div></div>
-        <button class="primary" onclick="downloadStorageBackup()" id="storageBackupBtn">다운로드</button>
-      </div>
-    </div>
-    <div id="lastBackupLabel" style="font-size:12px; color:var(--text-muted); margin-top:14px;"></div>
-    <div style="display:flex; justify-content:flex-end; margin-top:18px;">
-      <button class="secondary" onclick="closeDataBackupModal()">닫기</button>
     </div>
   </div>
 </div>
