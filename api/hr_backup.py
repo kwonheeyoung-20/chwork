@@ -72,6 +72,7 @@ BACKUP_TABLES = [
     "timetable_teachers",
     "timetable_entries",
     "pension_installment_snapshots",
+    "personal_media",
     # 월마감 보고서
     "monthly_closing_remarks",
     "monthly_closing_reports",

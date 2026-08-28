@@ -72,6 +72,22 @@ def storage_upload(path, data_bytes, content_type):
         return json.loads(resp.read())
 
 
+def storage_delete(path):
+    if not path:
+        return
+    url = f"{SUPABASE_URL}/storage/v1/object/{BUCKET}/{quote(path)}"
+    req = urllib.request.Request(url, method="DELETE", headers={
+        "Authorization": f"Bearer {SUPABASE_SECRET_KEY}",
+        "apikey": SUPABASE_SECRET_KEY,
+    })
+    try:
+        urllib.request.urlopen(req, timeout=15)
+    except urllib.error.HTTPError:
+        pass
+    except urllib.error.URLError:
+        pass
+
+
 def storage_sign_url(path, expires_in=3600):
     if not path:
         return None
@@ -314,6 +330,20 @@ class handler(BaseHTTPRequestHandler):
             return
 
         # mode == "finalize" — 저장소에 업로드 + 목록에 등록(확정)
+        # 같은 period_key(예: "2026-06")를 여러 번 재확정하면 매번 새 UUID로 파일이
+        # 새로 생성되는데, DB 행은 upsert라 최신 파일 하나만 가리키게 되고 예전 파일들은
+        # 스토리지에 그대로 남아 고아 파일로 쌓임 — 그래서 새로 올리기 전에 기존
+        # storage_path를 먼저 확인해두고, 새 파일 저장이 끝난 뒤 예전 파일을 지움.
+        old_storage_path = None
+        try:
+            existing_rows = rest_request(
+                "GET", f"monthly_closing_reports?period_key=eq.{period_key}&select=storage_path"
+            ) or []
+            if existing_rows:
+                old_storage_path = existing_rows[0].get("storage_path")
+        except SupabaseError:
+            old_storage_path = None
+
         save_warning = None
         try:
             storage_path = f"monthly_closing/{uuid.uuid4()}.xlsx"
@@ -333,6 +363,8 @@ class handler(BaseHTTPRequestHandler):
                 },
                 prefer="resolution=merge-duplicates",
             )
+            if old_storage_path and old_storage_path != storage_path:
+                storage_delete(old_storage_path)
         except Exception as exc:
             save_warning = f"파일은 생성됐지만 목록 확정 저장에 실패했습니다: {exc}"
 
