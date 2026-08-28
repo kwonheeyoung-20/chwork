@@ -1552,7 +1552,9 @@ class handler(BaseHTTPRequestHandler):
     # personal (개인 스케줄 - 가족 일정)
     # ────────────────────────────────────────────────────────
     def _generate_lunar_occurrences(self):
-        """date_type='lunar'인 매년 반복 일정을, 매년 실제 양력 날짜로 환산해서 발생일자를 채워넣음."""
+        """date_type='lunar'인 매년 반복 일정을, 매년 실제 양력 날짜로 환산해서 발생일자를 채워넣음.
+        예전에는 (음력 일정 수 × 연도 수)만큼 건마다 개별 POST를 보내서 왕복이 여러 번 발생했는데,
+        전부 모았다가 배열 하나로 한 번에 upsert하도록 바꿔서 왕복을 1번으로 줄임."""
         tasks = rest_request(
             "GET", "personal_schedule_tasks?date_type=eq.lunar&active=eq.true&select=*"
         ) or []
@@ -1560,6 +1562,7 @@ class handler(BaseHTTPRequestHandler):
             return
         today = kst_today()
         horizon_year = (today + datetime.timedelta(days=400)).year
+        rows_to_upsert = []
         for t in tasks:
             if t.get("lunar_month") is None or t.get("lunar_day") is None:
                 continue
@@ -1571,11 +1574,14 @@ class handler(BaseHTTPRequestHandler):
                     continue
                 if t.get("end_date") and solar_date > t["end_date"]:
                     continue
-                rest_request(
-                    "POST", "personal_schedule_occurrences?on_conflict=task_id,due_date",
-                    body={"task_id": t["id"], "due_date": solar_date},
-                    prefer="resolution=merge-duplicates",
-                )
+                rows_to_upsert.append({"task_id": t["id"], "due_date": solar_date})
+        if not rows_to_upsert:
+            return
+        rest_request(
+            "POST", "personal_schedule_occurrences?on_conflict=task_id,due_date",
+            body=rows_to_upsert,
+            prefer="resolution=merge-duplicates",
+        )
 
     def _get_personal(self, qs):
         role = self._role()
