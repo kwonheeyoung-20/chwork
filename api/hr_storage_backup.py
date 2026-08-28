@@ -48,9 +48,17 @@ def _request(method, url, body=None, timeout=25):
 
 def _rest_rows():
     # 운영 테이블에는 created_at 컬럼이 없으므로 실제 저장에 사용하는 열만 조회합니다.
-    path = "contract_document_files?select=id,document_id,file_name,storage_path,file_size,content_type&order=id.asc"
-    safe = urllib.parse.quote(path, safe="?&=,.*:()!~%")
-    return _request("GET", f"{SUPABASE_URL}/rest/v1/{safe}") or []
+    # contract_document_files(계약/증빙 첨부파일)뿐 아니라 monthly_closing_reports(월결산서
+    # 산출물)도 같은 contracts 버킷(monthly_closing/ 하위경로)을 쓰므로 같이 조회해서
+    # storage_path -> 원래 파일명 매핑에 포함시킴. 이게 빠지면 월결산서 파일은 zip에
+    # UUID 같은 저장용 이름 그대로 담겨서 뭐가 뭔지 알아볼 수 없게 됨.
+    contract_path = "contract_document_files?select=id,document_id,file_name,storage_path,file_size,content_type&order=id.asc"
+    monthly_path = "monthly_closing_reports?select=id,file_name,storage_path&order=id.asc"
+    rows = []
+    for path in (contract_path, monthly_path):
+        safe = urllib.parse.quote(path, safe="?&=,.*:()!~%")
+        rows.extend(_request("GET", f"{SUPABASE_URL}/rest/v1/{safe}") or [])
+    return rows
 
 
 def _list_objects(prefix=""):

@@ -44,6 +44,7 @@ BACKUP_TABLES = [
     "pension_accrual_adjustments",
     "pension_cumulative_history",
     "pension_multiplier_history",
+    "pension_installment_snapshots",
     "period_locks",
     # 성과급·인사기록 보고서
     "bonus_reports",
