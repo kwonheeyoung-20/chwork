@@ -4460,6 +4460,67 @@ function fmtManwon(thousand) {
   return Number(thousand).toLocaleString('ko-KR');
 }
 
+// 지급기준표: 표(직급별)와 자유텍스트를 같은 criteria_note 문자열 하나에 같이 저장함
+// (백엔드에 별도 컬럼 추가 없이, 마커로 구분해서 안에 JSON을 숨겨 넣는 방식)
+const BONUS_CRITERIA_TABLE_MARKER = '<!--BONUS_CRITERIA_TABLE:';
+const BONUS_CRITERIA_TABLE_MARKER_END = '-->';
+
+function parseBonusCriteriaNote(raw) {
+  const text = raw || '';
+  const start = text.indexOf(BONUS_CRITERIA_TABLE_MARKER);
+  if (start === -1) return { freeText: text, rows: [] };
+  const jsonStart = start + BONUS_CRITERIA_TABLE_MARKER.length;
+  const end = text.indexOf(BONUS_CRITERIA_TABLE_MARKER_END, jsonStart);
+  if (end === -1) return { freeText: text, rows: [] };
+  let rows = [];
+  try {
+    rows = JSON.parse(text.slice(jsonStart, end)) || [];
+  } catch (e) {
+    rows = [];
+  }
+  const freeText = (text.slice(0, start) + text.slice(end + BONUS_CRITERIA_TABLE_MARKER_END.length)).trim();
+  return { freeText, rows };
+}
+
+function buildBonusCriteriaNote(freeText, rows) {
+  const cleanRows = (rows || []).filter(r => (r.position || '').trim() || (r.criteria || '').trim());
+  if (cleanRows.length === 0) return freeText || '';
+  const marker = `${BONUS_CRITERIA_TABLE_MARKER}${JSON.stringify(cleanRows)}${BONUS_CRITERIA_TABLE_MARKER_END}`;
+  return freeText ? `${freeText}\n\n${marker}` : marker;
+}
+
+let bonusCriteriaRows = [];
+
+function renderBonusCriteriaTable() {
+  const tbody = $('bonusCriteriaTableBody');
+  if (bonusCriteriaRows.length === 0) bonusCriteriaRows = [{ position: '', criteria: '' }];
+  tbody.innerHTML = bonusCriteriaRows.map((r, idx) => `
+    <tr>
+      <td><input type="text" class="hr-input bonus-criteria-position" data-idx="${idx}" value="${esc(r.position)}" placeholder="예: 임원"></td>
+      <td><input type="text" class="hr-input bonus-criteria-value" data-idx="${idx}" value="${esc(r.criteria)}" placeholder="예: 2,000~10,000천원"></td>
+      <td style="text-align:center;"><a class="hr-edit-link" onclick="removeBonusCriteriaRow(${idx})">삭제</a></td>
+    </tr>
+  `).join('');
+  tbody.querySelectorAll('.bonus-criteria-position, .bonus-criteria-value').forEach(input => {
+    input.addEventListener('input', () => {
+      const idx = Number(input.dataset.idx);
+      const field = input.classList.contains('bonus-criteria-position') ? 'position' : 'criteria';
+      bonusCriteriaRows[idx][field] = input.value;
+    });
+  });
+}
+
+function addBonusCriteriaRow() {
+  bonusCriteriaRows.push({ position: '', criteria: '' });
+  renderBonusCriteriaTable();
+}
+
+function removeBonusCriteriaRow(idx) {
+  bonusCriteriaRows.splice(idx, 1);
+  if (bonusCriteriaRows.length === 0) bonusCriteriaRows.push({ position: '', criteria: '' });
+  renderBonusCriteriaTable();
+}
+
 async function loadBonusReport() {
   const year = $('bonusYear').value;
   const round = $('bonusRound').value;
@@ -4479,7 +4540,10 @@ async function loadBonusReport() {
     $('bonusY2GroupHeader').textContent = `${data.y2}년 이력 (전전년도)`;
     $('bonusY1GroupHeader').textContent = `${data.y1}년 이력 (직전년도)`;
     $('bonusLockStatus').textContent = data.locked ? `🔒 ${year}년 ${round}차 마감됨` : `${year}년 ${round}차 마감 전`;
-    $('bonusCriteriaNote').value = data.criteria_note || '';
+    const parsed = parseBonusCriteriaNote(data.criteria_note || '');
+    $('bonusCriteriaNote').value = parsed.freeText;
+    bonusCriteriaRows = parsed.rows.length > 0 ? parsed.rows : [{ position: '', criteria: '' }];
+    renderBonusCriteriaTable();
 
     const locked = data.locked;
     if (bonusReportCache.length === 0) {
@@ -4631,11 +4695,12 @@ async function saveBonusReportDraft() {
 async function saveBonusCriteriaNote() {
   const year = Number($('bonusYear').value);
   const round = Number($('bonusRound').value);
+  const combined = buildBonusCriteriaNote($('bonusCriteriaNote').value, bonusCriteriaRows);
   try {
     const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-      body: JSON.stringify({ type: 'bonus_criteria_note', year, round, criteria_note: $('bonusCriteriaNote').value }),
+      body: JSON.stringify({ type: 'bonus_criteria_note', year, round, criteria_note: combined }),
     });
     if (!res.ok) throw new Error('failed');
     alert('지급기준표가 저장되었습니다.');
@@ -4682,13 +4747,36 @@ function _bonusPrintLandscape() {
   $('bonus_print_asof').textContent = `기준일자: ${new Date().toISOString().slice(0, 10)}`;
 
   const criteriaNote = $('bonusCriteriaNote').value.trim();
+  const criteriaRowsForPrint = (bonusCriteriaRows || []).filter(r => (r.position || '').trim() || (r.criteria || '').trim());
   const existingBlock = document.getElementById('bonus_print_criteria_block');
   if (existingBlock) existingBlock.remove();
-  if (criteriaNote) {
+  if (criteriaNote || criteriaRowsForPrint.length > 0) {
     const block = document.createElement('div');
     block.id = 'bonus_print_criteria_block';
-    block.style.cssText = 'margin-top:16px; padding:10px; border:1px solid #ccc; font-size:11px; white-space:pre-wrap;';
-    block.innerHTML = `<b>[참고] 지급기준표</b><br>${esc(criteriaNote).replace(/\n/g, '<br>')}`;
+    block.style.cssText = 'margin-top:16px; padding:10px; border:1px solid #ccc; font-size:11px;';
+    let inner = '<b>[참고] 지급기준표</b>';
+    if (criteriaRowsForPrint.length > 0) {
+      inner += `
+        <table style="width:100%; border-collapse:collapse; margin-top:6px;">
+          <thead><tr>
+            <th style="border:1px solid #ccc; padding:3px 6px; text-align:left; background:#f2f2f2;">직급</th>
+            <th style="border:1px solid #ccc; padding:3px 6px; text-align:left; background:#f2f2f2;">기준</th>
+          </tr></thead>
+          <tbody>
+            ${criteriaRowsForPrint.map(r => `
+              <tr>
+                <td style="border:1px solid #ccc; padding:3px 6px;">${esc(r.position)}</td>
+                <td style="border:1px solid #ccc; padding:3px 6px;">${esc(r.criteria)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+    if (criteriaNote) {
+      inner += `<div style="margin-top:8px; white-space:pre-wrap;">${esc(criteriaNote).replace(/\n/g, '<br>')}</div>`;
+    }
+    block.innerHTML = inner;
     $('bonusReportPrintArea').appendChild(block);
   }
 
