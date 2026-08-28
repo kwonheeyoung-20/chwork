@@ -4483,7 +4483,7 @@ function parseBonusCriteriaNote(raw) {
 }
 
 function buildBonusCriteriaNote(freeText, rows) {
-  const cleanRows = (rows || []).filter(r => (r.position || '').trim() || (r.criteria || '').trim());
+  const cleanRows = (rows || []).filter(r => (r.position || '').trim() || (r.criteria || '').trim() || (r.note || '').trim());
   if (cleanRows.length === 0) return freeText || '';
   const marker = `${BONUS_CRITERIA_TABLE_MARKER}${JSON.stringify(cleanRows)}${BONUS_CRITERIA_TABLE_MARKER_END}`;
   return freeText ? `${freeText}\n\n${marker}` : marker;
@@ -4493,31 +4493,33 @@ let bonusCriteriaRows = [];
 
 function renderBonusCriteriaTable() {
   const tbody = $('bonusCriteriaTableBody');
-  if (bonusCriteriaRows.length === 0) bonusCriteriaRows = [{ position: '', criteria: '' }];
+  if (bonusCriteriaRows.length === 0) bonusCriteriaRows = [{ position: '', criteria: '', note: '' }];
   tbody.innerHTML = bonusCriteriaRows.map((r, idx) => `
     <tr>
       <td><input type="text" class="hr-input bonus-criteria-position" data-idx="${idx}" value="${esc(r.position)}" placeholder="예: 임원"></td>
       <td><input type="text" class="hr-input bonus-criteria-value" data-idx="${idx}" value="${esc(r.criteria)}" placeholder="예: 2,000~10,000천원"></td>
+      <td><input type="text" class="hr-input bonus-criteria-note" data-idx="${idx}" value="${esc(r.note || '')}" placeholder="비고"></td>
       <td style="text-align:center;"><a class="hr-edit-link" onclick="removeBonusCriteriaRow(${idx})">삭제</a></td>
     </tr>
   `).join('');
-  tbody.querySelectorAll('.bonus-criteria-position, .bonus-criteria-value').forEach(input => {
+  tbody.querySelectorAll('.bonus-criteria-position, .bonus-criteria-value, .bonus-criteria-note').forEach(input => {
     input.addEventListener('input', () => {
       const idx = Number(input.dataset.idx);
-      const field = input.classList.contains('bonus-criteria-position') ? 'position' : 'criteria';
+      const field = input.classList.contains('bonus-criteria-position') ? 'position'
+        : input.classList.contains('bonus-criteria-value') ? 'criteria' : 'note';
       bonusCriteriaRows[idx][field] = input.value;
     });
   });
 }
 
 function addBonusCriteriaRow() {
-  bonusCriteriaRows.push({ position: '', criteria: '' });
+  bonusCriteriaRows.push({ position: '', criteria: '', note: '' });
   renderBonusCriteriaTable();
 }
 
 function removeBonusCriteriaRow(idx) {
   bonusCriteriaRows.splice(idx, 1);
-  if (bonusCriteriaRows.length === 0) bonusCriteriaRows.push({ position: '', criteria: '' });
+  if (bonusCriteriaRows.length === 0) bonusCriteriaRows.push({ position: '', criteria: '', note: '' });
   renderBonusCriteriaTable();
 }
 
@@ -4542,7 +4544,7 @@ async function loadBonusReport() {
     $('bonusLockStatus').textContent = data.locked ? `🔒 ${year}년 ${round}차 마감됨` : `${year}년 ${round}차 마감 전`;
     const parsed = parseBonusCriteriaNote(data.criteria_note || '');
     $('bonusCriteriaNote').value = parsed.freeText;
-    bonusCriteriaRows = parsed.rows.length > 0 ? parsed.rows : [{ position: '', criteria: '' }];
+    bonusCriteriaRows = parsed.rows.length > 0 ? parsed.rows : [{ position: '', criteria: '', note: '' }];
     renderBonusCriteriaTable();
 
     const locked = data.locked;
@@ -4562,7 +4564,7 @@ async function loadBonusReport() {
     document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => updateBonusRowCalc(tr));
     renderBonusReportTotals();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
   }
 }
 
@@ -4747,7 +4749,7 @@ function _bonusPrintLandscape() {
   $('bonus_print_asof').textContent = `기준일자: ${new Date().toISOString().slice(0, 10)}`;
 
   const criteriaNote = $('bonusCriteriaNote').value.trim();
-  const criteriaRowsForPrint = (bonusCriteriaRows || []).filter(r => (r.position || '').trim() || (r.criteria || '').trim());
+  const criteriaRowsForPrint = (bonusCriteriaRows || []).filter(r => (r.position || '').trim() || (r.criteria || '').trim() || (r.note || '').trim());
   const existingBlock = document.getElementById('bonus_print_criteria_block');
   if (existingBlock) existingBlock.remove();
   if (criteriaNote || criteriaRowsForPrint.length > 0) {
@@ -4761,12 +4763,14 @@ function _bonusPrintLandscape() {
           <thead><tr>
             <th style="border:1px solid #ccc; padding:3px 6px; text-align:left; background:#f2f2f2;">직급</th>
             <th style="border:1px solid #ccc; padding:3px 6px; text-align:left; background:#f2f2f2;">기준</th>
+            <th style="border:1px solid #ccc; padding:3px 6px; text-align:left; background:#f2f2f2;">비고</th>
           </tr></thead>
           <tbody>
             ${criteriaRowsForPrint.map(r => `
               <tr>
                 <td style="border:1px solid #ccc; padding:3px 6px;">${esc(r.position)}</td>
                 <td style="border:1px solid #ccc; padding:3px 6px;">${esc(r.criteria)}</td>
+                <td style="border:1px solid #ccc; padding:3px 6px;">${esc(r.note || '')}</td>
               </tr>
             `).join('')}
           </tbody>
