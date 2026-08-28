@@ -16,6 +16,7 @@ import traceback
 import urllib.request
 import urllib.parse
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -108,14 +109,45 @@ class handler(BaseHTTPRequestHandler):
         year = int(year_str)
         round_no = int(round_str)
         y1, y2 = year - 1, year - 2
+        bonus_type = f"성과급{round_no}차"
 
-        employees = rest_request(
-            "GET", "employees?status=eq.재직&select=id,name,branch,department,position,hire_date&order=hire_date.asc"
-        ) or []
+        # 서로 관련 없는 조회 5개를 순서대로(직렬) 하나씩 기다리면 지연이 그대로 누적돼서
+        # (한 건당 최대 10초 타임아웃 x 5) 가끔 서버리스 함수 실행시간을 넘겨 간헐적으로
+        # "서버 에러"가 나는 원인이 됐음(패턴 없이 느릴 때만 터짐) — 병렬로 한 번에 보내서
+        # 전체 소요시간을 가장 느린 요청 1개 수준으로 줄임.
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            employees_future = pool.submit(
+                rest_request, "GET",
+                "employees?status=eq.재직&select=id,name,branch,department,position,hire_date&order=hire_date.asc",
+            )
+            salary_future = pool.submit(
+                rest_request, "GET",
+                "salary_history?select=employee_id,effective_month,annual_salary_thousand&order=effective_month.asc",
+            )
+            bonus_future = pool.submit(
+                rest_request, "GET",
+                f"other_payments?payment_type=eq.{bonus_type}&select=employee_id,payment_date,amount,note&order=payment_date.asc",
+            )
+            decided_future = pool.submit(
+                rest_request, "GET", f"bonus_reports?year=eq.{year}&round=eq.{round_no}&select=*",
+            )
+            locked_future = pool.submit(is_period_locked, f"bonus-{year}-{round_no}")
+            note_future = pool.submit(
+                rest_request, "GET",
+                f"bonus_report_notes?year=eq.{year}&round=eq.{round_no}&select=criteria_note",
+            )
 
-        salary_rows = rest_request(
-            "GET", "salary_history?select=employee_id,effective_month,annual_salary_thousand&order=effective_month.asc"
-        ) or []
+            employees = employees_future.result() or []
+            salary_rows = salary_future.result() or []
+            bonus_rows = bonus_future.result() or []
+            decided_rows = decided_future.result() or []
+            locked = locked_future.result()
+            try:
+                note_rows = note_future.result() or []
+                criteria_note = note_rows[0]["criteria_note"] if note_rows else None
+            except SupabaseError:
+                criteria_note = None  # bonus_report_notes 테이블이 아직 없으면(마이그레이션 084 미실행) 그냥 빈 값으로
+
         # 직원별로, 해당 연도 안에서 가장 마지막(늦은) effective_month의 연봉을 그 해 연봉으로 봄
         salary_by_emp_year = {}
         for r in salary_rows:
@@ -131,10 +163,6 @@ class handler(BaseHTTPRequestHandler):
         # 해당하는 타입만 가져와야 함 — 예전에는 payment_type=like.*성과급*로 1차/2차를
         # 둘 다 가져와서 합쳐버리는 바람에, 1차 보고서를 봐도 2차 금액까지 합산된 값이
         # 나오는 버그가 있었음(사용자 신고로 발견).
-        bonus_type = f"성과급{round_no}차"
-        bonus_rows = rest_request(
-            "GET", f"other_payments?payment_type=eq.{bonus_type}&select=employee_id,payment_date,amount,note&order=payment_date.asc"
-        ) or []
         bonus_by_emp_year = {}
         note_by_emp_year = {}  # 과거 성과급의 "기준/율"을 note에 적어두신 경우 그대로 보여줌(맨 마지막 건 기준)
         for r in bonus_rows:
@@ -148,20 +176,7 @@ class handler(BaseHTTPRequestHandler):
             if r.get("note"):
                 note_by_emp_year[key] = r["note"]
 
-        decided_rows = rest_request(
-            "GET", f"bonus_reports?year=eq.{year}&round=eq.{round_no}&select=*"
-        ) or []
         decided_by_emp = {r["employee_id"]: r for r in decided_rows}
-
-        locked = is_period_locked(f"bonus-{year}-{round_no}")
-
-        try:
-            note_rows = rest_request(
-                "GET", f"bonus_report_notes?year=eq.{year}&round=eq.{round_no}&select=criteria_note"
-            ) or []
-            criteria_note = note_rows[0]["criteria_note"] if note_rows else None
-        except SupabaseError:
-            criteria_note = None  # bonus_report_notes 테이블이 아직 없으면(마이그레이션 084 미실행) 그냥 빈 값으로
 
         def monthly(annual_thousand):
             return round(annual_thousand * 1000 / 12) if annual_thousand else None
