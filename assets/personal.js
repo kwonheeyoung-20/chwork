@@ -106,11 +106,20 @@ async function showMain() {
   else setTimeout(loadSecondaryData, 250);
 }
 
+// 반복일정 회차 생성(prepare=1)은 서버에서 꽤 무거운 작업(전체 일정 재계산)이라,
+// 페이지를 열 때마다 매번 실행할 필요는 없습니다. 저장/수정 시점에는 서버가 이미
+// 자동으로 갱신해주므로, 여기서는 "혹시 놓친 게 있을 때"를 대비한 catch-up 용도로
+// 일정 시간(12시간)에 한 번만 실행되도록 제한합니다.
+const PERSONAL_PREPARE_THROTTLE_MS = 12 * 60 * 60 * 1000;
+
 async function preparePersonalScheduleData() {
   try {
+    const lastRun = Number(localStorage.getItem('chwork_personal_prepare_at') || 0);
+    if (Date.now() - lastRun < PERSONAL_PREPARE_THROTTLE_MS) return;
     const res = await fetch(`${apiBase()}/api/personal_schedule?prepare=1`, { headers: authHeaders() });
     if (handle401(res)) return;
     if (!res.ok) throw new Error('일정 준비 실패');
+    localStorage.setItem('chwork_personal_prepare_at', String(Date.now()));
   } catch (e) {
     // 조회 화면에서 구체적인 오류를 표시할 수 있도록 여기서는 진행을 막지 않습니다.
   }
@@ -633,7 +642,7 @@ function closePersonalEventModal() { $('personalEventModal').style.display = 'no
 
 async function editPersonalTask(taskId) {
   try {
-    const res = await fetch(`${apiBase()}/api/personal_schedule?tasks=1`, { headers: authHeaders() });
+    const res = await fetch(`${apiBase()}/api/personal_schedule?tasks=1&skip_prepare=1`, { headers: authHeaders() });
     if (handle401(res)) return;
     const data = await res.json();
     personalTasksCache = data.tasks || [];
