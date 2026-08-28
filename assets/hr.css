@@ -64,6 +64,48 @@
   background: #d9d9d9 !important;
 }
 
+/* 퇴직연금(현황/차수별) 인쇄 합계 행도 성과급보고서와 동일하게 회색 배경 */
+#pensionPrintArea .hr-total-row td,
+#pensionInstallPrintArea .hr-total-row td {
+  background: #d9d9d9 !important;
+}
+
+/* 성과급보고서: 2024년/2025년 이력 칸이 둘 다 같은 옅은 하늘색이라 경계가 잘 안 보이던 문제 —
+   데이터 행에도 헤더와 같은 계열의 옅은 배경을 칸별로 깔고, 그룹 사이에 굵은 세로선을 넣어
+   순번~입사일 / 2024년 / 2025년 / 당해년도 현재급여 / 결정 구간이 한눈에 구분되게 함.
+   (합계 행은 이미 전체를 회색으로 덮으므로 여기서 제외) */
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(7),
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(8),
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(9),
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(10),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(7),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(8),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(9),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(10) {
+  background: #f4f8fd;
+}
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(11),
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(12),
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(13),
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(14),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(11),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(12),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(13),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(14) {
+  background: #f2faf5;
+}
+#bonusReportTable thead th:nth-child(7), #bonusReportTable tbody td:nth-child(7),
+#bonusReportPrintArea thead th:nth-child(7), #bonusReportPrintArea tbody td:nth-child(7),
+#bonusReportTable thead th:nth-child(11), #bonusReportTable tbody td:nth-child(11),
+#bonusReportPrintArea thead th:nth-child(11), #bonusReportPrintArea tbody td:nth-child(11),
+#bonusReportTable thead th:nth-child(15), #bonusReportTable tbody td:nth-child(15),
+#bonusReportPrintArea thead th:nth-child(15), #bonusReportPrintArea tbody td:nth-child(15),
+#bonusReportTable thead th:nth-child(17), #bonusReportTable tbody td:nth-child(17),
+#bonusReportPrintArea thead th:nth-child(17), #bonusReportPrintArea tbody td:nth-child(17) {
+  border-left: 2px solid #999 !important;
+}
+
+
 /* 합계(hr-total-row)가 있는 인쇄 표들: 표 전체를 위아래로 테두리 쳐서 경계를 명확히 하고,
    헤더 밑줄·합계 윗줄은 짝이 맞게 회색 한 줄씩만(배경 채우기는 안 함) */
 #pensionPrintArea table.mc-framed-table,
@@ -96,8 +138,8 @@
   #printArea .table th, #printArea .hr-total-row td,
   #payslipPrintArea .table th, #payslipPrintArea .hr-total-row td,
   #registerPrintArea .table th, #registerPrintArea .hr-total-row td,
-  #pensionPrintArea .table th, #pensionPrintArea .hr-total-row td,
-  #pensionInstallPrintArea .table th, #pensionInstallPrintArea .hr-total-row td,
+  #pensionPrintArea .table th,
+  #pensionInstallPrintArea .table th,
   #mcPrintArea .table th, #mcPrintArea .hr-total-row td,
   #bonusReportPrintArea .table th,
   #promoMatrixPrintArea .table th, #promoMatrixPrintArea .hr-total-row td {
