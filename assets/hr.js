@@ -244,7 +244,14 @@ function showMain() {
   $('hrMain').style.display = 'flex';
   const validGroups = ['home', 'payroll', 'pension', 'contacts', 'contractdocs'];
   const hashGroup = (window.location.hash || '').replace('#', '');
-  switchMenuGroup(validGroups.includes(hashGroup) ? hashGroup : 'home');
+  if (hashGroup === 'data-backup') {
+    // 다른 화면(분석및보고/업무일정 등)의 설정에서 "데이터 백업"을 눌렀을 때
+    // hr.html#data-backup으로 넘어오는 경우 — 여기서 바로 백업 모달을 열어줌
+    switchMenuGroup('home');
+    setTimeout(() => { if (typeof openDataBackupModal === 'function') openDataBackupModal(); }, 0);
+  } else {
+    switchMenuGroup(validGroups.includes(hashGroup) ? hashGroup : 'home');
+  }
   loadEmployees();
 }
 

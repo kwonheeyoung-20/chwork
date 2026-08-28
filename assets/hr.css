@@ -94,15 +94,60 @@
 #bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(14) {
   background: #f2faf5;
 }
-#bonusReportTable thead th:nth-child(7), #bonusReportTable tbody td:nth-child(7),
-#bonusReportPrintArea thead th:nth-child(7), #bonusReportPrintArea tbody td:nth-child(7),
-#bonusReportTable thead th:nth-child(11), #bonusReportTable tbody td:nth-child(11),
-#bonusReportPrintArea thead th:nth-child(11), #bonusReportPrintArea tbody td:nth-child(11),
-#bonusReportTable thead th:nth-child(15), #bonusReportTable tbody td:nth-child(15),
-#bonusReportPrintArea thead th:nth-child(15), #bonusReportPrintArea tbody td:nth-child(15),
-#bonusReportTable thead th:nth-child(17), #bonusReportTable tbody td:nth-child(17),
-#bonusReportPrintArea thead th:nth-child(17), #bonusReportPrintArea tbody td:nth-child(17) {
-  border-left: 2px solid #999 !important;
+
+/* 성과급보고서 구분선(세로줄): 순번~입사일 / 2024년 / 2025년 / 당해년도 현재급여 / 결정
+   4개 구간의 경계에만 넣음. 헤더가 1행(그룹명, colspan으로 4~5칸 묶음)과 2행(세부 항목,
+   묶음 없이 낱개)으로 서로 구조가 달라서, 같은 nth-child 번호가 행마다 다른 칸을 가리키는
+   바람에 전에는 위치가 어긋났음 — 그래서 1행은 그룹헤더 id로, 2행은 그 행 안에서의
+   실제 순서로, tbody는 tbody대로 각각 따로 정확히 지정함. 굵기·색은 표 기본 테두리와
+   동일한 1px #999로 통일(따로 굵게 하지 않음 — 진하기만 달라 튀지 않게).
+   가로선도 같은 색으로 맞춰서 세로선과 통일감 있게 함. */
+#bonusReportTable, #bonusReportPrintArea table {
+  border-collapse: collapse;
+}
+#bonusReportTable th, #bonusReportTable td,
+#bonusReportPrintArea th, #bonusReportPrintArea td {
+  border: 1px solid #999 !important;
+}
+/* 헤더 1행: 그룹 시작 칸 4개(2024/2025/현재급여/결정) 왼쪽에 구분선 */
+#bonusReportTable #bonusY2GroupHeader, #bonusReportPrintArea #bonusY2GroupHeader,
+#bonusReportTable #bonusY1GroupHeader, #bonusReportPrintArea #bonusY1GroupHeader,
+#bonusReportTable #bonusNowGroupHeader, #bonusReportPrintArea #bonusNowGroupHeader,
+#bonusReportTable #bonusDecisionGroupHeader, #bonusReportPrintArea #bonusDecisionGroupHeader {
+  border-left: 2px solid #666 !important;
+}
+/* 헤더 2행: 이 행은 순번~입사일(rowspan) 칸이 없이 세부 항목 15칸만 있어서,
+   그 안에서 2025년(5번째)/현재급여(9번째)/결정(11번째) 시작 칸에 구분선 */
+#bonusReportTable thead tr:last-child th:nth-child(5),
+#bonusReportPrintArea thead tr:last-child th:nth-child(5),
+#bonusReportTable thead tr:last-child th:nth-child(9),
+#bonusReportPrintArea thead tr:last-child th:nth-child(9),
+#bonusReportTable thead tr:last-child th:nth-child(11),
+#bonusReportPrintArea thead tr:last-child th:nth-child(11) {
+  border-left: 2px solid #666 !important;
+}
+/* tbody(실제 데이터 행): 순번~입사일 6칸 + 나머지가 그대로 이어지므로 전체 칸 기준
+   7번째(2024 시작)/11번째(2025 시작)/15번째(현재급여 시작)/17번째(결정 시작) */
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(7),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(7),
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(11),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(11),
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(15),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(15),
+#bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(17),
+#bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(17) {
+  border-left: 2px solid #666 !important;
+}
+/* 합계 행은 colspan으로 칸이 묶여있어서 물리적 칸 순서가 데이터 행과 다름
+   (1:순번~기준2024 통합, 2:2024성과급합계, 3:2025그룹 시작, 4:2025성과급합계,
+    5:현재급여 시작, 6:결정 시작) — 직접 계산해서 지정 */
+#bonusReportTable tbody tr.hr-total-row td:nth-child(3),
+#bonusReportPrintArea tbody tr.hr-total-row td:nth-child(3),
+#bonusReportTable tbody tr.hr-total-row td:nth-child(5),
+#bonusReportPrintArea tbody tr.hr-total-row td:nth-child(5),
+#bonusReportTable tbody tr.hr-total-row td:nth-child(6),
+#bonusReportPrintArea tbody tr.hr-total-row td:nth-child(6) {
+  border-left: 2px solid #666 !important;
 }
 
 
