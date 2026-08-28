@@ -74,6 +74,18 @@ def is_period_locked(period_key):
     return bool(rows) and rows[0].get("locked", False)
 
 
+def is_installment_locked(date_str):
+    """차수(지급일자) 단위 마감 여부. 연도 마감(module=pension)과는 별개로,
+    module=pension_installment / period_key=지급일자(YYYY-MM-DD)로 관리함."""
+    if not date_str:
+        return False
+    date_str = date_str[:10]
+    rows = rest_request(
+        "GET", f"period_locks?module=eq.pension_installment&period_key=eq.{date_str}&select=locked"
+    ) or []
+    return bool(rows) and rows[0].get("locked", False)
+
+
 def is_pre_2026(year_str):
     return bool(year_str) and year_str < "2026"
 
@@ -116,6 +128,12 @@ class handler(BaseHTTPRequestHandler):
 
             if qs.get("locks", ["0"])[0] == "1":
                 locks = rest_request("GET", "period_locks?module=eq.pension&select=*&order=period_key.desc")
+                return self._send(200, {"locks": locks})
+
+            if qs.get("installment_locks", ["0"])[0] == "1":
+                locks = rest_request(
+                    "GET", "period_locks?module=eq.pension_installment&select=*&order=period_key.desc"
+                )
                 return self._send(200, {"locks": locks})
 
             # 특정 직원의 불입 내역 또는 보정 내역 또는 연도별 발생액 조회
@@ -232,8 +250,12 @@ class handler(BaseHTTPRequestHandler):
         return self._send(200, {"installments": installments})
 
     def _get_pension_print_installment(self, qs):
-        """인쇄용: 선택한 차수(기간) 지급액 + 당해년도 발생액/불입액 합계를 함께 반환.
-        예) 2026년 상반기 불입분만 인쇄하고 싶을 때 from~to로 그 기간을 지정."""
+        """인쇄용: 화면 리스트와 같은 구분(이름/지사/부서/직급/가입일/누적추계액(현재기준)/
+        실불입액 합계/잔액/당해년도 발생액/당해년도 불입액 합계/이번 차수 지급액)으로 반환.
+
+        저장 시점에 남겨둔 스냅샷(pension_installment_snapshots)이 있으면 그걸 그대로 쓰고
+        (그 처리시점 자료를 그대로 인쇄), 스냅샷이 없는 직원(2026-06-30 이전 이관 자료 등)만
+        예전처럼 오늘 기준으로 재계산해서 채워줌 — 이 경우 어쩔 수 없이 오늘 기준 값이 됨."""
         from_date = qs.get("from", [None])[0]
         to_date = qs.get("to", [None])[0]
         if not from_date or not to_date:
@@ -244,19 +266,160 @@ class handler(BaseHTTPRequestHandler):
         import datetime
         kst_today = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date()
         today_str = kst_today.isoformat()
-        year_start = f"{kst_today.year}-01-01"
 
-        base = rest_request("GET", "pension_status?select=id,name,branch,department") or []
+        # 1) 저장 시점 스냅샷이 있으면 그대로 사용
+        snap_rows = rest_request(
+            "GET",
+            f"pension_installment_snapshots?installment_date=gte.{from_date}&installment_date=lte.{to_date}&select=*",
+        ) or []
+        snapshot_by_emp = {}
+        for s in snap_rows:
+            eid = s["employee_id"]
+            if eid not in snapshot_by_emp:
+                snapshot_by_emp[eid] = dict(s)
+            else:
+                # 같은 직원이 그 기간 안에 여러 차수로 걸쳐 있으면 지급액만 합산(다른 값은 최신 걸로 덮어씀)
+                snapshot_by_emp[eid]["installment_amount"] = (
+                    (snapshot_by_emp[eid].get("installment_amount") or 0) + (s.get("installment_amount") or 0)
+                )
+        snapshot_employee_ids = set(snapshot_by_emp.keys())
 
+        # 2) 스냅샷이 없는 직원은 예전 방식대로 오늘 기준으로 재계산해서 보완
         range_contribs = rest_request(
             "GET",
-            f"pension_contributions?contribution_date=gte.{from_date}&contribution_date=lte.{to_date}&select=employee_id,amount,contribution_date,note",
+            f"pension_contributions?contribution_date=gte.{from_date}&contribution_date=lte.{to_date}&select=employee_id,amount",
         ) or []
         installment_map = {}
         for c in range_contribs:
             eid = c["employee_id"]
             installment_map[eid] = installment_map.get(eid, 0) + (c.get("amount") or 0)
 
+        legacy_employee_ids = [eid for eid in installment_map.keys() if eid not in snapshot_employee_ids]
+
+        legacy_rows_by_emp = {}
+        if legacy_employee_ids:
+            base = rest_request("GET", "pension_status?select=id,name,branch,department,hire_date") or []
+            base_by_id = {b["id"]: b for b in base}
+            emp_rows = rest_request("GET", "employees?select=id,position") or []
+            position_by_id = {e["id"]: e.get("position") for e in emp_rows}
+
+            year_of_to = to_date[:4]
+            year_start = f"{year_of_to}-01-01"
+
+            as_of_now = rpc("pension_status_as_of", {"p_as_of": today_str}) or []
+            now_map = {r["id"]: r for r in as_of_now}
+            as_of_prev_year = rpc("pension_status_as_of", {"p_as_of": f"{int(year_of_to) - 1}-12-31"}) or []
+            prev_map = {r["id"]: r for r in as_of_prev_year}
+
+            ytd_contribs = rest_request(
+                "GET",
+                f"pension_contributions?contribution_date=gte.{year_start}&contribution_date=lte.{today_str}&select=employee_id,amount",
+            ) or []
+            ytd_paid_map = {}
+            for c in ytd_contribs:
+                eid = c["employee_id"]
+                ytd_paid_map[eid] = ytd_paid_map.get(eid, 0) + (c.get("amount") or 0)
+
+            for eid in legacy_employee_ids:
+                b = base_by_id.get(eid, {})
+                now_cum = (now_map.get(eid, {}) or {}).get("as_of_cumulative_estimate", 0) or 0
+                prev_cum = (prev_map.get(eid, {}) or {}).get("as_of_cumulative_estimate", 0) or 0
+                total_contributed = (now_map.get(eid, {}) or {}).get("as_of_paid", 0) or 0
+                legacy_rows_by_emp[eid] = {
+                    "id": eid,
+                    "name": b.get("name"),
+                    "branch": b.get("branch"),
+                    "department": b.get("department"),
+                    "position": position_by_id.get(eid),
+                    "hire_date": b.get("hire_date"),
+                    "cumulative_estimate": round(now_cum),
+                    "total_contributed": round(total_contributed),
+                    "balance": round(now_cum - total_contributed),
+                    "ytd_accrual": round(now_cum - prev_cum),
+                    "ytd_paid": ytd_paid_map.get(eid, 0),
+                    "installment_amount": installment_map.get(eid, 0),
+                }
+
+        rows = []
+        for eid, s in snapshot_by_emp.items():
+            rows.append({
+                "id": eid,
+                "name": s.get("name"),
+                "branch": s.get("branch"),
+                "department": s.get("department"),
+                "position": s.get("position"),
+                "hire_date": s.get("hire_date"),
+                "cumulative_estimate": s.get("cumulative_estimate"),
+                "total_contributed": s.get("total_contributed"),
+                "balance": s.get("balance"),
+                "ytd_accrual": s.get("ytd_accrual"),
+                "ytd_paid": s.get("ytd_paid"),
+                "installment_amount": s.get("installment_amount"),
+            })
+        rows.extend(legacy_rows_by_emp.values())
+
+        if not rows:
+            return self._send(200, {"rows": [], "from": from_date, "to": to_date, "as_of": today_str})
+
+        if legacy_employee_ids and snapshot_employee_ids:
+            snapshot_note = f"저장 시점 자료 기준 (일부 {len(legacy_employee_ids)}명은 스냅샷이 없어 오늘({today_str}) 기준으로 재계산됨)"
+        elif legacy_employee_ids:
+            snapshot_note = f"이관된 과거 자료라 저장 시점 스냅샷이 없어 오늘({today_str}) 기준으로 재계산됨"
+        else:
+            snapshot_note = "저장 시점(정산지급일 처리 당시) 자료 그대로 인쇄"
+
+        return self._send(200, {
+            "rows": rows, "from": from_date, "to": to_date, "as_of": today_str,
+            "snapshot_note": snapshot_note,
+        })
+
+    def _refresh_installment_snapshot(self, date_str):
+        """특정 지급일자(date_str)의 스냅샷을, 그 시점에 실제 존재하는 pension_contributions
+        전체를 기준으로 다시 계산해서 덮어씀. 추가/수정/삭제 등 어떤 변경이 있었든 이 함수를
+        호출하면 항상 '지금 이 순간의 최종 상태'가 스냅샷에 그대로 반영됨.
+        (마감된 지급일자에는 애초에 쓰기 자체가 막혀있으므로, 이 함수는 항상 '마감 해제된
+        상태에서의 변경 직후' 또는 '일괄저장/마감 처리 시점'에만 호출됨)
+        해당 지급일자에 남은 불입 기록이 하나도 없으면(전부 삭제됐으면) 스냅샷도 전부 지움."""
+        date_str = date_str[:10]
+        import datetime
+        kst_today = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date()
+        today_str = kst_today.isoformat()
+
+        current_rows = rest_request(
+            "GET", f"pension_contributions?contribution_date=eq.{date_str}&select=employee_id,amount"
+        ) or []
+        current_amounts = {}
+        for r in current_rows:
+            eid = r["employee_id"]
+            current_amounts[eid] = current_amounts.get(eid, 0) + (r.get("amount") or 0)
+
+        # 기존 스냅샷 중, 더 이상 이 날짜에 불입 기록이 없는 직원의 스냅샷은 유령 데이터가
+        # 되므로 지움(예: 유일한 기록이 삭제된 경우)
+        existing_snap = rest_request(
+            "GET", f"pension_installment_snapshots?installment_date=eq.{date_str}&select=employee_id"
+        ) or []
+        for s in existing_snap:
+            if s["employee_id"] not in current_amounts:
+                rest_request(
+                    "DELETE",
+                    f"pension_installment_snapshots?installment_date=eq.{date_str}&employee_id=eq.{s['employee_id']}",
+                )
+
+        if not current_amounts:
+            return
+
+        base = rest_request("GET", "pension_status?select=id,name,branch,department,hire_date") or []
+        base_by_id = {b["id"]: b for b in base}
+        emp_rows = rest_request("GET", "employees?select=id,position") or []
+        position_by_id = {e["id"]: e.get("position") for e in emp_rows}
+
+        as_of_now = rpc("pension_status_as_of", {"p_as_of": today_str}) or []
+        now_map = {r["id"]: r for r in as_of_now}
+
+        year_start = f"{date_str[:4]}-01-01"
+        prev_year_end = f"{int(date_str[:4]) - 1}-12-31"
+        as_of_prev_year = rpc("pension_status_as_of", {"p_as_of": prev_year_end}) or []
+        prev_map = {r["id"]: r for r in as_of_prev_year}
         ytd_contribs = rest_request(
             "GET",
             f"pension_contributions?contribution_date=gte.{year_start}&contribution_date=lte.{today_str}&select=employee_id,amount",
@@ -266,24 +429,33 @@ class handler(BaseHTTPRequestHandler):
             eid = c["employee_id"]
             ytd_paid_map[eid] = ytd_paid_map.get(eid, 0) + (c.get("amount") or 0)
 
-        as_of_data = rpc("pension_status_as_of", {"p_as_of": today_str}) or []
-        accrual_map = {row["id"]: row.get("period_accrual", 0) for row in as_of_data}
-
-        rows = []
-        for emp in base:
-            eid = emp["id"]
-            if eid not in installment_map and eid not in ytd_paid_map:
-                continue
-            rows.append({
-                "id": eid,
-                "name": emp.get("name"),
-                "branch": emp.get("branch"),
-                "department": emp.get("department"),
-                "installment_amount": installment_map.get(eid, 0),
-                "ytd_accrual": accrual_map.get(eid, 0),
+        snapshot_body = []
+        for eid, amount in current_amounts.items():
+            b = base_by_id.get(eid, {})
+            now_cum = (now_map.get(eid, {}) or {}).get("as_of_cumulative_estimate", 0) or 0
+            total_contributed = (now_map.get(eid, {}) or {}).get("as_of_paid", 0) or 0
+            prev_cum = (prev_map.get(eid, {}) or {}).get("as_of_cumulative_estimate", 0) or 0
+            snapshot_body.append({
+                "installment_date": date_str,
+                "employee_id": eid,
+                "name": b.get("name"),
+                "branch": b.get("branch"),
+                "department": b.get("department"),
+                "position": position_by_id.get(eid),
+                "hire_date": b.get("hire_date"),
+                "cumulative_estimate": round(now_cum),
+                "total_contributed": round(total_contributed),
+                "balance": round(now_cum - total_contributed),
+                "ytd_accrual": round(now_cum - prev_cum),
                 "ytd_paid": ytd_paid_map.get(eid, 0),
+                "installment_amount": amount,
             })
-        return self._send(200, {"rows": rows, "from": from_date, "to": to_date, "as_of": today_str})
+
+        if snapshot_body:
+            rest_request(
+                "POST", "pension_installment_snapshots?on_conflict=installment_date,employee_id",
+                body=snapshot_body, prefer="resolution=merge-duplicates",
+            )
 
     def _build_yearly_for_employee(self, employee_id):
         import datetime
@@ -353,7 +525,7 @@ class handler(BaseHTTPRequestHandler):
                 }, prefer="return=representation")
                 return self._send(201, {"multiplier": created[0] if created else None})
 
-            # 마감/마감해제: {"type": "lock", period_key: "2026", locked: true/false, note}
+            # 마감/마감해제: {"type": "lock", period_key: "2026", locked: true/false, note}  (연도 단위)
             if isinstance(payload, dict) and payload.get("type") == "lock":
                 period_key = payload.get("period_key")
                 locked = payload.get("locked", True)
@@ -362,6 +534,25 @@ class handler(BaseHTTPRequestHandler):
                 rest_request(
                     "POST", "period_locks?on_conflict=module,period_key",
                     body={"module": "pension", "period_key": period_key, "locked": locked, "note": payload.get("note")},
+                    prefer="resolution=merge-duplicates",
+                )
+                return self._send(200, {"ok": True})
+
+            # 차수(지급일자) 단위 마감/마감해제: {"type": "lock_installment", period_key: "2026-09-30", locked: true/false}
+            # 마감(locked=true) 시점에 그 지급일자의 최종 상태를 스냅샷으로 다시 굳혀둠(= 이 순간이 "확정본").
+            if isinstance(payload, dict) and payload.get("type") == "lock_installment":
+                date_str = payload.get("period_key")
+                locked = payload.get("locked", True)
+                if not date_str:
+                    return self._send(400, {"error": "period_key(지급일자)는 필수입니다"})
+                if locked:
+                    try:
+                        self._refresh_installment_snapshot(date_str)
+                    except Exception:
+                        pass
+                rest_request(
+                    "POST", "period_locks?on_conflict=module,period_key",
+                    body={"module": "pension_installment", "period_key": date_str[:10], "locked": locked, "note": payload.get("note")},
                     prefer="resolution=merge-duplicates",
                 )
                 return self._send(200, {"ok": True})
@@ -384,12 +575,16 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(201, {"adjustment": created[0] if created else None})
 
             # 목록형(일괄 저장): {"items": [{employee_id, contribution_date, amount, note}, ...]}
+            # "정산지급일로 일괄 저장"은 그 지급일자를 확정하는 행위이므로, 저장 성공 즉시
+            # 그 지급일자를 자동으로 마감(차수 마감)하고 최종 상태를 스냅샷으로 굳혀둠.
+            # 이미 마감된 지급일자에 추가로 넣으려면 먼저 마감해제해야 함.
             if isinstance(payload, dict) and "items" in payload:
                 items = payload["items"]
                 if not items:
                     return self._send(400, {"error": "items가 비어있습니다"})
                 body = []
                 locked_years = set()
+                locked_dates = set()
                 for it in items:
                     if not it.get("employee_id") or not it.get("contribution_date") or it.get("amount") is None:
                         continue
@@ -397,23 +592,51 @@ class handler(BaseHTTPRequestHandler):
                     if is_period_locked(y):
                         locked_years.add(y)
                         continue
+                    d = it["contribution_date"][:10]
+                    if is_installment_locked(d):
+                        locked_dates.add(d)
+                        continue
                     body.append({
                         "employee_id": it["employee_id"],
                         "contribution_date": it["contribution_date"],
                         "amount": it["amount"],
                         "note": it.get("note"),
                     })
-                if locked_years and not body:
-                    return self._send(423, {"error": f"{', '.join(sorted(locked_years))}년이 마감되어 저장할 항목이 없습니다."})
+                if (locked_years or locked_dates) and not body:
+                    msgs = []
+                    if locked_years:
+                        msgs.append(f"{', '.join(sorted(locked_years))}년이 마감되어")
+                    if locked_dates:
+                        msgs.append(f"{', '.join(sorted(locked_dates))} 차수가 마감되어")
+                    return self._send(423, {"error": f"{' / '.join(msgs)} 저장할 항목이 없습니다. 먼저 마감해제해주세요."})
                 if not body:
                     return self._send(400, {"error": "유효한 항목이 없습니다"})
                 created = rest_request("POST", "pension_contributions", body=body, prefer="return=representation")
                 result = {"contributions": created, "count": len(created) if created else 0}
                 if locked_years:
                     result["skipped_locked_years"] = sorted(locked_years)
+                if locked_dates:
+                    result["skipped_locked_dates"] = sorted(locked_dates)
+                affected_dates = sorted({it["contribution_date"][:10] for it in body})
+                for d in affected_dates:
+                    try:
+                        self._refresh_installment_snapshot(d)
+                        rest_request(
+                            "POST", "period_locks?on_conflict=module,period_key",
+                            body={"module": "pension_installment", "period_key": d, "locked": True,
+                                  "note": "정산지급일 일괄 저장 시 자동 마감"},
+                            prefer="resolution=merge-duplicates",
+                        )
+                    except Exception:
+                        # 스냅샷/자동마감에 실패해도 불입 저장 자체는 이미 성공했으므로 조용히 넘어감
+                        # (이 경우 "이 차수 인쇄"는 오늘 기준으로 재계산해서 보여주는 방식으로 자동 대체됨)
+                        pass
+                result["locked_dates"] = affected_dates
                 return self._send(201, result)
 
-            # 단건 저장
+            # 단건 저장 ("+ 불입 기록 추가"). 이것도 일괄 저장과 동일하게 그 지급일자의
+            # 스냅샷을 즉시 갱신해두지만, 자동으로 마감하지는 않음(여러 명 나눠서 입력하는
+            # 중간중간 잠기면 불편하므로) — 다 끝나면 목록에서 "마감" 버튼으로 직접 잠그면 됨.
             emp_id = payload.get("employee_id")
             contribution_date = payload.get("contribution_date")
             amount = payload.get("amount")
@@ -421,6 +644,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "employee_id, contribution_date, amount는 필수입니다"})
             if is_period_locked(year_of(contribution_date)):
                 return self._send(423, {"error": f"{year_of(contribution_date)}년은 마감되어 있습니다. 먼저 마감해제해주세요."})
+            if is_installment_locked(contribution_date):
+                return self._send(423, {"error": f"{contribution_date[:10]} 차수는 마감되어 있습니다. 먼저 마감해제해주세요."})
 
             created = rest_request("POST", "pension_contributions", body={
                 "employee_id": emp_id,
@@ -428,6 +653,10 @@ class handler(BaseHTTPRequestHandler):
                 "amount": amount,
                 "note": payload.get("note"),
             }, prefer="return=representation")
+            try:
+                self._refresh_installment_snapshot(contribution_date)
+            except Exception:
+                pass
             return self._send(201, {"contribution": created[0] if created else None})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -467,12 +696,15 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True})
 
             existing = rest_request("GET", f"pension_contributions?id=eq.{item_id}&select=contribution_date")
+            old_date = existing[0]["contribution_date"] if existing else None
             if existing:
                 check_date = payload.get("contribution_date") or existing[0]["contribution_date"]
                 if is_pre_2026(year_of(existing[0]["contribution_date"])) or is_pre_2026(year_of(check_date)):
                     return self._send(423, {"error": "2025년 이전 확정자료는 수정할 수 없습니다."})
                 if is_period_locked(year_of(check_date)) or is_period_locked(year_of(existing[0]["contribution_date"])):
                     return self._send(423, {"error": "마감된 연도의 데이터는 수정할 수 없습니다. 먼저 마감해제해주세요."})
+                if is_installment_locked(check_date) or is_installment_locked(existing[0]["contribution_date"]):
+                    return self._send(423, {"error": "마감된 차수(지급일자)의 데이터는 수정할 수 없습니다. 먼저 마감해제해주세요."})
 
             update_fields = {}
             if payload.get("contribution_date"):
@@ -485,6 +717,14 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "수정할 항목이 없습니다"})
 
             rest_request("PATCH", f"pension_contributions?id=eq.{item_id}", body=update_fields)
+            new_date = payload.get("contribution_date") or old_date
+            try:
+                if old_date:
+                    self._refresh_installment_snapshot(old_date)
+                if new_date and new_date != old_date:
+                    self._refresh_installment_snapshot(new_date)
+            except Exception:
+                pass
             return self._send(200, {"ok": True})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -513,8 +753,15 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(423, {"error": "2025년 이전 확정자료는 삭제할 수 없습니다."})
             if existing and is_period_locked(year_of(existing[0][date_field])):
                 return self._send(423, {"error": "마감된 연도의 데이터는 삭제할 수 없습니다. 먼저 마감해제해주세요."})
+            if existing and not is_adjustment and is_installment_locked(existing[0][date_field]):
+                return self._send(423, {"error": "마감된 차수(지급일자)의 데이터는 삭제할 수 없습니다. 먼저 마감해제해주세요."})
 
             rest_request("DELETE", f"{table}?id=eq.{item_id}")
+            if existing and not is_adjustment:
+                try:
+                    self._refresh_installment_snapshot(existing[0][date_field])
+                except Exception:
+                    pass
             return self._send(200, {"ok": True})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
