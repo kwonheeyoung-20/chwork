@@ -461,7 +461,7 @@ HR_PASSWORD = os.environ.get("HR_PASSWORD", "")
 FAMILY_PASSWORD = os.environ.get("FAMILY_PASSWORD", "")
 
 # 가족용 비밀번호는 "개인 일정관리(personal)", "가족 공유 메모(family_notes)", "학교 시간표(timetable)"만 열 수 있음
-FAMILY_ALLOWED_RESOURCES = {"personal", "family_notes", "timetable"}
+FAMILY_ALLOWED_RESOURCES = {"personal", "family_notes", "timetable", "personal_media"}
 CONTRACT_BUCKET = "contracts"
 
 
@@ -703,6 +703,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._get_family_notes(qs)
             if resource == "timetable":
                 return self._get_timetable(qs)
+            if resource == "personal_media":
+                return self._get_personal_media(qs)
             if resource == "manuals":
                 return self._get_manuals(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
@@ -999,6 +1001,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._post_family_notes(payload)
             if resource == "timetable":
                 return self._post_timetable(payload)
+            if resource == "personal_media":
+                return self._post_personal_media(payload)
             if resource == "manuals":
                 if self._role() == "family":
                     return self._send(403, {"error": "가족 계정은 접근할 수 없습니다"})
@@ -1483,6 +1487,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._delete_family_notes(qs)
             if resource == "timetable":
                 return self._delete_timetable(qs)
+            if resource == "personal_media":
+                return self._delete_personal_media(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
 
         except SupabaseError as e:
@@ -1952,6 +1958,84 @@ class handler(BaseHTTPRequestHandler):
             "content": content,
             "updated_at": datetime.datetime.utcnow().isoformat(),
         })
+        return self._send(200, {"ok": True})
+
+    # ────────────────────────────────────────────────────────
+    # personal_media (하진이 알림장 / 사진 앨범)
+    # ────────────────────────────────────────────────────────
+    def _get_personal_media(self, qs):
+        category = qs.get("category", [None])[0]
+        if category not in ("notice", "album"):
+            return self._send(400, {"error": "category는 notice 또는 album이어야 합니다"})
+
+        file_id = qs.get("file_id", [None])[0]
+        if file_id:
+            # 이미지 외(문서/PDF 등)는 목록에서 바로 서명 URL을 안 만들고, 실제로 열 때만 생성
+            rows = rest_request(
+                "GET", f"personal_media?id=eq.{file_id}&select=file_name,storage_path,content_type"
+            ) or []
+            if not rows:
+                return self._send(404, {"error": "파일을 찾을 수 없습니다"})
+            row = rows[0]
+            view_url = storage_sign_url(row.get("storage_path"))
+            if not view_url:
+                return self._send(502, {"error": "열람 주소를 만들지 못했습니다"})
+            return self._send(200, {"file_name": row.get("file_name"), "view_url": view_url})
+
+        rows = rest_request(
+            "GET", f"personal_media?category=eq.{category}&select=*&order=created_at.desc"
+        ) or []
+        # 이미지는 목록에서 바로 미리보기가 필요해서, 이미지 항목에 한해서만 서명 URL을 같이 만들어 내려줌
+        for r in rows:
+            if (r.get("content_type") or "").startswith("image/"):
+                r["view_url"] = storage_sign_url(r.get("storage_path"))
+        return self._send(200, {"items": rows})
+
+    def _post_personal_media(self, payload):
+        category = payload.get("category")
+        if category not in ("notice", "album"):
+            return self._send(400, {"error": "category는 notice 또는 album이어야 합니다"})
+        fb64 = payload.get("file_base64")
+        fname = payload.get("file_name")
+        if not fb64 or not fname:
+            return self._send(400, {"error": "file_base64, file_name은 필수입니다"})
+        try:
+            fbytes = base64.b64decode(fb64)
+        except Exception:
+            return self._send(400, {"error": "파일 데이터를 해독할 수 없습니다"})
+        if len(fbytes) > 8 * 1024 * 1024:
+            return self._send(413, {"error": "파일이 너무 큽니다 (8MB 이하로 올려주세요)"})
+
+        subfolder = "notices" if category == "notice" else "album"
+        spath = f"personal/{subfolder}/{safe_filename(fname)}"
+        storage_upload(spath, fbytes, payload.get("content_type"))
+
+        role = self._role()
+        created = rest_request("POST", "personal_media", body={
+            "category": category,
+            "file_name": fname,
+            "storage_path": spath,
+            "content_type": payload.get("content_type"),
+            "file_size": len(fbytes),
+            "note": payload.get("note"),
+            "uploaded_by_role": role,
+        }, prefer="return=representation")
+        return self._send(201, {"item": created[0] if created else None})
+
+    def _delete_personal_media(self, qs):
+        item_id = qs.get("id", [None])[0]
+        if not item_id:
+            return self._send(400, {"error": "id는 필수입니다"})
+        rows = rest_request("GET", f"personal_media?id=eq.{item_id}&select=storage_path,uploaded_by_role") or []
+        if not rows:
+            return self._send(404, {"error": "파일을 찾을 수 없습니다"})
+        owner_role = rows[0].get("uploaded_by_role")
+        role = self._role()
+        # "나"(admin) 계정은 누가 올렸든 삭제 가능. "가족" 계정은 본인이 올린 것만 삭제 가능.
+        if role != "admin" and owner_role != role:
+            return self._send(403, {"error": "이 자료는 등록하신 분(계정)만 삭제할 수 있습니다"})
+        storage_delete(rows[0]["storage_path"])
+        rest_request("DELETE", f"personal_media?id=eq.{item_id}")
         return self._send(200, {"ok": True})
 
     def _get_timetable(self, qs):
