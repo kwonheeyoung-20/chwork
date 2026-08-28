@@ -281,9 +281,11 @@
 
       <div id="perMain" style="display:none; flex-direction:column; gap:20px;">
 
-        <div style="display:flex; gap:8px; margin-bottom:14px;">
+        <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
           <button class="tab-btn active" data-persub="family" onclick="switchPerTab('family')">가족 일정</button>
           <button class="tab-btn" data-persub="timetable" onclick="switchPerTab('timetable')">학교 시간표</button>
+          <button class="tab-btn" data-persub="notice" onclick="switchPerTab('notice')">하진이 알림장</button>
+          <button class="tab-btn" data-persub="album" onclick="switchPerTab('album')">사진 앨범</button>
         </div>
 
         <!-- ── 가족 일정 ── -->
@@ -468,9 +470,69 @@
           </details>
         </div>
 
+        <!-- ── 하진이 알림장 ── -->
+        <div id="perNoticeView" style="display:none;">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>하진이 알림장 <span id="noticeCount" class="hr-count"></span></h2>
+              <button class="primary" onclick="openMediaUploadModal('notice')">+ 자료 추가</button>
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
+              이미지·PDF·문서파일을 올릴 수 있어요. 이미지·PDF는 바로 미리볼 수 있고, 그 외 문서는 파일명과 다운로드 버튼으로 제공돼요.
+            </p>
+            <div id="noticeList" style="display:flex; flex-direction:column; gap:10px;">
+              <div class="dash-empty">불러오는 중…</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- ── 사진 앨범 ── -->
+        <div id="perAlbumView" style="display:none;">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>사진 앨범 <span id="albumCount" class="hr-count"></span></h2>
+              <button class="primary" onclick="openMediaUploadModal('album')">+ 사진 추가</button>
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
+              여러 장을 한 번에 올릴 수 있어요. 사진을 누르면 크게 볼 수 있어요.
+            </p>
+            <div id="albumGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px;">
+              <div class="dash-empty">불러오는 중…</div>
+            </div>
+          </section>
+        </div>
+
       </div>
     </div>
   </main>
+</div>
+
+<!-- 알림장/앨범 자료 업로드 모달 -->
+<div id="mediaUploadModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:420px;">
+    <h2 id="mediaUploadModalTitle">자료 추가</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label id="mediaUploadFileLabel">파일 선택 (이미지/PDF/문서, 8MB 이하)
+        <input id="mu_file" type="file" class="hr-input" style="padding:6px;">
+      </label>
+      <label>메모(선택) <input id="mu_note" class="hr-input" placeholder="예: 8월 현장학습 안내문"></label>
+    </div>
+    <div id="mediaUploadModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeMediaUploadModal()">취소</button>
+      <button class="primary" id="mediaUploadSaveBtn" onclick="saveMediaUpload()">업로드</button>
+    </div>
+  </div>
+</div>
+
+<!-- 사진 크게 보기 -->
+<div id="albumViewerModal" class="hr-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeAlbumViewer()">
+  <div class="hr-modal" style="width:auto; max-width:92vw; padding:12px; background:transparent; box-shadow:none;">
+    <img id="albumViewerImg" style="max-width:100%; max-height:82vh; display:block; margin:0 auto; border-radius:var(--radius-sm);">
+    <div style="text-align:center; margin-top:10px;">
+      <button class="secondary" onclick="closeAlbumViewer()">닫기</button>
+    </div>
+  </div>
 </div>
 
 <!-- 가족 구성원 추가/수정 모달 -->
