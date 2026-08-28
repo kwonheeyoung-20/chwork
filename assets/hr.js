@@ -10,8 +10,16 @@ function hrPassword() { return sessionStorage.getItem('chwork_hr_pw') || ''; }
 /* ── 전체 데이터 백업 ── */
 function refreshLastBackupLabel() {
   const saved = localStorage.getItem('chwork_last_backup');
-  $('lastBackupLabel').textContent = saved ? `마지막 백업: ${saved}` : '아직 백업한 적 없음';
+  const label = $('lastBackupLabel');
+  if (label) label.textContent = saved ? `마지막 백업: ${saved}` : '아직 백업한 적 없음';
 }
+
+function openBackupModal() {
+  refreshLastBackupLabel();
+  $('zipBackupProgress').textContent = '';
+  $('backupModal').style.display = 'flex';
+}
+function closeBackupModal() { $('backupModal').style.display = 'none'; }
 
 async function downloadFullBackup() {
   const btn = $('backupBtn');
@@ -49,6 +57,68 @@ async function downloadFullBackup() {
     refreshLastBackupLabel();
   } catch (e) {
     alert('백업 다운로드 중 오류가 발생했습니다: ' + (e.message || ''));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+/* 첨부파일 전체를 zip 하나로 묶어서 다운로드.
+   api/hr_storage_backup은 버킷 안 파일 목록 + 임시(1시간) 다운로드 주소만 돌려주므로,
+   여기서 하나씩 실제로 받아와 JSZip으로 묶어 브라우저에서 압축함. */
+async function downloadZipBackup() {
+  const btn = $('zipBackupBtn');
+  const progress = $('zipBackupProgress');
+  const original = btn.textContent;
+  btn.disabled = true;
+  try {
+    btn.textContent = '파일 목록 불러오는 중…';
+    progress.textContent = '';
+    const listRes = await fetch(`${apiBase()}/api/hr_storage_backup`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const listData = await listRes.json();
+    if (!listRes.ok) throw new Error(listData.error || listData.detail || `목록 조회 실패 (상태코드 ${listRes.status})`);
+
+    const files = listData.files || [];
+    if (files.length === 0) {
+      alert('백업할 첨부파일이 없습니다.');
+      return;
+    }
+    if (listData.missing_storage_paths && listData.missing_storage_paths.length > 0) {
+      progress.textContent = `⚠ DB에는 있지만 실제 파일이 없는 항목 ${listData.missing_storage_paths.length}건은 제외하고 진행합니다.`;
+    }
+
+    const zip = new JSZip();
+    let done = 0;
+    for (const f of files) {
+      btn.textContent = `파일 받는 중… (${done + 1}/${files.length})`;
+      try {
+        const fileRes = await fetch(f.signed_url);
+        if (!fileRes.ok) throw new Error('다운로드 실패');
+        const blob = await fileRes.blob();
+        zip.file(f.zip_name, blob);
+      } catch (fileErr) {
+        progress.textContent = `⚠ "${f.file_name}" 파일을 못 받아서 건너뜀`;
+      }
+      done += 1;
+    }
+
+    btn.textContent = 'zip 압축 중…';
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    const today = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `chwork_files_${today}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    progress.textContent = `완료: 총 ${files.length}개 파일 (${(listData.total_size / 1024 / 1024).toFixed(1)}MB)`;
+  } catch (e) {
+    alert('zip 백업 중 오류가 발생했습니다: ' + (e.message || ''));
   } finally {
     btn.disabled = false;
     btn.textContent = original;
