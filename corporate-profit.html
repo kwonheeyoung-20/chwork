@@ -97,7 +97,7 @@
 
     <main class="main">
       <header class="topbar">
-        <div style="display:flex; align-items:center; gap:12px;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:nowrap;">
           <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" aria-label="메뉴">☰</button>
           <div>
             <h1>분석 및 보고</h1>
@@ -112,7 +112,7 @@
       </div>
 
       <div id="section-branch_profit" class="main-section" style="display:none;">
-      <div class="content" style="display:flex; flex-direction:column; gap:18px; padding:20px 28px;">
+      <div class="content">
         <div class="panel">
           <div class="panel-header"><h2 style="font-size:16px; margin-bottom:12px;">📤 파일 업로드</h2></div>
           <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">회계 원장(ACA0090)·합계잔액시산표(ACB0021) 엑셀을 업로드하면 손익/재무 현황을 자동 분석합니다.</p>
@@ -225,7 +225,7 @@
       </div>
 
       <div id="section-monthly_closing" class="main-section">
-        <div class="content" style="display:flex; flex-direction:column; gap:18px; padding:20px 28px;">
+        <div class="content">
           <div class="panel">
             <div class="panel-header"><h2 style="font-size:16px; margin-bottom:12px;">📋 월결산서 생성</h2></div>
             <p style="font-size:13px; color:var(--text-secondary); margin-bottom:14px;">
