@@ -26,7 +26,7 @@ import datetime
 import urllib.request
 import urllib.parse
 import urllib.error
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 
 
 def kst_today():
