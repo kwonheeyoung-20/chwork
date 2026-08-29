@@ -1114,6 +1114,10 @@ class handler(BaseHTTPRequestHandler):
                 if not item_id:
                     return self._send(400, {"error": "id는 필수입니다"})
                 return self._patch_timetable(item_id, payload)
+            if resource == "personal_media":
+                if not item_id:
+                    return self._send(400, {"error": "id는 필수입니다"})
+                return self._patch_personal_media(item_id, payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -1140,7 +1144,7 @@ class handler(BaseHTTPRequestHandler):
             return self._send(200, {"file_name": row.get("file_name"), "view_url": view_url})
 
         rows = rest_request(
-            "GET", f"personal_media?category=eq.{category}&select=*&order=created_at.desc"
+            "GET", f"personal_media?category=eq.{category}&select=*&order=display_date.desc,created_at.desc"
         ) or []
         # 이미지는 목록에서 바로 미리보기가 필요해서, 이미지 항목에 한해서만 서명 URL을 같이 만들어 내려줌.
         # 사진 수가 늘어날수록 한 장씩 순서대로(직렬로) 만들면 느려지므로 병렬로 처리함
@@ -1208,9 +1212,30 @@ class handler(BaseHTTPRequestHandler):
             "content_type": payload.get("content_type"),
             "file_size": file_size,
             "note": payload.get("note"),
+            "display_date": payload.get("display_date") or kst_today().isoformat(),
             "uploaded_by_role": role,
         }, prefer="return=representation")
         return self._send(201, {"item": created[0] if created else None})
+
+    def _patch_personal_media(self, item_id, payload):
+        rows = rest_request("GET", f"personal_media?id=eq.{item_id}&select=uploaded_by_role") or []
+        if not rows:
+            return self._send(404, {"error": "자료를 찾을 수 없습니다"})
+        owner_role = rows[0].get("uploaded_by_role")
+        role = self._role()
+        # 삭제와 동일한 기준: "나"(admin)는 누가 올렸든 수정 가능, "가족"은 본인이 올린 것만
+        if role != "admin" and owner_role != role:
+            return self._send(403, {"error": "이 자료는 등록하신 분(계정)만 수정할 수 있습니다"})
+
+        update_fields = {}
+        if "note" in payload:
+            update_fields["note"] = payload["note"]
+        if payload.get("display_date"):
+            update_fields["display_date"] = payload["display_date"]
+        if not update_fields:
+            return self._send(400, {"error": "수정할 항목이 없습니다"})
+        rest_request("PATCH", f"personal_media?id=eq.{item_id}", body=update_fields)
+        return self._send(200, {"ok": True})
 
     def _delete_personal_media(self, qs):
         item_id = qs.get("id", [None])[0]
