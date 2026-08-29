@@ -920,6 +920,8 @@ class handler(BaseHTTPRequestHandler):
             if resource == "timetable":
                 return self._post_timetable(payload)
             if resource == "personal_media":
+                if payload.get("action") == "sign_upload":
+                    return self._sign_upload_personal_media(payload)
                 return self._post_personal_media(payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
