@@ -515,12 +515,29 @@
       <label id="mediaUploadFileLabel">파일 선택 (이미지/PDF/문서, 30MB 이하)
         <input id="mu_file" type="file" class="hr-input" style="padding:6px;">
       </label>
+      <label>날짜 <input id="mu_date" type="date" class="hr-input"></label>
       <label>메모(선택) <input id="mu_note" class="hr-input" placeholder="예: 8월 현장학습 안내문"></label>
     </div>
     <div id="mediaUploadModalMsg" class="hr-msg"></div>
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
       <button class="secondary" onclick="closeMediaUploadModal()">취소</button>
       <button class="primary" id="mediaUploadSaveBtn" onclick="saveMediaUpload()">업로드</button>
+    </div>
+  </div>
+</div>
+
+<!-- 알림장/앨범 자료 수정 모달 (메모·날짜) -->
+<div id="mediaEditModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:400px;">
+    <h2>자료 수정</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>날짜 <input id="me_date" type="date" class="hr-input"></label>
+      <label>메모 <input id="me_note" class="hr-input"></label>
+    </div>
+    <div id="mediaEditModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeMediaEditModal()">취소</button>
+      <button class="primary" onclick="saveMediaEdit()">저장</button>
     </div>
   </div>
 </div>
@@ -538,6 +555,7 @@
     <div id="albumViewerCounter" style="text-align:center; margin-top:6px; font-size:12px; color:rgba(255,255,255,0.85);"></div>
     <div id="albumViewerNote" style="display:none; max-width:92vw; margin:8px auto 0; padding:8px 12px; background:var(--surface); border-radius:var(--radius-sm); font-size:13px; text-align:center; word-break:break-word;"></div>
     <div style="text-align:center; margin-top:10px;">
+      <button class="secondary" id="albumViewerEditBtn" onclick="openMediaEditFromViewer()" style="display:none;">수정</button>
       <button class="secondary" onclick="closeAlbumViewer()">닫기</button>
     </div>
   </div>
