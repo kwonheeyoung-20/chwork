@@ -1134,10 +1134,15 @@ class handler(BaseHTTPRequestHandler):
         rows = rest_request(
             "GET", f"personal_media?category=eq.{category}&select=*&order=created_at.desc"
         ) or []
-        # 이미지는 목록에서 바로 미리보기가 필요해서, 이미지 항목에 한해서만 서명 URL을 같이 만들어 내려줌
-        for r in rows:
-            if (r.get("content_type") or "").startswith("image/"):
-                r["view_url"] = storage_sign_url(r.get("storage_path"))
+        # 이미지는 목록에서 바로 미리보기가 필요해서, 이미지 항목에 한해서만 서명 URL을 같이 만들어 내려줌.
+        # 사진 수가 늘어날수록 한 장씩 순서대로(직렬로) 만들면 느려지므로 병렬로 처리함
+        # (사진 50장이면 순서대로는 왕복 50번, 병렬이면 가장 느린 1번 수준으로 단축됨).
+        image_rows = [r for r in rows if (r.get("content_type") or "").startswith("image/")]
+        if image_rows:
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                signed_urls = list(pool.map(lambda r: storage_sign_url(r.get("storage_path")), image_rows))
+            for r, url in zip(image_rows, signed_urls):
+                r["view_url"] = url
         return self._send(200, {"items": rows})
 
     def _sign_upload_personal_media(self, payload):
