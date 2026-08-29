@@ -527,8 +527,16 @@
 
 <!-- 사진 크게 보기 -->
 <div id="albumViewerModal" class="hr-modal-backdrop" style="display:none;" onclick="if(event.target===this) closeAlbumViewer()">
-  <div class="hr-modal" style="width:auto; max-width:92vw; padding:12px; background:transparent; box-shadow:none;">
-    <img id="albumViewerImg" style="max-width:100%; max-height:82vh; display:block; margin:0 auto; border-radius:var(--radius-sm);">
+  <div class="hr-modal" style="width:auto; max-width:92vw; padding:12px; background:transparent; box-shadow:none; position:relative;">
+    <button onclick="albumViewerPrev()" id="albumViewerPrevBtn" aria-label="이전 사진"
+      style="position:absolute; left:-6px; top:50%; transform:translateY(-50%); z-index:2; width:40px; height:40px; border-radius:50%; border:none; background:rgba(0,0,0,0.45); color:#fff; font-size:20px; cursor:pointer;">‹</button>
+    <div id="albumViewerImgWrap" style="overflow:hidden; touch-action:pan-y;">
+      <img id="albumViewerImg" style="max-width:100%; max-height:78vh; display:block; margin:0 auto; border-radius:var(--radius-sm); user-select:none;">
+    </div>
+    <button onclick="albumViewerNext()" id="albumViewerNextBtn" aria-label="다음 사진"
+      style="position:absolute; right:-6px; top:50%; transform:translateY(-50%); z-index:2; width:40px; height:40px; border-radius:50%; border:none; background:rgba(0,0,0,0.45); color:#fff; font-size:20px; cursor:pointer;">›</button>
+    <div id="albumViewerCounter" style="text-align:center; margin-top:6px; font-size:12px; color:rgba(255,255,255,0.85);"></div>
+    <div id="albumViewerNote" style="display:none; max-width:92vw; margin:8px auto 0; padding:8px 12px; background:var(--surface); border-radius:var(--radius-sm); font-size:13px; text-align:center; word-break:break-word;"></div>
     <div style="text-align:center; margin-top:10px;">
       <button class="secondary" onclick="closeAlbumViewer()">닫기</button>
     </div>
