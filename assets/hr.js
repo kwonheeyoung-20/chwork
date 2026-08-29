@@ -3155,6 +3155,7 @@ async function loadPensionInstallmentList() {
         <span style="margin-left:auto; display:flex; gap:6px;">
           ${lockBtn}
           <button class="secondary" style="font-size:11px; padding:3px 8px;" onclick="printPensionInstallment('${d}','${d}')">이 차수 인쇄</button>
+          <button class="secondary" style="font-size:11px; padding:3px 8px; color:var(--red);" onclick="deletePensionInstallment('${d}')">전체 삭제</button>
         </span>
       </div>
     `;
@@ -3204,6 +3205,30 @@ async function togglePensionInstallmentLock(dateStr, locked) {
     loadPensionInstallmentList();
   } catch (e) {
     alert('처리 중 오류가 발생했습니다: ' + (e.message || ''));
+  }
+}
+
+/* 이 지급일자(차수)에 걸린 불입 기록·스냅샷·마감 상태를 전부 한 번에 지움 —
+   마감 여부와 상관없이 지울 수 있음(직원마다 하나씩 이력에서 지울 필요 없게). */
+async function deletePensionInstallment(dateStr) {
+  if (!await appConfirm(
+    `${dateStr} 차수 전체를 삭제하시겠습니까?\n이 날짜로 저장된 모든 직원의 불입 기록과, 인쇄용으로 얼려둔 자료까지 전부 지워지며 되돌릴 수 없습니다.`,
+    '차수 전체 삭제'
+  )) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_pension`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'delete_installment', period_key: dateStr }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || data.detail || '삭제 실패');
+    }
+    loadPensionInstallmentList();
+    loadPension();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다: ' + (e.message || ''));
   }
 }
 
@@ -4850,6 +4875,30 @@ function collectBonusReportInputs() {
     });
   });
   return items;
+}
+
+/* 결정기준/율(입력) 칸을 표 전체(또는 아직 비어있는 칸만)에 한 번에 채워넣음.
+   emptyOnly=true면 이미 값이 있는 칸은 건드리지 않고 빈 칸만 채움. */
+function applyBonusCriteriaBulk(emptyOnly) {
+  const value = $('bonusCriteriaBulkInput').value.trim();
+  if (!value) {
+    alert('일괄 적용할 결정기준/율 값을 먼저 입력해주세요.');
+    return;
+  }
+  const inputs = document.querySelectorAll('#bonusReportTbody tr[data-emp-id] .bonus-criteria-input');
+  if (inputs.length === 0) {
+    alert('먼저 조회를 눌러 직원 목록을 불러와주세요.');
+    return;
+  }
+  let count = 0;
+  inputs.forEach(input => {
+    if (input.disabled) return;  // 마감된 보고서는 건드리지 않음
+    if (emptyOnly && input.value.trim() !== '') return;
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    count += 1;
+  });
+  alert(`${count}명에게 적용했습니다. 저장하시려면 "입력내용 저장(초안)"을 눌러주세요.`);
 }
 
 async function saveBonusReportDraft() {
