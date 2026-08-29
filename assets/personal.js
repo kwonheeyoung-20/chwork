@@ -1516,9 +1516,9 @@ function renderNoticeList(items) {
     const isImage = (it.content_type || '').startsWith('image/');
     const isPdf = it.content_type === 'application/pdf';
     const uploaderLabel = it.uploaded_by_role === 'family' ? '가족' : '나';
-    const dateLabel = new Date(it.created_at).toLocaleString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' });
+    const dateLabel = it.display_date || (it.created_at || '').slice(0, 10);
     const previewHtml = isImage && it.view_url
-      ? `<img src="${esc(it.view_url)}" style="width:100%; max-width:260px; border-radius:var(--radius-sm); display:block; margin-bottom:8px; cursor:pointer;" onclick="openAlbumViewerUrl('${esc(it.view_url)}')">`
+      ? `<img src="${esc(it.view_url)}" style="width:100%; max-width:260px; border-radius:var(--radius-sm); display:block; margin-bottom:8px; cursor:pointer;" onclick="openNoticeImagePreview('${esc(it.view_url)}')">`
       : isPdf
         ? `<a class="hr-edit-link" onclick="openPersonalMediaFile('${it.id}')" style="display:inline-block; margin-bottom:6px;">📄 PDF 미리보기</a>`
         : '';
@@ -1527,16 +1527,28 @@ function renderNoticeList(items) {
         ${previewHtml}
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
           <span>${fileTypeIcon(it.content_type)} ${esc(it.file_name)}</span>
-          <span style="font-size:11px; color:var(--text-muted); margin-left:auto;">등록: ${uploaderLabel} · ${dateLabel}</span>
+          <span style="font-size:11px; color:var(--text-muted); margin-left:auto;">등록: ${uploaderLabel} · ${esc(dateLabel)}</span>
         </div>
         ${it.note ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">${esc(it.note)}</div>` : ''}
         <div style="margin-top:8px; display:flex; gap:10px;">
           ${!isImage ? `<a class="hr-edit-link" onclick="openPersonalMediaFile('${it.id}')">${isPdf ? '미리보기' : '다운로드'}</a>` : ''}
+          ${mediaCanDelete(it) ? `<a class="hr-edit-link" onclick="openMediaEditModal('${it.id}', 'notice')">수정</a>` : ''}
           ${mediaCanDelete(it) ? `<a class="hr-edit-link" style="color:var(--red);" onclick="deletePersonalMedia('${it.id}', '${it.category}')">삭제</a>` : ''}
         </div>
       </div>
     `;
   }).join('');
+}
+
+function openNoticeImagePreview(url) {
+  if (!url) return;
+  $('albumViewerImg').src = url;
+  $('albumViewerCounter').textContent = '';
+  $('albumViewerNote').style.display = 'none';
+  $('albumViewerPrevBtn').style.display = 'none';
+  $('albumViewerNextBtn').style.display = 'none';
+  $('albumViewerEditBtn').style.display = 'none';
+  $('albumViewerModal').style.display = 'flex';
 }
 
 function renderAlbumGrid(items) {
@@ -1545,12 +1557,13 @@ function renderAlbumGrid(items) {
     grid.innerHTML = `<div class="dash-empty">등록된 사진이 없습니다.</div>`;
     return;
   }
-  // 최신순으로 오는 목록을 "업로드 날짜"별로 묶어서, 날짜 구분선 아래에 그 날 올린 사진들을
-  // 그리드로 보여줌. albumMediaCache에 원본 그대로 담아둬서 확대보기에서 메모를 찾을 수 있게 함.
+  // 최신순으로 오는 목록을 "사진 날짜"(display_date, 사용자가 직접 고칠 수 있음)별로 묶어서,
+  // 날짜 구분선 아래에 그 날짜 사진들을 그리드로 보여줌.
   const groups = [];
   const byDate = {};
   items.forEach(it => {
-    const dateKey = new Date(it.created_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+    const raw = it.display_date || (it.created_at || '').slice(0, 10);
+    const dateKey = raw ? new Date(raw + 'T00:00:00').toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' }) : '날짜 없음';
     if (!byDate[dateKey]) { byDate[dateKey] = []; groups.push(dateKey); }
     byDate[dateKey].push(it);
   });
@@ -1564,6 +1577,7 @@ function renderAlbumGrid(items) {
         <img src="${esc(it.view_url || '')}" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:var(--radius-sm); cursor:pointer; background:var(--bg);"
              onclick="openAlbumViewer('${it.id}')">
         ${it.note ? `<div style="position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent, rgba(0,0,0,0.65)); color:#fff; font-size:11px; padding:12px 6px 4px; border-radius:0 0 var(--radius-sm) var(--radius-sm); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;">${esc(it.note)}</div>` : ''}
+        ${mediaCanDelete(it) ? `<a class="hr-edit-link" style="position:absolute; top:4px; right:32px; background:rgba(0,0,0,0.55); color:#fff; border:none; padding:2px 8px; border-radius:10px; font-size:11px;" onclick="event.stopPropagation(); openMediaEditModal('${it.id}', 'album')">수정</a>` : ''}
         ${mediaCanDelete(it) ? `<a class="hr-edit-link" style="position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.55); color:#fff; border:none; padding:2px 8px; border-radius:10px; font-size:11px;" onclick="event.stopPropagation(); deletePersonalMedia('${it.id}', 'album')">삭제</a>` : ''}
       </div>
     `).join('')}
@@ -1580,6 +1594,9 @@ function openAlbumViewer(id) {
   const idx = albumViewerList.findIndex(x => x.id === id);
   if (idx === -1) return;
   albumViewerIndex = idx;
+  // 알림장 이미지 미리보기(openNoticeImagePreview)에서 숨겼던 화살표/수정 버튼을 다시 보이게
+  $('albumViewerPrevBtn').style.display = '';
+  $('albumViewerNextBtn').style.display = '';
   renderAlbumViewerAt(albumViewerIndex);
   $('albumViewerModal').style.display = 'flex';
   document.addEventListener('keydown', albumViewerKeyHandler);
@@ -1598,6 +1615,15 @@ function renderAlbumViewerAt(index) {
   // 맨 처음/맨 끝에서는 그 방향 화살표를 흐리게 (더 넘어갈 게 없다는 표시)
   $('albumViewerPrevBtn').style.opacity = index > 0 ? '1' : '0.3';
   $('albumViewerNextBtn').style.opacity = index < albumViewerList.length - 1 ? '1' : '0.3';
+  const editBtn = $('albumViewerEditBtn');
+  editBtn.style.display = mediaCanDelete(item) ? 'inline-block' : 'none';
+  editBtn.dataset.mediaId = item.id;
+}
+
+function openMediaEditFromViewer() {
+  const id = $('albumViewerEditBtn').dataset.mediaId;
+  if (!id) return;
+  openMediaEditModal(id, 'album');
 }
 
 function albumViewerPrev() {
@@ -1659,6 +1685,7 @@ function openMediaUploadModal(category) {
   $('mu_file').value = '';
   $('mu_file').multiple = category === 'album';
   $('mu_file').accept = category === 'album' ? 'image/*' : '';
+  $('mu_date').value = toISO(new Date());
   $('mu_note').value = '';
   $('mediaUploadModalMsg').textContent = '';
   $('mediaUploadModal').style.display = 'flex';
@@ -1681,6 +1708,7 @@ async function saveMediaUpload() {
     return;
   }
   const note = $('mu_note').value.trim() || null;
+  const displayDate = $('mu_date').value || toISO(new Date());
   const btn = $('mediaUploadSaveBtn');
   btn.disabled = true;
   let okCount = 0;
@@ -1728,6 +1756,7 @@ async function saveMediaUpload() {
           content_type: file.type,
           storage_path: signData.storage_path,
           file_size: file.size,
+          display_date: displayDate,
           note,
         }),
       });
@@ -1756,5 +1785,48 @@ async function deletePersonalMedia(id, category) {
     loadPersonalMedia(category);
   } catch (e) {
     alert('삭제 중 오류가 발생했습니다: ' + (e.message || ''));
+  }
+}
+
+/* ── 알림장/앨범 자료 수정 (메모·날짜) ── */
+let pendingMediaEditId = null;
+let pendingMediaEditCategory = null;
+
+function openMediaEditModal(id, category) {
+  const cache = category === 'notice' ? noticeMediaCache : albumMediaCache;
+  const item = (cache || []).find(x => x.id === id);
+  if (!item) return;
+  pendingMediaEditId = id;
+  pendingMediaEditCategory = category;
+  $('me_date').value = item.display_date || (item.created_at || '').slice(0, 10);
+  $('me_note').value = item.note || '';
+  $('mediaEditModalMsg').textContent = '';
+  $('mediaEditModal').style.display = 'flex';
+}
+function closeMediaEditModal() { $('mediaEditModal').style.display = 'none'; }
+
+async function saveMediaEdit() {
+  if (!pendingMediaEditId) return;
+  const displayDate = $('me_date').value;
+  if (!displayDate) {
+    $('mediaEditModalMsg').textContent = '날짜를 선택해주세요.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_media?id=${pendingMediaEditId}`, {
+      method: 'PATCH',
+      headers: authHeaders(true),
+      body: JSON.stringify({
+        display_date: displayDate,
+        note: $('me_note').value.trim() || null,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || data.detail || '수정 실패');
+    closeMediaEditModal();
+    closeAlbumViewer();
+    loadPersonalMedia(pendingMediaEditCategory);
+  } catch (e) {
+    $('mediaEditModalMsg').textContent = '수정 중 오류가 발생했습니다: ' + (e.message || '');
   }
 }
