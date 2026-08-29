@@ -563,6 +563,23 @@ class handler(BaseHTTPRequestHandler):
                 )
                 return self._send(200, {"ok": True})
 
+            # 차수(지급일자) 단위 전체 삭제: {"type": "delete_installment", period_key: "2026-09-30"}
+            # 마감 여부와 상관없이(직원마다 이력에서 하나씩 지울 필요 없게) 그 날짜로 저장된
+            # 불입 기록·스냅샷·마감 상태를 한 번에 지움. 되돌릴 수 없으므로 프론트에서
+            # 강한 확인문구를 거치고 나서만 호출됨.
+            if isinstance(payload, dict) and payload.get("type") == "delete_installment":
+                date_str = payload.get("period_key")
+                if not date_str:
+                    return self._send(400, {"error": "period_key(지급일자)는 필수입니다"})
+                date_str = date_str[:10]
+                rest_request("DELETE", f"pension_contributions?contribution_date=eq.{date_str}")
+                rest_request("DELETE", f"pension_installment_snapshots?installment_date=eq.{date_str}")
+                rest_request(
+                    "DELETE",
+                    f"period_locks?module=eq.pension_installment&period_key=eq.{date_str}",
+                )
+                return self._send(200, {"ok": True})
+
             # 보정(조정) 추가: {"type": "adjustment", employee_id, effective_date, adjustment_amount, note}
             if isinstance(payload, dict) and payload.get("type") == "adjustment":
                 emp_id = payload.get("employee_id")
