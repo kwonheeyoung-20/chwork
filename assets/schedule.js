@@ -46,6 +46,26 @@ function showMain() {
   loadReminderBanner();
   loadTasks();
   loadCalendar();
+  prepareTaxScheduleData();
+}
+
+// 반복일정 재계산(prepare=1)은 서버에서 꽤 무거운 작업이라, 페이지를 열 때마다
+// 매번 실행할 필요는 없음 — 저장/수정 시점에는 서버가 이미 자동으로 갱신해주므로,
+// 여기서는 "혹시 놓친 게 있을 때"를 대비한 catch-up 용도로 일정 시간(12시간)에
+// 한 번만 실행되도록 제한함 (개인일정관리와 동일한 방식).
+const TAX_SCHEDULE_PREPARE_THROTTLE_MS = 12 * 60 * 60 * 1000;
+
+async function prepareTaxScheduleData() {
+  try {
+    const lastRun = Number(localStorage.getItem('chwork_tax_schedule_prepare_at') || 0);
+    if (Date.now() - lastRun < TAX_SCHEDULE_PREPARE_THROTTLE_MS) return;
+    const res = await fetch(`${apiBase()}/api/schedule?prepare=1`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    if (!res.ok) throw new Error('일정 준비 실패');
+    localStorage.setItem('chwork_tax_schedule_prepare_at', String(Date.now()));
+  } catch (e) {
+    // 조회 화면에서 구체적인 오류를 표시할 수 있도록 여기서는 진행을 막지 않음
+  }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -76,7 +96,7 @@ function handle401(res) {
 async function loadReminderBanner() {
   const wrap = $('reminderBannerWrap');
   try {
-    const res = await fetch(`${apiBase()}/api/schedule?upcoming=1`, { headers: authHeaders() });
+    const res = await fetch(`${apiBase()}/api/schedule?upcoming=1&skip_prepare=1`, { headers: authHeaders() });
     if (handle401(res)) return;
     const data = await res.json();
     const list = data.upcoming || [];
@@ -149,7 +169,7 @@ async function loadOccurrences() {
   const status = $('f_status').value;
   const category = $('f_category').value;
   try {
-    const url = `${apiBase()}/api/schedule?from=${from}&to=${to}&status=${status}`;
+    const url = `${apiBase()}/api/schedule?from=${from}&to=${to}&status=${status}&skip_prepare=1`;
     const res = await fetch(url, { headers: authHeaders() });
     if (handle401(res)) return;
     const data = await res.json();
@@ -337,7 +357,7 @@ function toggleTaskListOverview() {
 
 async function loadTasks() {
   try {
-    const res = await fetch(`${apiBase()}/api/schedule?tasks=1`, { headers: authHeaders() });
+    const res = await fetch(`${apiBase()}/api/schedule?tasks=1&skip_prepare=1`, { headers: authHeaders() });
     if (handle401(res)) return;
     const data = await res.json();
     taskCache = data.tasks || [];
@@ -748,7 +768,7 @@ async function loadCalendar() {
   const toStr = toISO(monthEnd);
 
   try {
-    const res = await fetch(`${apiBase()}/api/schedule?from=${fromStr}&to=${toStr}&status=all`, {
+    const res = await fetch(`${apiBase()}/api/schedule?from=${fromStr}&to=${toStr}&status=all&skip_prepare=1`, {
       headers: authHeaders(),
     });
     if (handle401(res)) return;
