@@ -14,6 +14,7 @@ import traceback
 import urllib.request
 import urllib.parse
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -477,8 +478,7 @@ class handler(BaseHTTPRequestHandler):
         start_year = max(hire_year, earliest_known_year)
         today = _kst_today.isoformat()
 
-        rows = []
-        for y in range(start_year, end_year + 1):
+        def calc_one_year(y):
             if y in history_by_year:
                 cum_estimate = history_by_year[y]
             else:
@@ -488,12 +488,18 @@ class handler(BaseHTTPRequestHandler):
             as_of_paid = retire_date if (retire_date and y == end_year) else (today if y == end_year else f"{y}-12-31")
             cum_paid = rpc("pension_contributed_as_of", {"p_employee_id": employee_id, "p_as_of": as_of_paid}) or 0
 
-            rows.append({
+            return {
                 "year": y,
                 "cumulative_estimate": round(cum_estimate),
                 "cumulative_paid": round(cum_paid),
                 "balance": round(cum_estimate - cum_paid),
-            })
+            }
+
+        # 연도마다 순서대로 RPC를 최대 2번씩 부르던 걸 병렬로 바꿈 —
+        # 근속연수가 길수록(예: 15년) 예전엔 그만큼 왕복이 늘어났었음.
+        years = list(range(start_year, end_year + 1))
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            rows = list(pool.map(calc_one_year, years))
         return rows
 
     def do_POST(self):

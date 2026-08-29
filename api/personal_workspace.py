@@ -780,13 +780,21 @@ class handler(BaseHTTPRequestHandler):
         )
         if status_filter and status_filter != "all":
             path += "&status=eq." + status_filter
-        rows = rest_request("GET", path) or []
+        # 아래 두 조회(이번 달 일정 + "이전 달에 시작해 넘어오는 기간 일정" 후보)는
+        # 서로 결과를 필요로 하지 않는 독립적인 조회인데, 예전에는 순서대로 하나씩
+        # 기다렸음(달 넘길 때마다 매번 왕복 2번) — 병렬로 동시에 보내서 왕복을 1번
+        # 수준으로 줄임.
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            rows_future = pool.submit(rest_request, "GET", path)
+            spanning_tasks_future = pool.submit(
+                rest_request, "GET",
+                "personal_schedule_tasks?recurrence_type=eq.once&end_date=gte." + from_date
+                + "&anchor_date=lt." + from_date
+                + "&select=id,title,category,member_name,recurrence_type,anchor_date,end_date,note,date_type,is_private,created_by_role",
+            )
+            rows = rows_future.result() or []
+            spanning_tasks = spanning_tasks_future.result() or []
         # 이전 달에 시작해 조회 월까지 이어지는 일회성 기간 일정도 달력에 포함합니다.
-        spanning_tasks = rest_request(
-            "GET", "personal_schedule_tasks?recurrence_type=eq.once&end_date=gte." + from_date
-            + "&anchor_date=lt." + from_date
-            + "&select=id,title,category,member_name,recurrence_type,anchor_date,end_date,note,date_type,is_private,created_by_role"
-        ) or []
         if spanning_tasks:
             task_ids = ",".join(t["id"] for t in spanning_tasks)
             spanning_occurrences = rest_request(

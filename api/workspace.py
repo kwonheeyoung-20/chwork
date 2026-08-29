@@ -260,7 +260,15 @@ class handler(BaseHTTPRequestHandler):
             return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
 
     def _get_schedule(self, qs):
-        _ensure_occurrences_generated()
+        # 예전에는 이 조회(배너/목록/달력) 하나마다 매번 반복일정 전체를 다시 계산했음
+        # (페이지 하나 열 때 배너+목록+달력 3번, 달력에서 다음달로 넘길 때마다 또 1번씩) —
+        # 개인일정관리에서 똑같은 문제를 고쳤던 것과 동일한 방식으로: prepare=1일 때만
+        # 실제로 재계산하고, 나머지는 skip_prepare=1을 붙여서 건너뛰게 함.
+        if qs.get("prepare", ["0"])[0] == "1":
+            _ensure_occurrences_generated()
+            return self._send(200, {"ok": True})
+        if qs.get("skip_prepare", ["0"])[0] != "1":
+            _ensure_occurrences_generated()
 
         if qs.get("tasks", ["0"])[0] == "1":
             tasks = rest_request(

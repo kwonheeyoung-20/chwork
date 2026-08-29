@@ -266,10 +266,10 @@ class handler(BaseHTTPRequestHandler):
         rows = rest_request(
             "GET", f"bonus_reports?year=eq.{year}&round=eq.{round_no}&decided_amount=gt.0&select=*"
         ) or []
-        created_count = 0
-        for r in rows:
+
+        def finalize_one(r):
             if r.get("other_payment_id"):
-                continue  # 이미 반영된 건 중복 생성 방지
+                return False  # 이미 반영된 건 중복 생성 방지
             note_text = r.get("note") or f"{year}년 {round_no}차 성과급보고서 확정 반영"
             if r.get("criteria"):
                 note_text = f"[{r['criteria']}] {note_text}"
@@ -282,7 +282,14 @@ class handler(BaseHTTPRequestHandler):
             }, prefer="return=representation")
             if op:
                 rest_request("PATCH", f"bonus_reports?id=eq.{r['id']}", body={"other_payment_id": op[0]["id"]})
-                created_count += 1
+                return True
+            return False
+
+        # 직원마다 순서대로(POST+PATCH 쌍) 처리하던 걸 병렬로 바꿈 — 최대 34명이면
+        # 예전엔 왕복 최대 68번이 순서대로 걸렸음. 한 직원 안에서의 POST->PATCH 순서(그
+        # 직원 건이 만들어진 뒤에 연결해야 함)는 그대로 유지하고, 직원과 직원 사이만 동시에 처리함.
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            created_count = sum(1 for ok in pool.map(finalize_one, rows) if ok)
 
         rest_request(
             "POST", "period_locks?on_conflict=module,period_key",

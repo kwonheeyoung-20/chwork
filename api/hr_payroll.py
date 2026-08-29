@@ -15,6 +15,7 @@ import traceback
 import urllib.request
 import urllib.parse
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse, parse_qs, quote
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
@@ -140,16 +141,15 @@ class handler(BaseHTTPRequestHandler):
                     f"&select=id,name,hire_date&order=hire_date.asc,name.asc",
                 ) or []
 
-                rows = []
-                for emp in employees:
+                def contract_terms_one(emp):
                     terms = rpc("payroll_contract_terms", {"p_employee_id": emp["id"], "p_year": year})
                     t = terms[0] if terms else None
                     if not t or not t.get("annual_salary"):
-                        continue
+                        return None
                     hire_date = emp.get("hire_date")
                     is_mid_year_hire = bool(hire_date and hire_date > jan1)
                     contract_start_date = hire_date if is_mid_year_hire else jan1
-                    rows.append({
+                    return {
                         "name": emp["name"],
                         "position": t.get("emp_position") or "",
                         "branch": t.get("branch") or "",
@@ -165,7 +165,12 @@ class handler(BaseHTTPRequestHandler):
                         "fixed_overtime_hours_raw": t["fixed_overtime_hours_raw"],
                         "is_probation": t.get("is_probation"),
                         "probation_amount": t.get("probation_monthly_amount"),
-                    })
+                    }
+
+                # 직원마다 순서대로 RPC 부르던 걸 병렬로 바꿈(직원 수만큼 왕복하던 게 1건 수준으로 줄어듦).
+                # pool.map은 입력 순서를 그대로 보존하므로 정렬(hire_date asc)은 그대로 유지됨.
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    rows = [r for r in pool.map(contract_terms_one, employees) if r is not None]
 
                 return self._send(200, {"year": year, "employees": rows})
 
@@ -328,13 +333,21 @@ class handler(BaseHTTPRequestHandler):
                         m = 1
                         y += 1
 
-                results = []
-                for emp in employees:
-                    for mo in months:
-                        diff = rpc("payroll_retroactive_diff_month", {"p_employee_id": emp["id"], "p_month": mo})
-                        diff = diff or 0
-                        if diff != 0:
-                            results.append({**emp, "source_month": mo, "retroactive_diff": diff})
+                def diff_one(pair):
+                    emp, mo = pair
+                    diff = rpc("payroll_retroactive_diff_month", {"p_employee_id": emp["id"], "p_month": mo}) or 0
+                    return (emp, mo, diff) if diff != 0 else None
+
+                # 직원 x 월 조합마다 순서대로 RPC 부르던 걸 병렬로 바꿈
+                # (직원 30명 x 6개월이면 예전엔 왕복 180번이 순서대로 걸렸음)
+                pairs = [(emp, mo) for emp in employees for mo in months]
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    computed = list(pool.map(diff_one, pairs))
+                results = [
+                    {**emp, "source_month": mo, "retroactive_diff": diff}
+                    for item in computed if item is not None
+                    for emp, mo, diff in [item]
+                ]
                 return self._send(200, {"employees": results})
 
             if qs.get("leave_adjustments", ["0"])[0] == "1":
@@ -386,8 +399,10 @@ class handler(BaseHTTPRequestHandler):
             ) or []
 
             settings_map = self._fetch_settings_map()
-            results = []
-            for emp in employees:
+
+            # 직원마다 순서대로 RPC를 2번씩(급여계산+최저임금체크) 호출하던 걸 병렬로 바꿈 —
+            # 직원이 36명이면 예전엔 왕복 72번이 순서대로 걸렸는데, 이제 가장 느린 1건 수준으로 줄어듦.
+            def calc_one(emp):
                 calc = rpc("payroll_calc_prorated", {"p_employee_id": emp["id"], "p_year_month": year_month})
                 row = calc[0] if calc else {
                     "base_pay": 0, "fixed_overtime_pay": 0,
@@ -398,7 +413,10 @@ class handler(BaseHTTPRequestHandler):
                     existing_note = row.get("adjustment_note")
                     row["adjustment_note"] = (existing_note + " / " if existing_note else "") + mw[0]["note"]
                 row["current_settings"] = settings_map.get(emp["id"])
-                results.append({**emp, **row})
+                return {**emp, **row}
+
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                results = list(pool.map(calc_one, employees))
 
             return self._send(200, {"payroll": results})
         except SupabaseError as e:
@@ -555,17 +573,16 @@ class handler(BaseHTTPRequestHandler):
                 f"&select=id"
             ) or []
 
-            body = []
-            for emp in employees:
+            def calc_one_for_save(emp):
                 calc = rpc("payroll_calc_prorated", {"p_employee_id": emp["id"], "p_year_month": year_month})
                 row = calc[0] if calc else None
                 if not row:
-                    continue
+                    return None
                 mw = rpc("payroll_min_wage_status", {"p_employee_id": emp["id"], "p_year_month": year_month})
                 if mw and mw[0].get("is_floored"):
                     existing_note = row.get("adjustment_note")
                     row["adjustment_note"] = (existing_note + " / " if existing_note else "") + mw[0]["note"]
-                body.append({
+                return {
                     "employee_id": emp["id"],
                     "year_month": year_month,
                     "base_pay": row["base_pay"],
@@ -584,7 +601,11 @@ class handler(BaseHTTPRequestHandler):
                     "calc_note": "1단계 기본계산 (정상 재직자 기준)"
                         + (" + 재직자 조정 반영" if row.get("adjustment_note") else "")
                         + (" + 일할계산 반영" if row.get("proration_note") else ""),
-                })
+                }
+
+            # 직원마다 순서대로 RPC 2번씩 부르던 걸 병렬로 바꿈(생성/저장 버튼 클릭 시 대기시간 단축)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                body = [r for r in pool.map(calc_one_for_save, employees) if r is not None]
 
             if not body:
                 return self._send(400, {"error": "계산된 대상이 없습니다"})
