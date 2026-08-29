@@ -1636,7 +1636,7 @@ async function saveMediaUpload() {
         // 서버(Vercel)가 JSON이 아닌 오류 페이지를 돌려준 경우 — 대부분 용량 초과
         throw new Error('파일이 너무 커서 업로드에 실패했습니다. 더 작은 사진으로 다시 시도해주세요.');
       }
-      if (!res.ok) throw new Error(data.error || '업로드 실패');
+      if (!res.ok) throw new Error(data.detail || data.error || '업로드 실패');
       okCount += 1;
     } catch (e) {
       $('mediaUploadModalMsg').textContent = `"${file.name}" 업로드 중 오류: ${e.message || ''}`;
