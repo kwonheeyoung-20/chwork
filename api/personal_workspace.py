@@ -18,15 +18,18 @@ hr_backup.py + hr_storage_backup.py를 하나로 합쳐서 확보한 자리를 �
 """
 from http.server import BaseHTTPRequestHandler
 import os
+import re
 import json
 import uuid
 import base64
+import numbers
 import traceback
 import datetime
 import urllib.request
 import urllib.parse
 import urllib.error
 from urllib.parse import urlparse, parse_qs, quote
+from concurrent.futures import ThreadPoolExecutor
 
 
 def kst_today():
@@ -544,6 +547,30 @@ def storage_upload(path, data_bytes, content_type):
         raise SupabaseError(e.code, e.read().decode("utf-8", "ignore"))
     except urllib.error.URLError as e:
         raise SupabaseError(0, f"파일 업로드 연결 실패: {e.reason}")
+
+
+def _storage_sign_upload(path):
+    """브라우저가 우리 서버(Vercel 함수)를 거치지 않고 Supabase Storage에
+    "직접" 업로드할 수 있게 해주는 1회용 임시 업로드 주소를 발급함.
+    (Vercel 함수 자체의 요청 크기 제한을 우회하기 위한 용도 — 서명된 다운로드
+    URL(storage_sign_url)과는 반대 방향)"""
+    url = f"{SUPABASE_URL}/storage/v1/object/upload/sign/{CONTRACT_BUCKET}/{quote(path)}"
+    req = urllib.request.Request(url, data=b"{}", method="POST", headers={
+        "Authorization": f"Bearer {SUPABASE_SECRET_KEY}",
+        "apikey": SUPABASE_SECRET_KEY,
+        "Content-Type": "application/json",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        raise SupabaseError(e.code, e.read().decode("utf-8", "ignore"))
+    except urllib.error.URLError as e:
+        raise SupabaseError(0, f"업로드 주소 발급 실패: {e.reason}")
+    signed_path = result.get("url") or ""
+    if signed_path.startswith("http"):
+        return signed_path
+    return f"{SUPABASE_URL}/storage/v1{signed_path}"
 
 
 def storage_delete(path):
@@ -1111,24 +1138,52 @@ class handler(BaseHTTPRequestHandler):
                 r["view_url"] = storage_sign_url(r.get("storage_path"))
         return self._send(200, {"items": rows})
 
+    def _sign_upload_personal_media(self, payload):
+        """대용량 사진(휴대폰 원본 등)을 base64로 감싸서 우리 서버(Vercel 함수)를
+        거치면, 인코딩하면서 용량이 33% 커지는데다 Vercel 함수 자체의 요청 크기
+        제한(약 4.5MB)까지 겹쳐서 3MB 남짓만 돼도 실패했음. 그래서 브라우저가
+        Supabase Storage로 "직접" 업로드하도록, 여기서는 그 업로드를 허가하는
+        1회용 임시 주소(서명 업로드 URL)만 발급해줌 — 실제 파일 바이트는
+        우리 서버를 거치지 않으므로 그 제한에 안 걸림."""
+        category = payload.get("category")
+        if category not in ("notice", "album"):
+            return self._send(400, {"error": "category는 notice 또는 album이어야 합니다"})
+        fname = payload.get("file_name")
+        if not fname:
+            return self._send(400, {"error": "file_name은 필수입니다"})
+
+        subfolder = "notices" if category == "notice" else "album"
+        spath = f"personal/{subfolder}/{safe_filename(fname)}"
+        upload_url = _storage_sign_upload(spath)
+        return self._send(200, {"storage_path": spath, "upload_url": upload_url})
+
     def _post_personal_media(self, payload):
         category = payload.get("category")
         if category not in ("notice", "album"):
             return self._send(400, {"error": "category는 notice 또는 album이어야 합니다"})
-        fb64 = payload.get("file_base64")
         fname = payload.get("file_name")
-        if not fb64 or not fname:
-            return self._send(400, {"error": "file_base64, file_name은 필수입니다"})
-        try:
-            fbytes = base64.b64decode(fb64)
-        except Exception:
-            return self._send(400, {"error": "파일 데이터를 해독할 수 없습니다"})
-        if len(fbytes) > 8 * 1024 * 1024:
-            return self._send(413, {"error": "파일이 너무 큽니다 (8MB 이하로 올려주세요)"})
+        if not fname:
+            return self._send(400, {"error": "file_name은 필수입니다"})
 
-        subfolder = "notices" if category == "notice" else "album"
-        spath = f"personal/{subfolder}/{safe_filename(fname)}"
-        storage_upload(spath, fbytes, payload.get("content_type"))
+        # 이미 브라우저에서 Supabase Storage로 직접 올려둔 경우(대용량 사진 경로) —
+        # 여기서는 파일을 다시 안 올리고, 메타데이터만 등록함
+        if payload.get("storage_path"):
+            spath = payload["storage_path"]
+            file_size = payload.get("file_size")
+        else:
+            fb64 = payload.get("file_base64")
+            if not fb64:
+                return self._send(400, {"error": "file_base64 또는 storage_path 중 하나는 필수입니다"})
+            try:
+                fbytes = base64.b64decode(fb64)
+            except Exception:
+                return self._send(400, {"error": "파일 데이터를 해독할 수 없습니다"})
+            if len(fbytes) > 8 * 1024 * 1024:
+                return self._send(413, {"error": "파일이 너무 큽니다 (8MB 이하로 올려주세요)"})
+            subfolder = "notices" if category == "notice" else "album"
+            spath = f"personal/{subfolder}/{safe_filename(fname)}"
+            storage_upload(spath, fbytes, payload.get("content_type"))
+            file_size = len(fbytes)
 
         role = self._role()
         created = rest_request("POST", "personal_media", body={
@@ -1136,7 +1191,7 @@ class handler(BaseHTTPRequestHandler):
             "file_name": fname,
             "storage_path": spath,
             "content_type": payload.get("content_type"),
-            "file_size": len(fbytes),
+            "file_size": file_size,
             "note": payload.get("note"),
             "uploaded_by_role": role,
         }, prefer="return=representation")
