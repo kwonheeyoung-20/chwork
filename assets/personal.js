@@ -1577,8 +1577,8 @@ function openMediaUploadModal(category) {
   pendingMediaUploadCategory = category;
   $('mediaUploadModalTitle').textContent = category === 'notice' ? '알림장 자료 추가' : '앨범 사진 추가';
   $('mediaUploadFileLabel').firstChild.textContent = category === 'notice'
-    ? '파일 선택 (이미지/PDF/문서, 8MB 이하) '
-    : '사진 선택 (여러 장 가능, 각 8MB 이하) ';
+    ? '파일 선택 (이미지/PDF/문서, 3MB 이하) '
+    : '사진 선택 (여러 장 가능, 각 3MB 이하) ';
   $('mu_file').value = '';
   $('mu_file').multiple = category === 'album';
   $('mu_file').accept = category === 'album' ? 'image/*' : '';
@@ -1608,8 +1608,12 @@ async function saveMediaUpload() {
   btn.disabled = true;
   let okCount = 0;
   for (const file of files) {
-    if (file.size > 8 * 1024 * 1024) {
-      $('mediaUploadModalMsg').textContent = `"${file.name}" 파일이 8MB를 넘어서 건너뛰었습니다.`;
+    // base64로 인코딩하면 용량이 약 33% 커지고, 여기에 Vercel 서버리스 함수 자체의
+    // 요청 크기 제한(약 4.5MB)까지 겹쳐서, 원본이 3MB만 넘어도 휴대폰 사진 같은
+    // 경우 전송 자체가 거부될 수 있음(그러면 서버가 JSON이 아닌 오류 페이지를
+    // 돌려줘서 "Unexpected token" 같은 파싱 오류로 보임) — 여유 있게 3MB로 제한.
+    if (file.size > 3 * 1024 * 1024) {
+      $('mediaUploadModalMsg').textContent = `"${file.name}" 파일이 너무 큽니다(3MB 이하로 올려주세요). 휴대폰 사진은 보통 원본이 커서, 갤러리 공유 시 "용량 줄이기/저용량"으로 보내거나 캡처본을 이용해주세요.`;
       continue;
     }
     try {
@@ -1625,7 +1629,13 @@ async function saveMediaUpload() {
           note,
         }),
       });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        // 서버(Vercel)가 JSON이 아닌 오류 페이지를 돌려준 경우 — 대부분 용량 초과
+        throw new Error('파일이 너무 커서 업로드에 실패했습니다. 더 작은 사진으로 다시 시도해주세요.');
+      }
       if (!res.ok) throw new Error(data.error || '업로드 실패');
       okCount += 1;
     } catch (e) {

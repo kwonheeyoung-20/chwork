@@ -4047,11 +4047,23 @@ function renderDocFileLinks(files) {
   if (!files || files.length === 0) return '-';
   // 파일이 여러 개면 <br>로 세로로 쌓으면 그 행만 세로로 길어져서(가로스크롤 표라 안 보이는 채로)
   // 표 전체 줄 간격이 이상하게 벌어져 보이는 문제가 있어, 한 줄로 이어서 표시하고 필요하면 가로 스크롤로 보게 함.
+  // 목록 조회 시에는 서명 URL을 미리 안 만들고(느려지니까), 실제 클릭한 순간에만 만들어서 엶
   return files.map(f =>
-    f.view_url
-      ? `<a href="${esc(f.view_url)}" target="_blank" rel="noopener" download="${esc(f.file_name || '')}" class="hr-file-link">📎 ${esc(f.file_name || '보기')}</a>`
-      : `${esc(f.file_name || '')} (만료된 링크, 새로고침 필요)`
+    `<a href="#" onclick="openContractDocFileLink('${f.id}'); return false;" class="hr-file-link">📎 ${esc(f.file_name || '보기')}</a>`
   ).join(' ');
+}
+
+async function openContractDocFileLink(fileId) {
+  try {
+    const res = await fetch(`${apiBase()}/api/contract_docs?file_id=${fileId}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || data.detail || '열람 실패');
+    window.open(data.view_url, '_blank');
+  } catch (e) {
+    alert('파일을 여는 중 오류가 발생했습니다: ' + (e.message || ''));
+  }
 }
 
 function contractDocStatus(c) {
@@ -4268,7 +4280,7 @@ function renderExistingFilesList(docId, files) {
   $('cdExistingFilesWrap').style.display = 'block';
   $('cdExistingFilesList').innerHTML = files.map(f => `
     <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 8px; background:var(--bg); border-radius:var(--radius-sm); font-size:12px;">
-      <a href="${esc(f.view_url || '#')}" target="_blank" rel="noopener" download="${esc(f.file_name || '')}" class="hr-edit-link">${esc(f.file_name || '파일')}</a>
+      <a href="#" onclick="openContractDocFileLink('${f.id}'); return false;" class="hr-edit-link">${esc(f.file_name || '파일')}</a>
       <a class="hr-edit-link" onclick="deleteContractDocFile('${f.id}', '${docId}')" style="color:var(--red); flex-shrink:0;">삭제</a>
     </div>
   `).join('');
