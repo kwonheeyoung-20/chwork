@@ -1545,21 +1545,98 @@ function renderAlbumGrid(items) {
     grid.innerHTML = `<div class="dash-empty">등록된 사진이 없습니다.</div>`;
     return;
   }
-  grid.innerHTML = items.map(it => `
-    <div style="position:relative;">
-      <img src="${esc(it.view_url || '')}" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:var(--radius-sm); cursor:pointer; background:var(--bg);"
-           onclick="openAlbumViewerUrl('${esc(it.view_url || '')}')">
-      ${mediaCanDelete(it) ? `<a class="hr-edit-link" style="position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.55); color:#fff; border:none; padding:2px 8px; border-radius:10px; font-size:11px;" onclick="event.stopPropagation(); deletePersonalMedia('${it.id}', 'album')">삭제</a>` : ''}
+  // 최신순으로 오는 목록을 "업로드 날짜"별로 묶어서, 날짜 구분선 아래에 그 날 올린 사진들을
+  // 그리드로 보여줌. albumMediaCache에 원본 그대로 담아둬서 확대보기에서 메모를 찾을 수 있게 함.
+  const groups = [];
+  const byDate = {};
+  items.forEach(it => {
+    const dateKey = new Date(it.created_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+    if (!byDate[dateKey]) { byDate[dateKey] = []; groups.push(dateKey); }
+    byDate[dateKey].push(it);
+  });
+
+  grid.innerHTML = groups.map(dateKey => `
+    <div style="grid-column:1/-1; font-size:13px; font-weight:600; color:var(--text-secondary); margin:${groups.indexOf(dateKey) === 0 ? '0' : '10px'} 0 2px; padding-top:${groups.indexOf(dateKey) === 0 ? '0' : '8px'}; border-top:${groups.indexOf(dateKey) === 0 ? 'none' : '1px solid var(--border)'};">
+      ${esc(dateKey)} <span style="font-weight:400; color:var(--text-muted);">(${byDate[dateKey].length}장)</span>
     </div>
+    ${byDate[dateKey].map(it => `
+      <div style="position:relative;">
+        <img src="${esc(it.view_url || '')}" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:var(--radius-sm); cursor:pointer; background:var(--bg);"
+             onclick="openAlbumViewer('${it.id}')">
+        ${it.note ? `<div style="position:absolute; bottom:0; left:0; right:0; background:linear-gradient(transparent, rgba(0,0,0,0.65)); color:#fff; font-size:11px; padding:12px 6px 4px; border-radius:0 0 var(--radius-sm) var(--radius-sm); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none;">${esc(it.note)}</div>` : ''}
+        ${mediaCanDelete(it) ? `<a class="hr-edit-link" style="position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.55); color:#fff; border:none; padding:2px 8px; border-radius:10px; font-size:11px;" onclick="event.stopPropagation(); deletePersonalMedia('${it.id}', 'album')">삭제</a>` : ''}
+      </div>
+    `).join('')}
   `).join('');
 }
 
-function openAlbumViewerUrl(url) {
-  if (!url) return;
-  $('albumViewerImg').src = url;
+let albumViewerList = [];   // 지금 보고 있는 앨범의 사진 순서(넘기기용, 화면에 보이는 최신순 그대로)
+let albumViewerIndex = -1;
+let albumViewerTouchStartX = null;
+
+function openAlbumViewer(id) {
+  // albumMediaCache는 최신순 그대로라, 그 순서대로 좌우로 넘길 수 있게 그대로 씀
+  albumViewerList = albumMediaCache || [];
+  const idx = albumViewerList.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  albumViewerIndex = idx;
+  renderAlbumViewerAt(albumViewerIndex);
   $('albumViewerModal').style.display = 'flex';
+  document.addEventListener('keydown', albumViewerKeyHandler);
 }
-function closeAlbumViewer() { $('albumViewerModal').style.display = 'none'; }
+
+function renderAlbumViewerAt(index) {
+  const item = albumViewerList[index];
+  if (!item || !item.view_url) return;
+  $('albumViewerImg').src = item.view_url;
+  const noteEl = $('albumViewerNote');
+  if (noteEl) {
+    noteEl.textContent = item.note || '';
+    noteEl.style.display = item.note ? 'block' : 'none';
+  }
+  $('albumViewerCounter').textContent = albumViewerList.length > 1 ? `${index + 1} / ${albumViewerList.length}` : '';
+  // 맨 처음/맨 끝에서는 그 방향 화살표를 흐리게 (더 넘어갈 게 없다는 표시)
+  $('albumViewerPrevBtn').style.opacity = index > 0 ? '1' : '0.3';
+  $('albumViewerNextBtn').style.opacity = index < albumViewerList.length - 1 ? '1' : '0.3';
+}
+
+function albumViewerPrev() {
+  if (albumViewerIndex <= 0) return;
+  albumViewerIndex -= 1;
+  renderAlbumViewerAt(albumViewerIndex);
+}
+function albumViewerNext() {
+  if (albumViewerIndex >= albumViewerList.length - 1) return;
+  albumViewerIndex += 1;
+  renderAlbumViewerAt(albumViewerIndex);
+}
+
+function albumViewerKeyHandler(e) {
+  if (e.key === 'ArrowLeft') albumViewerPrev();
+  else if (e.key === 'ArrowRight') albumViewerNext();
+  else if (e.key === 'Escape') closeAlbumViewer();
+}
+
+function closeAlbumViewer() {
+  $('albumViewerModal').style.display = 'none';
+  document.removeEventListener('keydown', albumViewerKeyHandler);
+}
+
+/* 휴대폰에서 손가락으로 좌우로 넘기는 스와이프 지원 */
+document.addEventListener('DOMContentLoaded', () => {
+  const wrap = $('albumViewerImgWrap');
+  if (!wrap) return;
+  wrap.addEventListener('touchstart', e => {
+    albumViewerTouchStartX = e.touches[0].clientX;
+  }, { passive: true });
+  wrap.addEventListener('touchend', e => {
+    if (albumViewerTouchStartX === null) return;
+    const deltaX = e.changedTouches[0].clientX - albumViewerTouchStartX;
+    albumViewerTouchStartX = null;
+    if (Math.abs(deltaX) < 40) return; // 너무 작은 움직임은 무시
+    if (deltaX > 0) albumViewerPrev(); else albumViewerNext();
+  }, { passive: true });
+});
 
 async function openPersonalMediaFile(id) {
   try {
