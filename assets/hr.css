@@ -114,7 +114,7 @@
 #bonusReportTable #bonusY1GroupHeader, #bonusReportPrintArea #bonusY1GroupHeader,
 #bonusReportTable #bonusNowGroupHeader, #bonusReportPrintArea #bonusNowGroupHeader,
 #bonusReportTable #bonusDecisionGroupHeader, #bonusReportPrintArea #bonusDecisionGroupHeader {
-  border-left: 2px solid #666 !important;
+  border-left: 1px solid #999 !important;
 }
 /* 헤더 2행: 이 행은 순번~입사일(rowspan) 칸이 없이 세부 항목 15칸만 있어서,
    그 안에서 2025년(5번째)/현재급여(9번째)/결정(11번째) 시작 칸에 구분선 */
@@ -124,7 +124,7 @@
 #bonusReportPrintArea thead tr:last-child th:nth-child(9),
 #bonusReportTable thead tr:last-child th:nth-child(11),
 #bonusReportPrintArea thead tr:last-child th:nth-child(11) {
-  border-left: 2px solid #666 !important;
+  border-left: 1px solid #999 !important;
 }
 /* tbody(실제 데이터 행): 순번~입사일 6칸 + 나머지가 그대로 이어지므로 전체 칸 기준
    7번째(2024 시작)/11번째(2025 시작)/15번째(현재급여 시작)/17번째(결정 시작) */
@@ -136,7 +136,7 @@
 #bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(15),
 #bonusReportTable tbody tr:not(.hr-total-row) td:nth-child(17),
 #bonusReportPrintArea tbody tr:not(.hr-total-row) td:nth-child(17) {
-  border-left: 2px solid #666 !important;
+  border-left: 1px solid #999 !important;
 }
 /* 합계 행은 colspan으로 칸이 묶여있어서 물리적 칸 순서가 데이터 행과 다름
    (1:순번~기준2024 통합, 2:2024성과급합계, 3:2025그룹 시작, 4:2025성과급합계,
@@ -147,7 +147,7 @@
 #bonusReportPrintArea tbody tr.hr-total-row td:nth-child(5),
 #bonusReportTable tbody tr.hr-total-row td:nth-child(6),
 #bonusReportPrintArea tbody tr.hr-total-row td:nth-child(6) {
-  border-left: 2px solid #666 !important;
+  border-left: 1px solid #999 !important;
 }
 
 
