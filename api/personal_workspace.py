@@ -1143,9 +1143,17 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(502, {"error": "열람 주소를 만들지 못했습니다"})
             return self._send(200, {"file_name": row.get("file_name"), "view_url": view_url})
 
-        rows = rest_request(
-            "GET", f"personal_media?category=eq.{category}&select=*&order=display_date.desc,created_at.desc"
-        ) or []
+        # 사진이 많아질수록 한 번에 전부 불러오면 느려지므로(서명 URL도 장수만큼 만들어야 함),
+        # from/to(기간)를 넘기면 그 기간(보통 한 달)만 조회함. 안 넘기면(예: 알림장은 지금도
+        # 문서 수가 적어서 아직 기간 제한 없이 씀) 예전처럼 전체를 조회함.
+        from_date = qs.get("from", [None])[0]
+        to_date = qs.get("to", [None])[0]
+        path = f"personal_media?category=eq.{category}&select=*&order=display_date.desc,created_at.desc"
+        if from_date:
+            path += f"&display_date=gte.{from_date}"
+        if to_date:
+            path += f"&display_date=lte.{to_date}"
+        rows = rest_request("GET", path) or []
         # 이미지는 목록에서 바로 미리보기가 필요해서, 이미지 항목에 한해서만 서명 URL을 같이 만들어 내려줌.
         # 사진 수가 늘어날수록 한 장씩 순서대로(직렬로) 만들면 느려지므로 병렬로 처리함
         # (사진 50장이면 순서대로는 왕복 50번, 병렬이면 가장 느린 1번 수준으로 단축됨).
