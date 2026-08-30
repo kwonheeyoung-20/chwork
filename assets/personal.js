@@ -146,6 +146,7 @@ function switchPerTab(name) {
   }
   if (name === 'album' && $('perAlbumView').dataset.loaded !== '1') {
     $('perAlbumView').dataset.loaded = '1';
+    initAlbumMonthState();
     loadPersonalMedia('album');
   }
 }
@@ -1478,11 +1479,48 @@ function fileTypeIcon(contentType) {
   return '📎';
 }
 
+let albumViewYear, albumViewMonth;
+
+function initAlbumMonthState() {
+  const now = new Date();
+  albumViewYear = now.getFullYear();
+  albumViewMonth = now.getMonth();
+}
+
+function syncAlbumMonthLabel() {
+  $('albumMonthLabel').textContent = `${albumViewYear}년 ${albumViewMonth + 1}월`;
+}
+
+function albumPrevMonth() {
+  albumViewMonth -= 1;
+  if (albumViewMonth < 0) { albumViewMonth = 11; albumViewYear -= 1; }
+  loadPersonalMedia('album');
+}
+function albumNextMonth() {
+  albumViewMonth += 1;
+  if (albumViewMonth > 11) { albumViewMonth = 0; albumViewYear += 1; }
+  loadPersonalMedia('album');
+}
+function albumThisMonth() {
+  initAlbumMonthState();
+  loadPersonalMedia('album');
+}
+
 async function loadPersonalMedia(category) {
   const listEl = category === 'notice' ? $('noticeList') : $('albumGrid');
   listEl.innerHTML = `<div class="dash-empty">불러오는 중…</div>`;
   try {
-    const res = await fetch(`${apiBase()}/api/personal_media?category=${category}`, { headers: authHeaders() });
+    // 앨범은 사진이 많아져도 느려지지 않도록 한 달 범위만 불러옴(알림장은 문서 수가
+    // 적어서 아직 전체 조회 그대로 둠). display_date(사용자가 고칠 수 있는 사진 날짜)
+    // 기준으로 그 달의 1일~말일을 범위로 넘김.
+    let url = `${apiBase()}/api/personal_media?category=${category}`;
+    if (category === 'album') {
+      syncAlbumMonthLabel();
+      const monthStart = toISO(new Date(albumViewYear, albumViewMonth, 1));
+      const monthEnd = toISO(new Date(albumViewYear, albumViewMonth + 1, 0));
+      url += `&from=${monthStart}&to=${monthEnd}`;
+    }
+    const res = await fetch(url, { headers: authHeaders() });
     if (handle401(res)) return;
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '불러오기 실패');
@@ -1493,7 +1531,7 @@ async function loadPersonalMedia(category) {
       renderNoticeList(items);
     } else {
       albumMediaCache = items;
-      $('albumCount').textContent = `총 ${items.length}장`;
+      $('albumCount').textContent = `이번 화면 ${items.length}장`;
       renderAlbumGrid(items);
     }
   } catch (e) {
