@@ -2837,18 +2837,18 @@ async function deleteSettingsHistoryRow(id, employeeId) {
 
 async function savePayRate() {
   const empId = editingId;
-  const month = $('pr_month').value;
+  const dateVal = $('pr_month').value;
   const rate = Number($('pr_rate').value);
   const employmentType = $('pr_employment_type').value;
   const contractEnd = $('pr_contract_end').value;
-  if (!empId || !month || !rate) {
-    $('payRateMsg').textContent = '적용 시작월, 요율은 필수입니다.';
+  if (!empId || !dateVal || !rate) {
+    $('payRateMsg').textContent = '적용 시작일, 요율은 필수입니다.';
     return;
   }
   const payload = {
     type: 'pay_rate',
     employee_id: empId,
-    effective_month: `${month}-01`,
+    effective_month: dateVal,
     pay_rate: rate / 100,
   };
   if (employmentType) payload.employment_type = employmentType;
@@ -2865,7 +2865,7 @@ async function savePayRate() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'save failed');
     $('payRateMsg').className = 'hr-msg success';
-    $('payRateMsg').textContent = `적용되었습니다 (${rate}%, ${month}부터).`;
+    $('payRateMsg').textContent = `적용되었습니다 (${rate}%, ${dateVal}부터).`;
     $('pr_month').value = '';
     $('pr_rate').value = '';
     $('pr_employment_type').value = '';
@@ -5034,6 +5034,11 @@ function _cloneScreenTableForPrint() {
   if (excludedIds.size > 0) {
     Array.from(clone.querySelectorAll('tbody tr[data-emp-id]')).forEach(tr => {
       if (excludedIds.has(tr.dataset.empId)) tr.remove();
+    });
+    // 제외하고 나면 원래 순번(1,2,3...)에 빈 번호가 생기므로, 남은 행 기준으로 1부터 다시 매김
+    Array.from(clone.querySelectorAll('tbody tr[data-emp-id]')).forEach((tr, idx) => {
+      const seqCell = tr.querySelector('td');
+      if (seqCell) seqCell.textContent = idx + 1;
     });
     // 제외된 인원이 있으면, 인쇄본 기준(남은 인원만)으로 전체 합계를 다시 계산해서 반영
     let sumY2 = 0, sumY1 = 0, sumDecided = 0;
