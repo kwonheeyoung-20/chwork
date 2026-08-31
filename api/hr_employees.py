@@ -25,16 +25,20 @@ HR_PASSWORD = os.environ.get("HR_PASSWORD", "")
 
 
 def add_months(date_str, months):
+    """계약종료일 계산 전용. 예: 8/3 시작 1개월 계약 -> "다음달 같은 날짜"(9/3)가 아니라
+    그 하루 전날인 9/2로 끝나야 정확히 만 1개월(전날까지 근무)이 됨. 그래서 "N개월 뒤
+    같은 날짜"를 구한 다음 하루를 뺀 값을 계약종료일로 씀."""
     import datetime
+    import calendar
     y, m, d = int(date_str[:4]), int(date_str[5:7]), int(date_str[8:10])
     total = (y * 12 + (m - 1)) + months
     ny, nm = divmod(total, 12)
     nm += 1
     # 말일 넘어가는 경우 방지 (예: 1/31 + 1개월 -> 2/28)
-    import calendar
     last_day = calendar.monthrange(ny, nm)[1]
     nd = min(d, last_day)
-    return datetime.date(ny, nm, nd).isoformat()
+    next_month_same_day = datetime.date(ny, nm, nd)
+    return (next_month_same_day - datetime.timedelta(days=1)).isoformat()
 
 
 def calendar_months_later_first_day(date_str, months):
