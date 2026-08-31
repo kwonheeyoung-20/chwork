@@ -1111,7 +1111,58 @@
           <div class="panel-header">
             <h2>연봉인상보고서</h2>
           </div>
-          <div class="status">준비 중입니다.</div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            직전 2개년도의 연봉·월급·성과급(1,2차 합계) 지급이력을 비교하여 당해년도 연봉인상을 검토·결정하기 위한 자료예요.
+            결정연봉만 입력하면 전년대비 인상액·인상률이 자동으로 계산됩니다.
+          </p>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">당해년도:</label>
+            <select id="siYear" class="hr-input" style="width:100px;" onchange="loadSalaryIncreaseReport()"></select>
+            <button class="secondary" onclick="loadSalaryIncreaseReport()">조회</button>
+            <span id="siLockStatus" style="font-size:12px; color:var(--text-muted); margin-left:8px;"></span>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+            <button class="secondary" onclick="printSalaryIncreaseDecision()">🖨 인쇄(의사결정용)</button>
+            <button class="secondary" onclick="printSalaryIncreaseFinal()">🖨 인쇄(확정 결정내용)</button>
+            <button class="primary" onclick="saveSalaryIncreaseDraft()">💾 입력내용 저장(초안)</button>
+            <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 4px;"></span>
+            <button class="primary" id="siFinalizeBtn" onclick="finalizeSalaryIncreaseReport()" style="background:var(--red,#c82828);">✅ 확정(마감)</button>
+            <button class="secondary" id="siUnlockBtn" onclick="unlockSalaryIncreaseReport()" style="display:none;">마감해제</button>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table" id="siTable" style="white-space:nowrap;">
+              <thead>
+                <tr>
+                  <th rowspan="2">순번</th>
+                  <th rowspan="2">이름</th>
+                  <th rowspan="2">지사</th>
+                  <th rowspan="2">부서</th>
+                  <th rowspan="2">직급</th>
+                  <th rowspan="2">입사일</th>
+                  <th colspan="3" id="siY2GroupHeader" style="text-align: center; background:#eef3fa;">이력</th>
+                  <th colspan="3" id="siY1GroupHeader" style="text-align: center; background:#eafaf0;">이력</th>
+                  <th colspan="2" style="text-align: center; background:#f2f2f2;">당해년도 현재 급여</th>
+                  <th colspan="4" style="text-align: center; background:#fff3d6;">당해년도 인상 결정</th>
+                  <th rowspan="2" class="si-exclude-col" style="background:#f0f0f0; min-width:60px;">인쇄<br>제외</th>
+                </tr>
+                <tr>
+                  <th class="num">연봉(천원)</th><th class="num">월급여</th><th class="num">성과급(1,2차)</th>
+                  <th class="num">연봉(천원)</th><th class="num">월급여</th><th class="num">성과급(1,2차)</th>
+                  <th class="num">연봉(천원)</th><th class="num">월급여</th>
+                  <th class="num" style="background:#fff9ec; min-width:120px;">결정연봉(입력)</th>
+                  <th class="num" style="background:#fff9ec;">인상액</th>
+                  <th class="num" style="background:#fff9ec;">인상률</th>
+                  <th style="background:#fff9ec; min-width:110px;">비고</th>
+                </tr>
+              </thead>
+              <tbody id="siTbody">
+                <tr><td colspan="19" style="text-align:center; color:var(--text-muted); padding:24px;">조회를 눌러주세요.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section class="panel" id="tab-contacts" style="display:none;">
@@ -1607,6 +1658,15 @@
     직전 2개년도 연봉·성과급 자료를 바탕으로 당해년도 성과급 지급액을 결정하는 보고서입니다.
   </p>
   <div id="bonus_print_table_container"></div>
+</div>
+
+<div id="siPrintArea" style="display:none;">
+  <h2 style="margin-bottom:4px;" id="si_print_title">연봉인상보고서</h2>
+  <p style="font-size:12px; color:var(--text-secondary); margin-bottom:4px;" id="si_print_asof"></p>
+  <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">
+    직전 2개년도 연봉·성과급 자료를 바탕으로 당해년도 연봉인상을 결정하는 보고서입니다.
+  </p>
+  <div id="si_print_table_container"></div>
 </div>
 
 <!-- 개인별 급여명세서 출력 모달 -->
