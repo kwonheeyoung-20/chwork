@@ -5158,14 +5158,14 @@ function initSalaryIncreaseReportTab() {
 async function loadSalaryIncreaseReport() {
   const year = $('siYear').value;
   const tbody = $('siTbody');
-  tbody.innerHTML = `<tr><td colspan="19" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?salary_increase_report=1&year=${year}`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="19" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}${data.detail ? '<br><span style="font-size:11px; color:var(--text-muted);">' + esc(data.detail) + '</span>' : ''}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}${data.detail ? '<br><span style="font-size:11px; color:var(--text-muted);">' + esc(data.detail) + '</span>' : ''}</td></tr>`;
       return;
     }
     siReportCache = data.employees || [];
@@ -5178,7 +5178,7 @@ async function loadSalaryIncreaseReport() {
 
     const locked = data.locked;
     if (siReportCache.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="19" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
       return;
     }
 
@@ -5191,7 +5191,7 @@ async function loadSalaryIncreaseReport() {
     document.querySelectorAll('#siTbody tr[data-emp-id]').forEach(tr => updateSiRowCalc(tr));
     renderSiTotals();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="19" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
   }
 }
 
@@ -5210,6 +5210,8 @@ function renderSiRow(e, locked) {
       <td class="num" style="background:#f7f9fc;">${fmtManwon(e.salary_y1)}</td>
       <td class="num" style="background:#f7f9fc;">${fmt(e.monthly_y1)}</td>
       <td class="num" style="background:#f7f9fc;">${fmt(e.bonus_y1)}</td>
+      <td class="num" style="background:#f7f9fc;">${e.y1_increase_amount != null ? fmt(e.y1_increase_amount) : '-'}</td>
+      <td class="num" style="background:#f7f9fc;">${e.y1_increase_rate != null ? (e.y1_increase_rate * 100).toFixed(1) + '%' : '-'}</td>
       <td class="num">${fmtManwon(e.salary_now)}</td>
       <td class="num">${fmt(e.monthly_now)}</td>
       <td style="background:#fff9ec;">
@@ -5250,23 +5252,41 @@ function updateSiRowCalc(tr) {
 }
 
 function renderSiTotals() {
-  let sumY2 = 0, sumY1 = 0, sumDecided = 0;
+  const sums = { y2s: 0, y2m: 0, y2b: 0, y1s: 0, y1m: 0, y1b: 0, y1inc: 0, nows: 0, nowm: 0, decided: 0, incAmt: 0 };
+  let empCount = 0;
   document.querySelectorAll('#siTbody tr[data-emp-id]').forEach(tr => {
-    const salaryY1 = Number(tr.dataset.salaryY1 || 0);
-    sumY1 += salaryY1;
+    empCount += 1;
+    const e = siReportCache.find(x => x.employee_id === tr.dataset.empId) || {};
+    sums.y2s += Number(e.salary_y2 || 0); sums.y2m += Number(e.monthly_y2 || 0); sums.y2b += Number(e.bonus_y2 || 0);
+    sums.y1s += Number(e.salary_y1 || 0); sums.y1m += Number(e.monthly_y1 || 0); sums.y1b += Number(e.bonus_y1 || 0);
+    if (e.y1_increase_amount != null) sums.y1inc += Number(e.y1_increase_amount);
+    sums.nows += Number(e.salary_now || 0); sums.nowm += Number(e.monthly_now || 0);
     const v = tr.querySelector('.si-decided-input').value.trim();
-    sumDecided += v === '' ? 0 : Number(v);
+    const decided = v === '' ? null : Number(v);
+    if (decided != null) {
+      sums.decided += decided;
+      sums.incAmt += decided - Number(tr.dataset.salaryY1 || 0);
+    }
   });
   const existing = document.querySelector('.si-grand-total-row');
   if (existing) existing.remove();
   $('siTbody').insertAdjacentHTML('beforeend', `
     <tr class="hr-total-row si-grand-total-row">
-      <td colspan="9"></td>
-      <td class="num">전체 합계 ${fmt(sumY1)}</td>
-      <td colspan="2"></td>
-      <td class="num" style="background:#fff9ec;">${fmt(sumDecided)}</td>
-      <td colspan="2" style="background:#fff9ec;"></td>
-      <td></td>
+      <td colspan="6">전체 합계 (${empCount}명)</td>
+      <td class="num">${fmt(sums.y2s)}</td>
+      <td class="num">${fmt(sums.y2m)}</td>
+      <td class="num">${fmt(sums.y2b)}</td>
+      <td class="num">${fmt(sums.y1s)}</td>
+      <td class="num">${fmt(sums.y1m)}</td>
+      <td class="num">${fmt(sums.y1b)}</td>
+      <td class="num">${fmt(sums.y1inc)}</td>
+      <td style="background:var(--bg);"></td>
+      <td class="num">${fmt(sums.nows)}</td>
+      <td class="num">${fmt(sums.nowm)}</td>
+      <td class="num" style="background:#fff9ec;">${fmt(sums.decided)}</td>
+      <td class="num" style="background:#fff9ec;">${fmt(sums.incAmt)}</td>
+      <td style="background:#fff9ec;"></td>
+      <td style="background:#fff9ec;"></td>
       <td class="si-exclude-col"></td>
     </tr>
   `);
@@ -5379,17 +5399,31 @@ function _cloneSiTableForPrint() {
       const seqCell = tr.querySelector('td');
       if (seqCell) seqCell.textContent = idx + 1;
     });
-    let sumY1 = 0, sumDecided = 0;
+    // 제외된 인원이 있으면, 인쇄본 기준(남은 인원만)으로 합계 전부 다시 계산
+    const sums = { y2s: 0, y2m: 0, y2b: 0, y1s: 0, y1m: 0, y1b: 0, y1inc: 0, nows: 0, nowm: 0, decided: 0, incAmt: 0 };
+    let empCount = 0;
     clone.querySelectorAll('tbody tr[data-emp-id]').forEach(tr => {
-      sumY1 += Number(tr.dataset.salaryY1 || 0);
+      empCount += 1;
+      const e = siReportCache.find(x => x.employee_id === tr.dataset.empId) || {};
+      sums.y2s += Number(e.salary_y2 || 0); sums.y2m += Number(e.monthly_y2 || 0); sums.y2b += Number(e.bonus_y2 || 0);
+      sums.y1s += Number(e.salary_y1 || 0); sums.y1m += Number(e.monthly_y1 || 0); sums.y1b += Number(e.bonus_y1 || 0);
+      if (e.y1_increase_amount != null) sums.y1inc += Number(e.y1_increase_amount);
+      sums.nows += Number(e.salary_now || 0); sums.nowm += Number(e.monthly_now || 0);
       const decidedInput = tr.querySelector('.si-decided-input');
-      sumDecided += decidedInput && decidedInput.value.trim() !== '' ? Number(decidedInput.value) : 0;
+      const decided = decidedInput && decidedInput.value.trim() !== '' ? Number(decidedInput.value) : null;
+      if (decided != null) { sums.decided += decided; sums.incAmt += decided - Number(tr.dataset.salaryY1 || 0); }
     });
     const totalRow = clone.querySelector('.si-grand-total-row');
     if (totalRow) {
       const cells = Array.from(totalRow.children);
-      if (cells[1]) cells[1].textContent = `전체 합계 ${fmt(sumY1)}`;
-      if (cells[3]) cells[3].textContent = fmt(sumDecided);
+      cells[0].textContent = `전체 합계 (${empCount}명)`;
+      // [1]y2s [2]y2m [3]y2b [4]y1s [5]y1m [6]y1b [7]y1inc [8]빈(인상률) [9]nows [10]nowm [11]decided [12]incAmt
+      [cells[1], cells[2], cells[3], cells[4], cells[5], cells[6], cells[7], null, cells[9], cells[10], cells[11], cells[12]]
+        .forEach((cell, i) => {
+          if (!cell) return;
+          const vals = [sums.y2s, sums.y2m, sums.y2b, sums.y1s, sums.y1m, sums.y1b, sums.y1inc, null, sums.nows, sums.nowm, sums.decided, sums.incAmt];
+          cell.textContent = fmt(vals[i]);
+        });
     }
   }
 
@@ -5415,22 +5449,21 @@ function printSalaryIncreaseDecision() {
 
   const headRow2 = clone.querySelector('thead tr:nth-child(2)');
   const head2Cells = Array.from(headRow2.children);
-  // 0-based: [0~2]y2 [3~5]y1 [6~7]현재 [8]결정연봉 [9]인상액 [10]인상률 [11]비고
-  [head2Cells[9], head2Cells[10], head2Cells[11]].forEach(el => el && el.remove());
-  if (head2Cells[8]) head2Cells[8].textContent = '결정연봉';
+  // 0-based: [0~2]y2 [3~7]y1(연봉,월급여,성과급,인상액,인상률) [8~9]현재 [10]결정연봉 [11]인상액 [12]인상률 [13]비고
+  [head2Cells[11], head2Cells[12], head2Cells[13]].forEach(el => el && el.remove());
+  if (head2Cells[10]) head2Cells[10].textContent = '결정연봉';
 
   Array.from(clone.querySelectorAll('tbody tr')).forEach(tr => {
     if (tr.classList.contains('si-grand-total-row')) return;
     const cells = Array.from(tr.children);
-    if (cells.length < 18) return;
-    [cells[15], cells[16], cells[17]].forEach(td => td && td.remove()); // 인상액,인상률,비고
+    if (cells.length < 20) return;
+    [cells[17], cells[18], cells[19]].forEach(td => td && td.remove()); // 인상액,인상률,비고
   });
   const totalRow = clone.querySelector('.si-grand-total-row');
   if (totalRow) {
     const cells = Array.from(totalRow.children);
-    // si-exclude-col은 이미 위에서 제거된 뒤라 남은 순서: [0]colspan9 [1]전체합계Y1 [2]colspan2
-    // [3]결정합계 [4]colspan2(인상액+인상률 자리) [5]비고 자리
-    [cells[4], cells[5]].forEach(td => td && td.remove());
+    // [0]colspan6 [1~7]y2,y1(연봉월급여성과급인상액) [8]빈(인상률) [9~10]현재 [11]결정연봉합계 [12]인상액합계 [13]빈(인상률) [14]빈(비고)
+    [cells[12], cells[13], cells[14]].forEach(td => td && td.remove());
   }
 
   $('si_print_table_container').innerHTML = '';

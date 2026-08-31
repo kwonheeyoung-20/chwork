@@ -150,6 +150,85 @@
   border-left: 1px solid #999 !important;
 }
 
+/* ══════════════ 연봉인상보고서: 성과급보고서와 동일한 방식(구분선/배경색/합계 강조) ══════════════ */
+#siTable thead th,
+#siPrintArea thead th {
+  text-align: center;
+}
+#siTable .hr-total-row td,
+#siPrintArea .hr-total-row td {
+  background: #d9d9d9 !important;
+}
+/* 전전년도 이력(3칸) 배경 */
+#siTable tbody tr:not(.hr-total-row) td:nth-child(7),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(8),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(9),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(7),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(8),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(9) {
+  background: #f4f8fd;
+}
+/* 전년도 이력(연봉/월급여/성과급/전전년대비 인상액·인상률 5칸) 배경 */
+#siTable tbody tr:not(.hr-total-row) td:nth-child(10),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(11),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(12),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(13),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(14),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(10),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(11),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(12),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(13),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(14) {
+  background: #f2faf5;
+}
+#siTable, #siPrintArea table {
+  border-collapse: collapse;
+}
+#siTable th, #siTable td,
+#siPrintArea th, #siPrintArea td {
+  border: 1px solid #999 !important;
+}
+/* 헤더 1행: 그룹 시작 칸(전전년도/전년도/현재급여/결정) 왼쪽에 구분선 */
+#siTable #siY2GroupHeader, #siPrintArea #siY2GroupHeader,
+#siTable #siY1GroupHeader, #siPrintArea #siY1GroupHeader,
+#siTable #siNowGroupHeader, #siPrintArea #siNowGroupHeader,
+#siTable #siDecisionGroupHeader, #siPrintArea #siDecisionGroupHeader {
+  border-left: 1px solid #999 !important;
+}
+/* 헤더 2행: 세부 항목 14칸 중 4번째(전년도 시작)/9번째(현재급여 시작)/11번째(결정 시작) */
+#siTable thead tr:last-child th:nth-child(4),
+#siPrintArea thead tr:last-child th:nth-child(4),
+#siTable thead tr:last-child th:nth-child(9),
+#siPrintArea thead tr:last-child th:nth-child(9),
+#siTable thead tr:last-child th:nth-child(11),
+#siPrintArea thead tr:last-child th:nth-child(11) {
+  border-left: 1px solid #999 !important;
+}
+/* tbody(데이터 행): 순번~입사일 6칸 + 나머지가 이어지므로 7번째(전전년도 시작)/
+   10번째(전년도 시작)/15번째(현재급여 시작)/17번째(결정 시작) */
+#siTable tbody tr:not(.hr-total-row) td:nth-child(7),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(7),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(10),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(10),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(15),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(15),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(17),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(17) {
+  border-left: 1px solid #999 !important;
+}
+/* 합계 행: [1]colspan6 다음부터 개별 칸이라 2번째(전전년도 시작)/5번째(전년도 시작)/
+   10번째(현재급여 시작)/12번째(결정 시작) */
+#siTable tbody tr.hr-total-row td:nth-child(2),
+#siPrintArea tbody tr.hr-total-row td:nth-child(2),
+#siTable tbody tr.hr-total-row td:nth-child(5),
+#siPrintArea tbody tr.hr-total-row td:nth-child(5),
+#siTable tbody tr.hr-total-row td:nth-child(10),
+#siPrintArea tbody tr.hr-total-row td:nth-child(10),
+#siTable tbody tr.hr-total-row td:nth-child(12),
+#siPrintArea tbody tr.hr-total-row td:nth-child(12) {
+  border-left: 1px solid #999 !important;
+}
+
 
 /* 합계(hr-total-row)가 있는 인쇄 표들: 표 전체를 위아래로 테두리 쳐서 경계를 명확히 하고,
    헤더 밑줄·합계 윗줄은 짝이 맞게 회색 한 줄씩만(배경 채우기는 안 함) */
@@ -187,12 +266,14 @@
   #pensionInstallPrintArea .table th,
   #mcPrintArea .table th, #mcPrintArea .hr-total-row td,
   #bonusReportPrintArea .table th,
+  #siPrintArea .table th,
   #promoMatrixPrintArea .table th, #promoMatrixPrintArea .hr-total-row td {
     background: transparent;
   }
   /* 화면에서만 쓰는 "인쇄제외" 체크박스 칼럼은 JS(_cloneScreenTableForPrint)에서
      이미 인쇄용 표 복제본에서 제거하지만, 혹시 모를 경우를 대비한 안전장치 */
   .bonus-exclude-col { display: none !important; }
+  .si-exclude-col { display: none !important; }
 
   /* 브라우저는 기본적으로 "배경색 인쇄"를 꺼둔 채로 인쇄하는 경우가 많아서,
      CSS로 지정해둔 배경색(당해년도 발생액/불입액 칸의 회색 등)이 인쇄물에 안 나올 수 있음.
@@ -209,9 +290,10 @@
   .layout { display: none !important; }
   #printArea, #printArea *, #payslipPrintArea, #payslipPrintArea *,
   #registerPrintArea, #registerPrintArea *, #pensionPrintArea, #pensionPrintArea *,
-  #pensionInstallPrintArea, #pensionInstallPrintArea *, #mcPrintArea, #mcPrintArea *, #bonusReportPrintArea, #bonusReportPrintArea *
+  #pensionInstallPrintArea, #pensionInstallPrintArea *, #mcPrintArea, #mcPrintArea *, #bonusReportPrintArea, #bonusReportPrintArea *,
+  #siPrintArea, #siPrintArea *
   { visibility: visible; }
-  #printArea, #payslipPrintArea, #registerPrintArea, #pensionPrintArea, #pensionInstallPrintArea, #mcPrintArea, #bonusReportPrintArea {
+  #printArea, #payslipPrintArea, #registerPrintArea, #pensionPrintArea, #pensionInstallPrintArea, #mcPrintArea, #bonusReportPrintArea, #siPrintArea {
     display: block; position: static; width: 100%;
   }
   /* 모달(position:fixed)이 인쇄시 매 페이지마다 반복 출력되는 문제 방지 */
