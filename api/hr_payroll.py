@@ -117,6 +117,95 @@ class handler(BaseHTTPRequestHandler):
         except SupabaseError:
             return {}
 
+    def _get_salary_increase_report(self, year):
+        # 성과급보고서(_get_bonus_report)와 같은 구조 — 전전년도/전년도 연봉+성과급(1,2차 합)은
+        # 매번 실시간 조회(salary_history/other_payments), "결정"만 별도 테이블(salary_increase_reports)에 저장.
+        y1, y2 = year - 1, year - 2
+
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            employees_future = pool.submit(
+                rest_request, "GET",
+                "employees?status=eq.재직&select=id,name,branch,department,position,hire_date&order=hire_date.asc",
+            )
+            salary_future = pool.submit(
+                rest_request, "GET",
+                "salary_history?select=employee_id,effective_month,annual_salary_thousand&order=effective_month.asc",
+            )
+            # 연봉인상보고서는 전전년도/전년도 모두 "성과급 1차+2차 합계"가 필요함 —
+            # 성과급보고서는 차수(1차 또는 2차) 하나만 보므로 payment_type을 특정 차수로 필터링했지만,
+            # 여기서는 "성과급1차"/"성과급2차" 둘 다(like 검색) 가져와서 연도별로 합산함.
+            bonus_future = pool.submit(
+                rest_request, "GET",
+                "other_payments?payment_type=like.성과급*차&select=employee_id,payment_date,amount",
+            )
+            decided_future = pool.submit(
+                rest_request, "GET", f"salary_increase_reports?year=eq.{year}&select=*",
+            )
+            locked_future = pool.submit(is_period_locked, f"salary-increase-{year}")
+
+            employees = employees_future.result() or []
+            salary_rows = salary_future.result() or []
+            bonus_rows = bonus_future.result() or []
+            decided_rows = decided_future.result() or []
+            locked = locked_future.result()
+
+        salary_by_emp_year = {}
+        for r in salary_rows:
+            emp_id = r.get("employee_id")
+            month = r.get("effective_month")
+            if not emp_id or not month:
+                continue
+            yr = int(str(month)[:4])
+            salary_by_emp_year[(emp_id, yr)] = r["annual_salary_thousand"]  # asc 정렬이라 마지막 값이 남음
+
+        bonus_by_emp_year = {}
+        for r in bonus_rows:
+            emp_id = r.get("employee_id")
+            pdate = r.get("payment_date")
+            if not emp_id or not pdate:
+                continue
+            yr = int(str(pdate)[:4])
+            key = (emp_id, yr)
+            bonus_by_emp_year[key] = bonus_by_emp_year.get(key, 0) + (r.get("amount") or 0)
+
+        decided_by_emp = {r["employee_id"]: r for r in decided_rows}
+
+        def monthly(annual_thousand):
+            return round(annual_thousand * 1000 / 12) if annual_thousand else None
+
+        result = []
+        for idx, emp in enumerate(employees, start=1):
+            eid = emp["id"]
+            decided = decided_by_emp.get(eid)
+            salary_y2 = salary_by_emp_year.get((eid, y2))
+            salary_y1 = salary_by_emp_year.get((eid, y1))
+            salary_now = salary_by_emp_year.get((eid, year)) or salary_y1
+            decided_salary = decided.get("decided_salary_thousand") if decided else None
+            # 인상액/인상률은 "전년도(y1) 연봉" 대비로 자동 계산 — 결정연봉을 아직 안 입력했으면 비움
+            increase_amount = (decided_salary - salary_y1) if (decided_salary is not None and salary_y1) else None
+            increase_rate = (increase_amount / salary_y1) if (increase_amount is not None and salary_y1) else None
+            result.append({
+                "seq": idx,
+                "employee_id": eid,
+                "name": emp.get("name"), "branch": emp.get("branch"),
+                "department": emp.get("department"), "position": emp.get("position"),
+                "hire_date": emp.get("hire_date"),
+                "salary_y2": salary_y2, "monthly_y2": monthly(salary_y2),
+                "bonus_y2": bonus_by_emp_year.get((eid, y2), 0),
+                "salary_y1": salary_y1, "monthly_y1": monthly(salary_y1),
+                "bonus_y1": bonus_by_emp_year.get((eid, y1), 0),
+                "salary_now": salary_now, "monthly_now": monthly(salary_now),
+                "decided_salary": decided_salary,
+                "increase_amount": increase_amount,
+                "increase_rate": increase_rate,
+                "note": decided.get("note") if decided else None,
+            })
+
+        return self._send(200, {
+            "year": year, "y1": y1, "y2": y2,
+            "locked": locked, "employees": result,
+        })
+
     def do_GET(self):
         try:
             if not self._authorized():
@@ -127,6 +216,12 @@ class handler(BaseHTTPRequestHandler):
             if qs.get("locks", ["0"])[0] == "1":
                 locks = rest_request("GET", "period_locks?module=eq.payroll&select=*&order=period_key.desc")
                 return self._send(200, {"locks": locks})
+
+            if qs.get("salary_increase_report", ["0"])[0] == "1":
+                year = qs.get("year", [None])[0]
+                if not year:
+                    return self._send(400, {"error": "year는 필수입니다"})
+                return self._get_salary_increase_report(int(year))
 
             if qs.get("contract_data", ["0"])[0] == "1":
                 year = qs.get("year", [None])[0]
@@ -431,6 +526,47 @@ class handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
+
+            # 연봉인상보고서 초안 저장: {"type": "salary_increase_save", "year": 2027, "items": [{employee_id, decided_salary, note}, ...]}
+            if isinstance(payload, dict) and payload.get("type") == "salary_increase_save":
+                year = payload.get("year")
+                items = payload.get("items") or []
+                if not year:
+                    return self._send(400, {"error": "year는 필수입니다"})
+                if is_period_locked(f"salary-increase-{year}"):
+                    return self._send(423, {"error": f"{year}년 연봉인상보고서는 이미 마감되어 있습니다. 먼저 마감해제해주세요."})
+                body = []
+                for it in items:
+                    if not it.get("employee_id"):
+                        continue
+                    body.append({
+                        "employee_id": it["employee_id"],
+                        "year": year,
+                        "decided_salary_thousand": it.get("decided_salary"),
+                        "note": it.get("note"),
+                        "updated_at": "now()",
+                    })
+                if not body:
+                    return self._send(400, {"error": "저장할 항목이 없습니다"})
+                rest_request(
+                    "POST", "salary_increase_reports?on_conflict=employee_id,year",
+                    body=body, prefer="resolution=merge-duplicates",
+                )
+                return self._send(200, {"ok": True, "count": len(body)})
+
+            # 연봉인상보고서 마감/마감해제: {"type": "salary_increase_lock", "year": 2027, "locked": true/false}
+            if isinstance(payload, dict) and payload.get("type") == "salary_increase_lock":
+                year = payload.get("year")
+                locked = payload.get("locked", True)
+                if not year:
+                    return self._send(400, {"error": "year는 필수입니다"})
+                rest_request(
+                    "POST", "period_locks?on_conflict=module,period_key",
+                    body={"module": "payroll", "period_key": f"salary-increase-{year}", "locked": locked,
+                          "note": f"{year}년 연봉인상보고서 확정"},
+                    prefer="resolution=merge-duplicates",
+                )
+                return self._send(200, {"ok": True})
 
             # 수습요율 등 급여 설정 변경: {"type": "pay_rate", employee_id, effective_month, pay_rate, employment_type, contract_end_date, note}
             if isinstance(payload, dict) and payload.get("type") == "pay_rate":
