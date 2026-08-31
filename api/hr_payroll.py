@@ -184,6 +184,9 @@ class handler(BaseHTTPRequestHandler):
             # 인상액/인상률은 "전년도(y1) 연봉" 대비로 자동 계산 — 결정연봉을 아직 안 입력했으면 비움
             increase_amount = (decided_salary - salary_y1) if (decided_salary is not None and salary_y1) else None
             increase_rate = (increase_amount / salary_y1) if (increase_amount is not None and salary_y1) else None
+            # 전년도(y1) 자료 자체에도, 그 전해(y2) 대비 인상액/인상률을 참고용으로 같이 보여줌
+            y1_increase_amount = (salary_y1 - salary_y2) if (salary_y1 and salary_y2) else None
+            y1_increase_rate = (y1_increase_amount / salary_y2) if (y1_increase_amount is not None and salary_y2) else None
             result.append({
                 "seq": idx,
                 "employee_id": eid,
@@ -194,6 +197,8 @@ class handler(BaseHTTPRequestHandler):
                 "bonus_y2": bonus_by_emp_year.get((eid, y2), 0),
                 "salary_y1": salary_y1, "monthly_y1": monthly(salary_y1),
                 "bonus_y1": bonus_by_emp_year.get((eid, y1), 0),
+                "y1_increase_amount": y1_increase_amount,
+                "y1_increase_rate": y1_increase_rate,
                 "salary_now": salary_now, "monthly_now": monthly(salary_now),
                 "decided_salary": decided_salary,
                 "increase_amount": increase_amount,
