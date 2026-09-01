@@ -4732,14 +4732,14 @@ async function loadBonusReport() {
   const year = $('bonusYear').value;
   const round = $('bonusRound').value;
   const tbody = $('bonusReportTbody');
-  tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_other_payments?bonus_report=1&year=${year}&round=${round}`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}${data.detail ? '<br><span style="font-size:11px; color:var(--text-muted);">' + esc(data.detail) + '</span>' : ''}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}${data.detail ? '<br><span style="font-size:11px; color:var(--text-muted);">' + esc(data.detail) + '</span>' : ''}</td></tr>`;
       return;
     }
     bonusReportCache = data.employees || [];
@@ -4754,7 +4754,7 @@ async function loadBonusReport() {
 
     const locked = data.locked;
     if (bonusReportCache.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
       return;
     }
 
@@ -4769,7 +4769,7 @@ async function loadBonusReport() {
     document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => updateBonusRowCalc(tr));
     renderBonusReportTotals();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
   }
 }
 
@@ -5158,14 +5158,14 @@ function initSalaryIncreaseReportTab() {
 async function loadSalaryIncreaseReport() {
   const year = $('siYear').value;
   const tbody = $('siTbody');
-  tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?salary_increase_report=1&year=${year}`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}${data.detail ? '<br><span style="font-size:11px; color:var(--text-muted);">' + esc(data.detail) + '</span>' : ''}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}${data.detail ? '<br><span style="font-size:11px; color:var(--text-muted);">' + esc(data.detail) + '</span>' : ''}</td></tr>`;
       return;
     }
     siReportCache = data.employees || [];
@@ -5178,7 +5178,7 @@ async function loadSalaryIncreaseReport() {
 
     const locked = data.locked;
     if (siReportCache.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
       return;
     }
 
@@ -5191,7 +5191,7 @@ async function loadSalaryIncreaseReport() {
     document.querySelectorAll('#siTbody tr[data-emp-id]').forEach(tr => updateSiRowCalc(tr));
     renderSiTotals();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="21" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
   }
 }
 
@@ -5217,6 +5217,10 @@ function renderSiRow(e, locked) {
       <td style="background:#fff9ec;">
         <input type="number" class="hr-input si-decided-input" style="width:110px; text-align:right;"
           value="${e.decided_salary != null ? e.decided_salary : ''}" ${locked ? 'disabled' : ''}>
+      </td>
+      <td style="background:#fff9ec;">
+        <input type="month" class="hr-input si-applied-input" style="width:120px;"
+          value="${e.applied_month ? e.applied_month.slice(0, 7) : ''}" ${locked ? 'disabled' : ''}>
       </td>
       <td class="num si-diff-cell" style="background:#fff9ec;">-</td>
       <td class="num si-pct-cell" style="background:#fff9ec;">-</td>
@@ -5284,6 +5288,7 @@ function renderSiTotals() {
       <td class="num">${fmt(sums.nows)}</td>
       <td class="num">${fmt(sums.nowm)}</td>
       <td class="num" style="background:#fff9ec;">${fmt(sums.decided)}</td>
+      <td style="background:#fff9ec;"></td>
       <td class="num" style="background:#fff9ec;">${fmt(sums.incAmt)}</td>
       <td style="background:#fff9ec;"></td>
       <td style="background:#fff9ec;"></td>
@@ -5297,15 +5302,39 @@ function collectSiReportInputs() {
   document.querySelectorAll('#siTbody tr[data-emp-id]').forEach(tr => {
     const empId = tr.dataset.empId;
     const amountInput = tr.querySelector('.si-decided-input');
+    const appliedInput = tr.querySelector('.si-applied-input');
     const noteInput = tr.querySelector('.si-note-input');
     const val = amountInput.value.trim();
     items.push({
       employee_id: empId,
       decided_salary: val === '' ? null : Number(val),
+      applied_month: appliedInput.value ? `${appliedInput.value}-01` : null,
       note: noteInput.value.trim() || null,
     });
   });
   return items;
+}
+
+/* 적용월을 표 전체(또는 아직 안 채운 칸만)에 한 번에 채워넣음 */
+function applySiAppliedMonthBulk(emptyOnly) {
+  const value = $('siAppliedBulkInput').value;
+  if (!value) {
+    alert('일괄 적용할 적용월을 먼저 선택해주세요.');
+    return;
+  }
+  const inputs = document.querySelectorAll('#siTbody tr[data-emp-id] .si-applied-input');
+  if (inputs.length === 0) {
+    alert('먼저 조회를 눌러 직원 목록을 불러와주세요.');
+    return;
+  }
+  let count = 0;
+  inputs.forEach(input => {
+    if (input.disabled) return;
+    if (emptyOnly && input.value !== '') return;
+    input.value = value;
+    count += 1;
+  });
+  alert(`${count}명에게 적용했습니다. 저장하시려면 "입력내용 저장(초안)"을 눌러주세요.`);
 }
 
 async function saveSalaryIncreaseDraft() {
@@ -5326,33 +5355,118 @@ async function saveSalaryIncreaseDraft() {
   }
 }
 
-async function finalizeSalaryIncreaseReport() {
-  const year = Number($('siYear').value);
-  if (!confirm(`${year}년 연봉인상보고서를 확정(마감)하시겠습니까?\n마감 후에는 이 화면에서 수정할 수 없고, 먼저 마감해제해야 합니다.\n(연봉/급여에 자동 반영은 아직 안 됩니다 — 이건 2단계 작업으로 예정되어 있습니다.)`)) return;
+let siPendingTargetMonth = null;
 
-  const items = collectSiReportInputs();
+async function openSiFinalizeModal() {
+  const year = Number($('siYear').value);
+  // 결정연봉은 입력했는데 적용월을 빼먹은 직원이 있으면 미리 알려줌(그 직원은 반영에서 빠지게 됨)
+  const missing = [];
+  document.querySelectorAll('#siTbody tr[data-emp-id]').forEach(tr => {
+    const decided = tr.querySelector('.si-decided-input').value.trim();
+    const applied = tr.querySelector('.si-applied-input').value;
+    if (decided !== '' && !applied) {
+      const name = tr.children[1] ? tr.children[1].textContent : '';
+      missing.push(name);
+    }
+  });
+  if (missing.length > 0) {
+    alert(`다음 직원은 결정연봉은 입력됐는데 적용월이 비어있어서 이번 확정에서 제외됩니다:\n${missing.join(', ')}\n\n적용월까지 입력한 뒤 다시 시도해주세요.`);
+    return;
+  }
+
+  // 반영 전, 지금까지 입력한 내용부터 저장(초안)
+  await fetch(`${apiBase()}/api/hr_payroll`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+    body: JSON.stringify({ type: 'salary_increase_save', year, items: collectSiReportInputs() }),
+  });
+
+  $('siFinalizeModalBody').innerHTML = `<div class="dash-empty">소급분 계산 중…</div>`;
+  $('siFinalizeModal').style.display = 'flex';
+
   try {
-    await fetch(`${apiBase()}/api/hr_payroll`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-      body: JSON.stringify({ type: 'salary_increase_save', year, items }),
-    });
     const res = await fetch(`${apiBase()}/api/hr_payroll`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-      body: JSON.stringify({ type: 'salary_increase_lock', year, locked: true }),
+      body: JSON.stringify({ type: 'salary_increase_retro_preview', year }),
     });
-    if (!res.ok) { const data = await res.json().catch(() => ({})); alert('확정 실패: ' + (data.error || '')); return; }
-    alert('확정(마감)되었습니다.');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '계산 실패');
+    renderSiFinalizePreview(data);
+  } catch (e) {
+    $('siFinalizeModalBody').innerHTML = `<div class="dash-empty" style="color:var(--red);">계산 중 오류: ${esc(e.message || '')}</div>`;
+  }
+}
+
+function renderSiFinalizePreview(data) {
+  const year = $('siYear').value;
+  const items = data.items || [];
+  let html = `<p style="font-size:13px; margin-bottom:12px;">
+    <b>${year}년</b> 연봉인상보고서를 확정하면, 결정연봉+적용월이 입력된 직원의 <b>연봉이력이 새로 추가</b>되고,
+    적용월부터 이번달까지 이미 처리된 급여와의 차액이 계산되어 아래처럼 소급 반영됩니다.
+  </p>`;
+
+  if (items.length === 0) {
+    html += `<div class="dash-empty">소급으로 추가 지급/차감할 차액이 없습니다 (연봉이력은 그대로 추가됩니다).</div>`;
+  } else {
+    html += `<div class="table-wrap"><table class="table"><thead><tr>
+      <th>이름</th><th>적용월</th><th class="num">결정연봉(천원)</th><th>소급 대상월</th><th class="num">소급 합계</th>
+    </tr></thead><tbody>`;
+    items.forEach(it => {
+      const monthsLabel = it.months.map(m => `${m.source_month.slice(0, 7)}(${fmt(m.amount)})`).join(', ');
+      html += `<tr>
+        <td>${esc(it.name)}</td>
+        <td>${esc(it.applied_month.slice(0, 7))}</td>
+        <td class="num">${fmt(it.decided_salary)}</td>
+        <td style="font-size:12px;">${esc(monthsLabel)}</td>
+        <td class="num" style="${it.subtotal < 0 ? 'color:var(--red);' : ''}">${fmt(it.subtotal)}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div>
+    <p style="text-align:right; font-weight:600; margin-top:8px;">전체 소급 합계: ${fmt(data.total)}원</p>`;
+  }
+
+  html += `
+    <div class="hr-form-grid" style="grid-template-columns:1fr; margin-top:16px;">
+      <label>소급분 반영월 (이 소급액을 합산해서 지급할 급여 달)
+        <input id="siTargetMonthInput" type="month" class="hr-input">
+      </label>
+    </div>
+  `;
+  $('siFinalizeModalBody').innerHTML = html;
+}
+
+function closeSiFinalizeModal() { $('siFinalizeModal').style.display = 'none'; }
+
+async function confirmSiFinalize() {
+  const year = Number($('siYear').value);
+  const targetInput = $('siTargetMonthInput');
+  if (!targetInput || !targetInput.value) {
+    alert('소급분 반영월을 선택해주세요.');
+    return;
+  }
+  const targetMonth = `${targetInput.value}-01`;
+  if (!confirm(`정말 반영하시겠습니까?\n\n이 작업은 연봉이력을 추가하고 실제 급여(${targetInput.value})에 소급분을 합산합니다.\n되돌리려면 "마감해제"를 눌러야 합니다.`)) return;
+
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_payroll`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'salary_increase_confirm_finalize', year, target_month: targetMonth }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert('반영 실패: ' + (data.error || data.detail || '')); return; }
+    alert(`반영되었습니다. (연봉이력 ${data.salary_history_count}건, 소급 ${data.retro_count}건)`);
+    closeSiFinalizeModal();
     loadSalaryIncreaseReport();
   } catch (e) {
-    alert('확정 중 오류가 발생했습니다.');
+    alert('반영 중 오류가 발생했습니다.');
   }
 }
 
 async function unlockSalaryIncreaseReport() {
   const year = Number($('siYear').value);
-  if (!confirm(`${year}년 연봉인상보고서 마감을 해제하시겠습니까?`)) return;
+  if (!confirm(`${year}년 연봉인상보고서 마감을 해제하시겠습니까?\n\n이 보고서로 반영됐던 연봉이력과 소급분 급여가 전부 되돌려집니다 (실제 지급된 소급분도 취소됩니다).`)) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll`, {
       method: 'POST',
@@ -5360,6 +5474,7 @@ async function unlockSalaryIncreaseReport() {
       body: JSON.stringify({ type: 'salary_increase_lock', year, locked: false }),
     });
     if (!res.ok) { const data = await res.json().catch(() => ({})); alert('처리 실패: ' + (data.error || '')); return; }
+    alert('마감해제되었습니다. 반영됐던 연봉이력/소급분도 되돌렸습니다.');
     loadSalaryIncreaseReport();
   } catch (e) {
     alert('처리 중 오류가 발생했습니다.');
@@ -5417,13 +5532,13 @@ function _cloneSiTableForPrint() {
     if (totalRow) {
       const cells = Array.from(totalRow.children);
       cells[0].textContent = `전체 합계 (${empCount}명)`;
-      // [1]y2s [2]y2m [3]y2b [4]y1s [5]y1m [6]y1b [7]y1inc [8]빈(인상률) [9]nows [10]nowm [11]decided [12]incAmt
-      [cells[1], cells[2], cells[3], cells[4], cells[5], cells[6], cells[7], null, cells[9], cells[10], cells[11], cells[12]]
-        .forEach((cell, i) => {
-          if (!cell) return;
-          const vals = [sums.y2s, sums.y2m, sums.y2b, sums.y1s, sums.y1m, sums.y1b, sums.y1inc, null, sums.nows, sums.nowm, sums.decided, sums.incAmt];
-          cell.textContent = fmt(vals[i]);
-        });
+      // [1]y2s [2]y2m [3]y2b [4]y1s [5]y1m [6]y1b [7]y1inc [8]빈(인상률) [9]nows [10]nowm [11]decided [12]빈(적용월) [13]incAmt
+      const targets = [cells[1], cells[2], cells[3], cells[4], cells[5], cells[6], cells[7], null, cells[9], cells[10], cells[11], null, cells[13]];
+      const vals = [sums.y2s, sums.y2m, sums.y2b, sums.y1s, sums.y1m, sums.y1b, sums.y1inc, null, sums.nows, sums.nowm, sums.decided, null, sums.incAmt];
+      targets.forEach((cell, i) => {
+        if (!cell) return;
+        cell.textContent = fmt(vals[i]);
+      });
     }
   }
 
@@ -5449,21 +5564,22 @@ function printSalaryIncreaseDecision() {
 
   const headRow2 = clone.querySelector('thead tr:nth-child(2)');
   const head2Cells = Array.from(headRow2.children);
-  // 0-based: [0~2]y2 [3~7]y1(연봉,월급여,성과급,인상액,인상률) [8~9]현재 [10]결정연봉 [11]인상액 [12]인상률 [13]비고
-  [head2Cells[11], head2Cells[12], head2Cells[13]].forEach(el => el && el.remove());
+  // 0-based: [0~2]y2 [3~7]y1(연봉,월급여,성과급,인상액,인상률) [8~9]현재 [10]결정연봉 [11]적용월 [12]인상액 [13]인상률 [14]비고
+  [head2Cells[12], head2Cells[13], head2Cells[14]].forEach(el => el && el.remove());
   if (head2Cells[10]) head2Cells[10].textContent = '결정연봉';
+  if (head2Cells[11]) head2Cells[11].textContent = '적용월';
 
   Array.from(clone.querySelectorAll('tbody tr')).forEach(tr => {
     if (tr.classList.contains('si-grand-total-row')) return;
     const cells = Array.from(tr.children);
-    if (cells.length < 20) return;
-    [cells[17], cells[18], cells[19]].forEach(td => td && td.remove()); // 인상액,인상률,비고
+    if (cells.length < 21) return;
+    [cells[18], cells[19], cells[20]].forEach(td => td && td.remove()); // 인상액,인상률,비고 (적용월은 남김)
   });
   const totalRow = clone.querySelector('.si-grand-total-row');
   if (totalRow) {
     const cells = Array.from(totalRow.children);
-    // [0]colspan6 [1~7]y2,y1(연봉월급여성과급인상액) [8]빈(인상률) [9~10]현재 [11]결정연봉합계 [12]인상액합계 [13]빈(인상률) [14]빈(비고)
-    [cells[12], cells[13], cells[14]].forEach(td => td && td.remove());
+    // [0]colspan6 [1~7]y2,y1(연봉월급여성과급인상액) [8]빈(인상률) [9~10]현재 [11]결정연봉합계 [12]빈(적용월) [13]인상액합계 [14]빈(인상률) [15]빈(비고)
+    [cells[13], cells[14], cells[15]].forEach(td => td && td.remove());
   }
 
   $('si_print_table_container').innerHTML = '';
