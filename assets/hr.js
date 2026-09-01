@@ -5732,11 +5732,16 @@ function switchPromotionsSubTab(name) {
   $('promoLiveView').style.display = name === 'live' ? 'block' : 'none';
   $('promoSavedView').style.display = name === 'saved' ? 'block' : 'none';
   $('promoHistoryView').style.display = name === 'history' ? 'block' : 'none';
+  $('promoBulkView').style.display = name === 'bulk' ? 'block' : 'none';
   $('promoStandardsView').style.display = name === 'standards' ? 'block' : 'none';
   if (name === 'saved') loadPromotionReportList();
   if (name === 'history') {
     populatePromoHistoryEmployeeSelect();
     populatePositionSelect('ph_position', '');
+  }
+  if (name === 'bulk' && $('promoBulkTbody').dataset.loaded !== '1') {
+    $('promoBulkTbody').dataset.loaded = '1';
+    loadPromoBulkTable();
   }
   if (name === 'standards') loadPositionStandards();
 }
@@ -5756,6 +5761,107 @@ async function loadPromotionsLive() {
     renderPromotionsTable(promoLiveCache, tbody);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패: ${esc(e.message || '')}</td></tr>`;
+  }
+}
+
+/* ── 승진 일괄입력 ── */
+async function loadPromoBulkTable() {
+  const tbody = $('promoBulkTbody');
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  try {
+    const [res] = await Promise.all([
+      fetch(`${apiBase()}/api/promotions?asof=${new Date().toISOString().slice(0, 10)}`, {
+        headers: { 'X-HR-Password': hrPassword() },
+      }),
+      ensurePositionStandardsLoaded(),  // 직급 드롭다운용 목록도 같이 미리 받아둠
+    ]);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '조회 실패');
+    const employees = data.employees || [];
+    if (employees.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
+      return;
+    }
+    const positionOptions = '<option value="">-- 선택 --</option>' +
+      positionStandardsCache.map(s => `<option value="${esc(s.position)}">${esc(s.position)}</option>`).join('');
+    tbody.innerHTML = employees.map(e => `
+      <tr data-emp-id="${e.employee_id}">
+        <td>${esc(e.name)}</td>
+        <td>${esc(e.branch || '-')}</td>
+        <td>${esc(e.department || '-')}</td>
+        <td>${esc(e.position || '-')}</td>
+        <td><input type="date" class="hr-input promo-bulk-date" style="width:140px;"></td>
+        <td><select class="hr-input promo-bulk-position" style="width:130px;">${positionOptions}</select></td>
+        <td><input type="text" class="hr-input promo-bulk-note" style="width:120px;"></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패: ${esc(e.message || '')}</td></tr>`;
+  }
+}
+
+function applyPromoBulkDate(emptyOnly) {
+  const value = $('promoBulkDateInput').value;
+  if (!value) {
+    alert('일괄 적용할 승진일을 먼저 선택해주세요.');
+    return;
+  }
+  const inputs = document.querySelectorAll('#promoBulkTbody .promo-bulk-date');
+  if (inputs.length === 0) {
+    alert('먼저 조회를 눌러 직원 목록을 불러와주세요.');
+    return;
+  }
+  let count = 0;
+  inputs.forEach(input => {
+    if (emptyOnly && input.value !== '') return;
+    input.value = value;
+    count += 1;
+  });
+  alert(`${count}명에게 적용했습니다.`);
+}
+
+async function savePromoBulk() {
+  const items = [];
+  document.querySelectorAll('#promoBulkTbody tr[data-emp-id]').forEach(tr => {
+    const dateEl = tr.querySelector('.promo-bulk-date');
+    const posEl = tr.querySelector('.promo-bulk-position');
+    const noteEl = tr.querySelector('.promo-bulk-note');
+    if (!dateEl || !posEl) return;
+    const position = posEl.value.trim();
+    if (!position) return;  // 승진 후 직급을 입력한 사람만 처리
+    items.push({
+      employee_id: tr.dataset.empId,
+      effective_date: dateEl.value || null,
+      position,
+      note: noteEl ? noteEl.value.trim() || null : null,
+    });
+  });
+  const missingDate = items.filter(it => !it.effective_date);
+  if (missingDate.length > 0) {
+    alert(`승진 후 직급은 입력했는데 승진일이 비어있는 직원이 ${missingDate.length}명 있습니다. 승진일도 입력해주세요.`);
+    return;
+  }
+  if (items.length === 0) {
+    alert('저장할 대상이 없습니다. 승진 후 직급을 입력한 직원이 있어야 저장됩니다.');
+    return;
+  }
+  if (!confirm(`${items.length}명의 승진 기록을 추가하시겠습니까?\n(급여에는 자동 반영되지 않습니다 — 반영 시점은 "직급이력 관리"에서 따로 지정하시면 됩니다.)`)) return;
+
+  $('promoBulkMsg').textContent = '저장 중…';
+  try {
+    const res = await fetch(`${apiBase()}/api/promotions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'bulk_position_history', items }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || data.detail || '저장 실패');
+    $('promoBulkMsg').className = 'hr-msg success';
+    $('promoBulkMsg').textContent = `${data.count}명 저장되었습니다.`;
+    loadPromoBulkTable();
+  } catch (e) {
+    $('promoBulkMsg').className = 'hr-msg';
+    $('promoBulkMsg').textContent = '저장 중 오류가 발생했습니다: ' + (e.message || '');
   }
 }
 
