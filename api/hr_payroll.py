@@ -182,9 +182,10 @@ class handler(BaseHTTPRequestHandler):
             salary_y1 = salary_by_emp_year.get((eid, y1))
             salary_now = salary_by_emp_year.get((eid, year)) or salary_y1
             decided_salary = decided.get("decided_salary_thousand") if decided else None
-            # 인상액/인상률은 "전년도(y1) 연봉" 대비로 자동 계산 — 결정연봉을 아직 안 입력했으면 비움
-            increase_amount = (decided_salary - salary_y1) if (decided_salary is not None and salary_y1) else None
-            increase_rate = (increase_amount / salary_y1) if (increase_amount is not None and salary_y1) else None
+            # 결정연봉의 인상액/인상률은 "당해년도 현재급여"(연봉인상 검토 시점 기준) 대비로 계산합니다.
+            # (전년도 대비 인상률은 참고용 이력 칸(y1_increase_*)에 이미 별도로 있음 — 그건 그대로 전년도 기준 유지)
+            increase_amount = (decided_salary - salary_now) if (decided_salary is not None and salary_now) else None
+            increase_rate = (increase_amount / salary_now) if (increase_amount is not None and salary_now) else None
             # 전년도(y1) 자료 자체에도, 그 전해(y2) 대비 인상액/인상률을 참고용으로 같이 보여줌
             y1_increase_amount = (salary_y1 - salary_y2) if (salary_y1 and salary_y2) else None
             y1_increase_rate = (y1_increase_amount / salary_y2) if (y1_increase_amount is not None and salary_y2) else None
