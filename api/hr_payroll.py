@@ -578,27 +578,17 @@ class handler(BaseHTTPRequestHandler):
 
                 this_month_str = datetime.date.today().replace(day=1).isoformat()
 
-                def months_between(start, end):
-                    result = []
-                    y, m = int(start[:4]), int(start[5:7])
-                    ey, em = int(end[:4]), int(end[5:7])
-                    while (y, m) <= (ey, em):
-                        result.append(f"{y:04d}-{m:02d}-01")
-                        m += 1
-                        if m > 12:
-                            m = 1
-                            y += 1
-                    return result
-
                 def preview_one(row):
                     emp_id = row["employee_id"]
                     applied = row["applied_month"][:10]
-                    months = months_between(applied, this_month_str)
-                    diffs = []
-                    for mo in months:
-                        diff = rpc("payroll_retroactive_diff_month", {"p_employee_id": emp_id, "p_month": mo}) or 0
-                        if diff != 0:
-                            diffs.append({"source_month": mo, "amount": diff})
+                    # 새 함수 하나로 "임시로 새 연봉 넣고 계산 → 계산 끝나면 원상복구"까지 안전하게 처리됨
+                    diff_rows = rpc("salary_increase_preview_diffs", {
+                        "p_employee_id": emp_id,
+                        "p_new_salary_thousand": row["decided_salary_thousand"],
+                        "p_applied_month": applied,
+                        "p_through_month": this_month_str,
+                    }) or []
+                    diffs = [{"source_month": d["source_month"], "amount": d["amount"]} for d in diff_rows]
                     return {
                         "employee_id": emp_id,
                         "name": (row.get("employees") or {}).get("name"),
