@@ -11,6 +11,7 @@ POST                                    -> 그 달 급여명세 생성/저장 (�
 from http.server import BaseHTTPRequestHandler
 import os
 import json
+import datetime
 import traceback
 import urllib.request
 import urllib.parse
@@ -201,6 +202,7 @@ class handler(BaseHTTPRequestHandler):
                 "y1_increase_rate": y1_increase_rate,
                 "salary_now": salary_now, "monthly_now": monthly(salary_now),
                 "decided_salary": decided_salary,
+                "applied_month": decided.get("applied_month") if decided else None,
                 "increase_amount": increase_amount,
                 "increase_rate": increase_rate,
                 "note": decided.get("note") if decided else None,
@@ -532,7 +534,7 @@ class handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
 
-            # 연봉인상보고서 초안 저장: {"type": "salary_increase_save", "year": 2027, "items": [{employee_id, decided_salary, note}, ...]}
+            # 연봉인상보고서 초안 저장: {"type": "salary_increase_save", "year": 2027, "items": [{employee_id, decided_salary, applied_month, note}, ...]}
             if isinstance(payload, dict) and payload.get("type") == "salary_increase_save":
                 year = payload.get("year")
                 items = payload.get("items") or []
@@ -548,6 +550,7 @@ class handler(BaseHTTPRequestHandler):
                         "employee_id": it["employee_id"],
                         "year": year,
                         "decided_salary_thousand": it.get("decided_salary"),
+                        "applied_month": it.get("applied_month"),
                         "note": it.get("note"),
                         "updated_at": "now()",
                     })
@@ -559,16 +562,197 @@ class handler(BaseHTTPRequestHandler):
                 )
                 return self._send(200, {"ok": True, "count": len(body)})
 
+            # 연봉인상 확정 시 소급분 미리보기: {"type": "salary_increase_retro_preview", "year": 2027}
+            # 결정연봉+적용월이 둘 다 입력된 직원마다, 적용월부터 이번달까지 이미 처리된 급여와
+            # (새 연봉 기준으로 다시 계산했을 때의) 차액을 계산해서 보여줌. 아무것도 저장하지 않음.
+            if isinstance(payload, dict) and payload.get("type") == "salary_increase_retro_preview":
+                year = payload.get("year")
+                if not year:
+                    return self._send(400, {"error": "year는 필수입니다"})
+                rows = rest_request(
+                    "GET", f"salary_increase_reports?year=eq.{year}&decided_salary_thousand=not.is.null"
+                    f"&applied_month=not.is.null&select=*,employees(name)"
+                ) or []
+                if not rows:
+                    return self._send(200, {"items": [], "total": 0})
+
+                this_month_str = datetime.date.today().replace(day=1).isoformat()
+
+                def months_between(start, end):
+                    result = []
+                    y, m = int(start[:4]), int(start[5:7])
+                    ey, em = int(end[:4]), int(end[5:7])
+                    while (y, m) <= (ey, em):
+                        result.append(f"{y:04d}-{m:02d}-01")
+                        m += 1
+                        if m > 12:
+                            m = 1
+                            y += 1
+                    return result
+
+                def preview_one(row):
+                    emp_id = row["employee_id"]
+                    applied = row["applied_month"][:10]
+                    months = months_between(applied, this_month_str)
+                    diffs = []
+                    for mo in months:
+                        diff = rpc("payroll_retroactive_diff_month", {"p_employee_id": emp_id, "p_month": mo}) or 0
+                        if diff != 0:
+                            diffs.append({"source_month": mo, "amount": diff})
+                    return {
+                        "employee_id": emp_id,
+                        "name": (row.get("employees") or {}).get("name"),
+                        "applied_month": applied,
+                        "decided_salary": row["decided_salary_thousand"],
+                        "months": diffs,
+                        "subtotal": sum(d["amount"] for d in diffs),
+                    }
+
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    items = list(pool.map(preview_one, rows))
+                items = [it for it in items if it["months"]]  # 차액 없는 직원은 안 보여줌
+                return self._send(200, {"items": items, "total": sum(it["subtotal"] for it in items)})
+
+            # 연봉인상 확정 반영: {"type": "salary_increase_confirm_finalize", "year": 2027, "target_month": "2027-04-01"}
+            # 미리보기를 사용자가 확인한 뒤 이 액션으로 실제 저장함 —
+            #   1) salary_history에 새 연봉 행 추가(연봉인상보고서 연도 꼬리표 남김)
+            #   2) 소급분을 target_month 급여에 합산 반영(payroll_retroactive_log에도 같은 꼬리표)
+            #   3) 이 연도를 마감
+            if isinstance(payload, dict) and payload.get("type") == "salary_increase_confirm_finalize":
+                year = payload.get("year")
+                target_month = payload.get("target_month")
+                if not year or not target_month:
+                    return self._send(400, {"error": "year, target_month은 필수입니다"})
+                if is_period_locked(target_month[:7]):
+                    return self._send(423, {"error": f"{target_month[:7]}은(는) 급여가 이미 마감되어 있습니다. 먼저 마감해제해주세요."})
+
+                rows = rest_request(
+                    "GET", f"salary_increase_reports?year=eq.{year}&decided_salary_thousand=not.is.null"
+                    f"&applied_month=not.is.null&select=*"
+                ) or []
+                if not rows:
+                    return self._send(400, {"error": "결정연봉+적용월이 입력된 직원이 없습니다"})
+
+                this_month_str = datetime.date.today().replace(day=1).isoformat()
+
+                def months_between(start, end):
+                    result = []
+                    y, m = int(start[:4]), int(start[5:7])
+                    ey, em = int(end[:4]), int(end[5:7])
+                    while (y, m) <= (ey, em):
+                        result.append(f"{y:04d}-{m:02d}-01")
+                        m += 1
+                        if m > 12:
+                            m = 1
+                            y += 1
+                    return result
+
+                # 1) 직원마다 새 연봉이력 추가 (병렬)
+                def add_salary_history(row):
+                    rest_request("POST", "salary_history", body={
+                        "employee_id": row["employee_id"],
+                        "effective_month": row["applied_month"][:10],
+                        "annual_salary_thousand": row["decided_salary_thousand"],
+                        "reason": f"{year}년 연봉인상보고서 확정",
+                        "source_salary_increase_year": year,
+                    })
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    list(pool.map(add_salary_history, rows))
+
+                # 2) 새 연봉 기준으로 소급분 다시 계산 (연봉이력이 이미 반영된 뒤라 정확한 새 금액이 나옴)
+                def calc_diffs(row):
+                    emp_id = row["employee_id"]
+                    applied = row["applied_month"][:10]
+                    months = months_between(applied, this_month_str)
+                    diffs = []
+                    for mo in months:
+                        diff = rpc("payroll_retroactive_diff_month", {"p_employee_id": emp_id, "p_month": mo}) or 0
+                        if diff != 0:
+                            diffs.append({"employee_id": emp_id, "source_month": mo, "amount": diff})
+                    return diffs
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    diff_lists = list(pool.map(calc_diffs, rows))
+                all_diffs = [d for sub in diff_lists for d in sub]
+
+                # 3) 소급분을 target_month 급여에 합산 반영 (기존 "소급인상분 일괄 저장"과 동일한 방식)
+                totals_by_employee = {}
+                for d in all_diffs:
+                    rest_request("POST", "payroll_retroactive_log", body={
+                        "employee_id": d["employee_id"],
+                        "source_month": d["source_month"],
+                        "amount": d["amount"],
+                        "target_month": target_month,
+                        "source_salary_increase_year": year,
+                    })
+                    totals_by_employee[d["employee_id"]] = totals_by_employee.get(d["employee_id"], 0) + d["amount"]
+
+                for emp_id, add_amount in totals_by_employee.items():
+                    existing = rest_request(
+                        "GET", f"monthly_payroll?employee_id=eq.{emp_id}&year_month=eq.{target_month}&select=id,retroactive_adjustment"
+                    )
+                    if existing:
+                        new_total = (existing[0].get("retroactive_adjustment") or 0) + add_amount
+                        rest_request(
+                            "PATCH", f"monthly_payroll?employee_id=eq.{emp_id}&year_month=eq.{target_month}",
+                            body={"retroactive_adjustment": new_total},
+                        )
+                    else:
+                        calc = rpc("payroll_calc_prorated", {"p_employee_id": emp_id, "p_year_month": target_month})
+                        calc_row = calc[0] if calc else {
+                            "base_pay": 0, "fixed_overtime_pay": 0,
+                            "attendance_allowance": 0, "meal_allowance": 0, "total_pay": 0, "adjustment_note": None,
+                        }
+                        rest_request("POST", "monthly_payroll", body={
+                            "employee_id": emp_id, "year_month": target_month,
+                            "base_pay": calc_row["base_pay"], "fixed_overtime_pay": calc_row["fixed_overtime_pay"],
+                            "attendance_allowance": calc_row["attendance_allowance"], "meal_allowance": calc_row["meal_allowance"],
+                            "total_pay": calc_row["total_pay"], "retroactive_adjustment": add_amount,
+                            "adjustment_note": calc_row.get("adjustment_note"), "proration_note": calc_row.get("proration_note"),
+                            "calc_note": f"{year}년 연봉인상보고서 소급분 반영",
+                        })
+
+                # 4) 마감
+                rest_request(
+                    "POST", "period_locks?on_conflict=module,period_key",
+                    body={"module": "payroll", "period_key": f"salary-increase-{year}", "locked": True,
+                          "note": f"{year}년 연봉인상보고서 확정 — 연봉이력 {len(rows)}건, 소급 {len(all_diffs)}건 반영"},
+                    prefer="resolution=merge-duplicates",
+                )
+                return self._send(200, {"ok": True, "salary_history_count": len(rows), "retro_count": len(all_diffs)})
+
             # 연봉인상보고서 마감/마감해제: {"type": "salary_increase_lock", "year": 2027, "locked": true/false}
+            # locked=false(마감해제)면, 이 보고서가 만들었던 연봉이력·소급기록을 전부 되돌린 뒤 잠금 해제함.
             if isinstance(payload, dict) and payload.get("type") == "salary_increase_lock":
                 year = payload.get("year")
                 locked = payload.get("locked", True)
                 if not year:
                     return self._send(400, {"error": "year는 필수입니다"})
+
+                if not locked:
+                    # 이 보고서가 만든 소급기록부터 되돌림 (급여명세에서 빼고 장부 삭제)
+                    tagged_logs = rest_request(
+                        "GET", f"payroll_retroactive_log?source_salary_increase_year=eq.{year}&select=*"
+                    ) or []
+                    for log_entry in tagged_logs:
+                        payroll_row = rest_request(
+                            "GET", f"monthly_payroll?employee_id=eq.{log_entry['employee_id']}"
+                            f"&year_month=eq.{log_entry['target_month']}&select=id,retroactive_adjustment"
+                        )
+                        if payroll_row:
+                            new_amount = (payroll_row[0].get("retroactive_adjustment") or 0) - log_entry["amount"]
+                            rest_request(
+                                "PATCH", f"monthly_payroll?id=eq.{payroll_row[0]['id']}",
+                                body={"retroactive_adjustment": new_amount},
+                            )
+                        rest_request("DELETE", f"payroll_retroactive_log?id=eq.{log_entry['id']}")
+
+                    # 이 보고서가 만든 연봉이력 행 삭제
+                    rest_request("DELETE", f"salary_history?source_salary_increase_year=eq.{year}")
+
                 rest_request(
                     "POST", "period_locks?on_conflict=module,period_key",
                     body={"module": "payroll", "period_key": f"salary-increase-{year}", "locked": locked,
-                          "note": f"{year}년 연봉인상보고서 확정"},
+                          "note": f"{year}년 연봉인상보고서 확정" if locked else f"{year}년 연봉인상보고서 마감해제 — 반영분 되돌림"},
                     prefer="resolution=merge-duplicates",
                 )
                 return self._send(200, {"ok": True})
