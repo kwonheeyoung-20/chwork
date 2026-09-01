@@ -168,26 +168,30 @@
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(9) {
   background: #f5fafd;
 }
-/* 전전년도 이력(3칸) 배경 */
+/* 전전년도 이력(연봉/월급여/성과급/전전년대비 인상액·인상률 5칸) 배경 */
 #siTable tbody tr:not(.hr-total-row) td:nth-child(10),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(11),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(12),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(13),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(14),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(10),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(11),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(12) {
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(12),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(13),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(14) {
   background: #f4f8fd;
 }
 /* 전년도 이력(연봉/월급여/성과급/전년대비 인상액·인상률 5칸) 배경 */
-#siTable tbody tr:not(.hr-total-row) td:nth-child(13),
-#siTable tbody tr:not(.hr-total-row) td:nth-child(14),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(15),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(16),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(17),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(13),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(14),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(18),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(19),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(15),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(16),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(17) {
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(17),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(18),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(19) {
   background: #f2faf5;
 }
 #siTable, #siPrintArea table {
@@ -205,43 +209,43 @@
 #siTable #siDecisionGroupHeader, #siPrintArea #siDecisionGroupHeader {
   border-left: 1px solid #999 !important;
 }
-/* 헤더 2행: 세부 항목 18칸 중 4번째(전전년도 시작)/7번째(전년도 시작)/12번째(현재급여 시작)/14번째(결정 시작) */
+/* 헤더 2행: 세부 항목 20칸 중 4번째(전전년도 시작)/9번째(전년도 시작)/14번째(현재급여 시작)/16번째(결정 시작) */
 #siTable thead tr:last-child th:nth-child(4),
 #siPrintArea thead tr:last-child th:nth-child(4),
-#siTable thead tr:last-child th:nth-child(7),
-#siPrintArea thead tr:last-child th:nth-child(7),
-#siTable thead tr:last-child th:nth-child(12),
-#siPrintArea thead tr:last-child th:nth-child(12),
+#siTable thead tr:last-child th:nth-child(9),
+#siPrintArea thead tr:last-child th:nth-child(9),
 #siTable thead tr:last-child th:nth-child(14),
-#siPrintArea thead tr:last-child th:nth-child(14) {
+#siPrintArea thead tr:last-child th:nth-child(14),
+#siTable thead tr:last-child th:nth-child(16),
+#siPrintArea thead tr:last-child th:nth-child(16) {
   border-left: 1px solid #999 !important;
 }
 /* tbody(데이터 행): 순번~입사일 6칸 + 나머지가 이어지므로 7번째(전전전년도 시작)/
-   10번째(전전년도 시작)/13번째(전년도 시작)/18번째(현재급여 시작)/20번째(결정 시작) */
+   10번째(전전년도 시작)/15번째(전년도 시작)/20번째(현재급여 시작)/22번째(결정 시작) */
 #siTable tbody tr:not(.hr-total-row) td:nth-child(7),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(7),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(10),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(10),
-#siTable tbody tr:not(.hr-total-row) td:nth-child(13),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(13),
-#siTable tbody tr:not(.hr-total-row) td:nth-child(18),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(18),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(15),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(15),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(20),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(20) {
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(20),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(22),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(22) {
   border-left: 1px solid #999 !important;
 }
 /* 합계 행: [1]colspan6 다음부터 개별 칸이라 2번째(전전전년도 시작)/5번째(전전년도 시작)/
-   8번째(전년도 시작)/13번째(현재급여 시작)/15번째(결정 시작) */
+   10번째(전년도 시작)/15번째(현재급여 시작)/17번째(결정 시작) */
 #siTable tbody tr.hr-total-row td:nth-child(2),
 #siPrintArea tbody tr.hr-total-row td:nth-child(2),
 #siTable tbody tr.hr-total-row td:nth-child(5),
 #siPrintArea tbody tr.hr-total-row td:nth-child(5),
-#siTable tbody tr.hr-total-row td:nth-child(8),
-#siPrintArea tbody tr.hr-total-row td:nth-child(8),
-#siTable tbody tr.hr-total-row td:nth-child(13),
-#siPrintArea tbody tr.hr-total-row td:nth-child(13),
+#siTable tbody tr.hr-total-row td:nth-child(10),
+#siPrintArea tbody tr.hr-total-row td:nth-child(10),
 #siTable tbody tr.hr-total-row td:nth-child(15),
-#siPrintArea tbody tr.hr-total-row td:nth-child(15) {
+#siPrintArea tbody tr.hr-total-row td:nth-child(15),
+#siTable tbody tr.hr-total-row td:nth-child(17),
+#siPrintArea tbody tr.hr-total-row td:nth-child(17) {
   border-left: 1px solid #999 !important;
 }
 
@@ -270,6 +274,13 @@
      바로 아래 "print-color-adjust: exact" 규칙이 이 body 배경까지 강제로 인쇄해버려서,
      표 아래 빈 공간이 전부 하늘색으로 찍히던 원인이었음 → html/body 배경을 흰색으로 강제. */
   html, body { background: #fff !important; }
+
+  /* 연봉인상보고서는 3개년(2024/2025/2026) + 결정칸까지 총 27칸이라 다른 인쇄표보다
+     훨씬 넓음. 가로 폭을 맞추는 건 JS(zoom 자동축소)가 처리하므로, 여기서는 글자를
+     과하게 줄이지 않고 세로 여백을 넉넉히 둬서(용지 2장 넘어가도 괜찮음) 답답해 보이지
+     않게 함 — zoom이 가로/세로 비율을 그대로 유지하며 줄여주므로 이 값이 실제 기준. */
+  #siPrintArea table { font-size: 13px !important; }
+  #siPrintArea table th, #siPrintArea table td { padding: 7px 6px !important; white-space: nowrap; }
 
   /* 화면에서 쓰던 옅은 배경색(표 헤더/합계행의 var(--bg), 옅은 하늘색 계열)은
      인쇄에서는 필요없으니, 앱에 있는 모든 인쇄 영역에 공통으로 투명하게 강제.
