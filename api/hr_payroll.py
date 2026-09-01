@@ -118,7 +118,38 @@ class handler(BaseHTTPRequestHandler):
         except SupabaseError:
             return {}
 
-    def _get_salary_increase_report(self, year):
+    def _get_salary_increase_history_list(self):
+        # 연봉인상보고서 확정으로 실제 반영된 소급분을, 퇴직연금 불입차수 목록과 같은 방식으로
+        # "소급분 반영월" 단위로 묶어서 보여줌. source_salary_increase_year가 있는 것만
+        # (수기로 급여요율조정에서 직접 계산한 소급분은 제외 — 그건 이 보고서가 만든 게 아니므로).
+        rows = rest_request(
+            "GET", "payroll_retroactive_log?source_salary_increase_year=not.is.null"
+            "&select=target_month,amount,source_salary_increase_year,employee_id,employees(name)"
+            "&order=target_month.desc"
+        ) or []
+        grouped = {}
+        for r in rows:
+            key = r["target_month"]
+            if key not in grouped:
+                grouped[key] = {"target_month": key, "year": r["source_salary_increase_year"], "total_amount": 0, "employees": {}}
+            grouped[key]["total_amount"] += r.get("amount") or 0
+            emp_id = r.get("employee_id")
+            name = (r.get("employees") or {}).get("name") or "-"
+            if emp_id not in grouped[key]["employees"]:
+                grouped[key]["employees"][emp_id] = {"name": name, "amount": 0}
+            grouped[key]["employees"][emp_id]["amount"] += r.get("amount") or 0
+
+        result = []
+        for g in sorted(grouped.values(), key=lambda x: x["target_month"], reverse=True):
+            emps = list(g["employees"].values())
+            result.append({
+                "target_month": g["target_month"], "year": g["year"],
+                "employee_count": len(emps), "total_amount": g["total_amount"],
+                "employees": emps,
+            })
+        return self._send(200, {"items": result})
+
+
         # 성과급보고서(_get_bonus_report)와 같은 구조 — 전전년도/전년도 연봉+성과급(1,2차 합)은
         # 매번 실시간 조회(salary_history/other_payments), "결정"만 별도 테이블(salary_increase_reports)에 저장.
         # 연봉인상보고서는 성과급보고서와 달리 3개년(전전전년도~전년도)까지 이력을 같이 보여줌.
@@ -191,6 +222,9 @@ class handler(BaseHTTPRequestHandler):
             # 전년도(y1) 자료 자체에도, 그 전해(y2) 대비 인상액/인상률을 참고용으로 같이 보여줌
             y1_increase_amount = (salary_y1 - salary_y2) if (salary_y1 and salary_y2) else None
             y1_increase_rate = (y1_increase_amount / salary_y2) if (y1_increase_amount is not None and salary_y2) else None
+            # 전전년도(y2) 자료에도 마찬가지로, 그 전해(y3) 대비 인상액/인상률을 참고용으로 보여줌
+            y2_increase_amount = (salary_y2 - salary_y3) if (salary_y2 and salary_y3) else None
+            y2_increase_rate = (y2_increase_amount / salary_y3) if (y2_increase_amount is not None and salary_y3) else None
             result.append({
                 "seq": idx,
                 "employee_id": eid,
@@ -201,6 +235,8 @@ class handler(BaseHTTPRequestHandler):
                 "bonus_y3": bonus_by_emp_year.get((eid, y3), 0),
                 "salary_y2": salary_y2, "monthly_y2": monthly(salary_y2),
                 "bonus_y2": bonus_by_emp_year.get((eid, y2), 0),
+                "y2_increase_amount": y2_increase_amount,
+                "y2_increase_rate": y2_increase_rate,
                 "salary_y1": salary_y1, "monthly_y1": monthly(salary_y1),
                 "bonus_y1": bonus_by_emp_year.get((eid, y1), 0),
                 "y1_increase_amount": y1_increase_amount,
@@ -234,6 +270,9 @@ class handler(BaseHTTPRequestHandler):
                 if not year:
                     return self._send(400, {"error": "year는 필수입니다"})
                 return self._get_salary_increase_report(int(year))
+
+            if qs.get("salary_increase_history_list", ["0"])[0] == "1":
+                return self._get_salary_increase_history_list()
 
             if qs.get("contract_data", ["0"])[0] == "1":
                 year = qs.get("year", [None])[0]
@@ -545,8 +584,8 @@ class handler(BaseHTTPRequestHandler):
                 items = payload.get("items") or []
                 if not year:
                     return self._send(400, {"error": "year는 필수입니다"})
-                if is_period_locked(f"salary-increase-{year}"):
-                    return self._send(423, {"error": f"{year}년 연봉인상보고서는 이미 마감되어 있습니다. 먼저 마감해제해주세요."})
+                if int(year) < datetime.date.today().year:
+                    return self._send(423, {"error": f"{year}년은 이미 지난 연도라 연봉인상 입력이 잠겨 있습니다."})
                 body = []
                 for it in items:
                     if not it.get("employee_id"):
@@ -618,6 +657,8 @@ class handler(BaseHTTPRequestHandler):
                 target_month = payload.get("target_month")
                 if not year or not target_month:
                     return self._send(400, {"error": "year, target_month은 필수입니다"})
+                if int(year) < datetime.date.today().year:
+                    return self._send(423, {"error": f"{year}년은 이미 지난 연도라 연봉인상 확정이 잠겨 있습니다."})
                 if is_period_locked(target_month[:7]):
                     return self._send(423, {"error": f"{target_month[:7]}은(는) 급여가 이미 마감되어 있습니다. 먼저 마감해제해주세요."})
 
@@ -722,13 +763,22 @@ class handler(BaseHTTPRequestHandler):
                             "calc_note": f"{year}년 연봉인상보고서 소급분 반영",
                         })
 
-                # 4) 마감
+                # 4) 이 연도에 "지금까지 몇 번, 몇 건 반영됐는지" 기록만 남김 (더 이상 입력을 막는 잠금이 아님 —
+                #    같은 연도 안에서 나중에 몇 명 더 인상하는 경우, 이 화면을 몇 번이든 다시 확정할 수 있음)
                 rest_request(
                     "POST", "period_locks?on_conflict=module,period_key",
                     body={"module": "payroll", "period_key": f"salary-increase-{year}", "locked": True,
                           "note": f"{year}년 연봉인상보고서 확정 — 연봉이력 {len(rows)}건, 소급 {len(all_diffs)}건 반영"},
                     prefer="resolution=merge-duplicates",
                 )
+
+                # 5) 이번에 처리한 직원들의 입력칸(결정연봉/적용월/비고)을 비움 —
+                #    이미 연봉이력·소급기록에는 영구히 반영됐으니, 화면은 다음 라운드를 위해 깨끗하게 리셋.
+                for row in rows:
+                    rest_request("PATCH", f"salary_increase_reports?id=eq.{row['id']}", body={
+                        "decided_salary_thousand": None, "applied_month": None, "note": None,
+                    })
+
                 return self._send(200, {"ok": True, "salary_history_count": len(rows), "retro_count": len(all_diffs)})
 
             # 연봉인상보고서 마감/마감해제: {"type": "salary_increase_lock", "year": 2027, "locked": true/false}
