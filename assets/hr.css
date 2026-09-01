@@ -254,19 +254,33 @@
    헤더 밑줄·합계 윗줄은 짝이 맞게 회색 한 줄씩만(배경 채우기는 안 함) */
 #pensionPrintArea table.mc-framed-table,
 #pensionInstallPrintArea table.mc-framed-table,
-#bonusReportPrintArea table.mc-framed-table {
+#bonusReportPrintArea table.mc-framed-table,
+#siPrintArea table.mc-framed-table {
   border-top: 1.5px solid #999 !important;
   border-bottom: 1.5px solid #999 !important;
+  border-left: 1.5px solid #999 !important;
+  border-right: 1.5px solid #999 !important;
 }
 #pensionPrintArea table.mc-framed-table thead th,
 #pensionInstallPrintArea table.mc-framed-table thead th,
-#bonusReportPrintArea table.mc-framed-table thead th {
+#bonusReportPrintArea table.mc-framed-table thead th,
+#siPrintArea table.mc-framed-table thead th {
   border-bottom: 1.5px solid #999 !important;
 }
 #pensionPrintArea table.mc-framed-table .hr-total-row td,
 #pensionInstallPrintArea table.mc-framed-table .hr-total-row td,
-#bonusReportPrintArea table.mc-framed-table .hr-total-row td {
+#bonusReportPrintArea table.mc-framed-table .hr-total-row td,
+#siPrintArea table.mc-framed-table .hr-total-row td {
   border-top: 1.5px solid #999 !important;
+}
+/* 표 맨 오른쪽 칸(비고)의 오른쪽 선이 다른 세로선보다 가늘어 보이던 문제 —
+   맨 끝 칸만 인접한 칸이 없어서 border-right 하나만 단독으로 그려지다 보니
+   상대적으로 얇아 보였음. 명시적으로 다른 구분선과 같은 두께로 지정. */
+#siTable tbody tr td:last-child,
+#siPrintArea tbody tr td:last-child,
+#siTable thead tr th:last-child,
+#siPrintArea thead tr th:last-child {
+  border-right: 1px solid #999 !important;
 }
 @media print {
   /* #pensionPrintArea 등 인쇄 영역은 .layout 바깥(= body 바로 아래)에 있는 별도 div라서,
