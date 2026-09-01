@@ -13,6 +13,7 @@ PATCH  -> 기존 직원 정보 수정 (body에 id 포함)
 from http.server import BaseHTTPRequestHandler
 import os
 import json
+import datetime
 import traceback
 import urllib.request
 import urllib.parse
@@ -262,6 +263,28 @@ class handler(BaseHTTPRequestHandler):
             for emp in data:
                 hist = sorted(emp.get("salary_history") or [], key=lambda h: h["effective_month"])
                 emp["current_salary_thousand"] = hist[-1]["annual_salary_thousand"] if hist else None
+
+            # 직급이력(승진 기록)에 오늘 이미 지난(도래한) 항목이 있는데 아직 표시용 직급(position)에
+            # 반영이 안 됐으면 여기서 자동으로 동기화함. "직급이력 관리"에서 승진일자만 등록해두고
+            # 급여반영(pay_position)은 나중에 해도, 승진일이 지나면 표시용 직급은 자동으로 바뀜.
+            # (급여계산에 쓰이는 pay_position/payroll_settings_history는 여기서 안 건드림 — 그건
+            # "급여반영"을 눌러야만 바뀌는 별개 절차.)
+            try:
+                today_str = datetime.date.today().isoformat()
+                due_history = rest_request(
+                    "GET", f"position_history?effective_date=lte.{today_str}"
+                    "&select=employee_id,effective_date,position&order=effective_date.asc"
+                ) or []
+                latest_due_position = {}
+                for h in due_history:
+                    latest_due_position[h["employee_id"]] = h["position"]  # asc 정렬이라 마지막 값이 최신
+                for emp in data:
+                    due_pos = latest_due_position.get(emp["id"])
+                    if due_pos and emp.get("position") != due_pos:
+                        rest_request("PATCH", f"employees?id=eq.{emp['id']}", body={"position": due_pos})
+                        emp["position"] = due_pos  # 이번 응답에도 바로 반영
+            except SupabaseError:
+                pass  # 동기화 실패해도 목록 자체는 정상 반환
 
             # 오늘 날짜 기준 실제 적용 중인 고용형태/요율/급여조건을 한 번에 조회해서 병합
             try:
