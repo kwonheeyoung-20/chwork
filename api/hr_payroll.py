@@ -637,15 +637,31 @@ class handler(BaseHTTPRequestHandler):
                             y += 1
                     return result
 
-                # 1) 직원마다 새 연봉이력 추가 (병렬)
+                # 1) 직원마다 연봉이력 반영 (병렬) — 적용월에 이미 값이 있으면(예: 초기 데이터 이관)
+                #    새로 추가하지 않고 고쳐씀(같은 날짜 중복 방지). 이때 원래 값을
+                #    previous_salary_thousand에 남겨서 마감해제 시 되돌릴 수 있게 함.
                 def add_salary_history(row):
-                    rest_request("POST", "salary_history", body={
-                        "employee_id": row["employee_id"],
-                        "effective_month": row["applied_month"][:10],
-                        "annual_salary_thousand": row["decided_salary_thousand"],
-                        "reason": f"{year}년 연봉인상보고서 확정",
-                        "source_salary_increase_year": year,
-                    })
+                    applied = row["applied_month"][:10]
+                    existing = rest_request(
+                        "GET", f"salary_history?employee_id=eq.{row['employee_id']}"
+                        f"&effective_month=eq.{applied}&select=id,annual_salary_thousand,reason"
+                    )
+                    if existing:
+                        rest_request("PATCH", f"salary_history?id=eq.{existing[0]['id']}", body={
+                            "annual_salary_thousand": row["decided_salary_thousand"],
+                            "reason": f"{year}년 연봉인상보고서 확정",
+                            "source_salary_increase_year": year,
+                            "previous_salary_thousand": existing[0]["annual_salary_thousand"],
+                            "previous_reason": existing[0].get("reason"),
+                        })
+                    else:
+                        rest_request("POST", "salary_history", body={
+                            "employee_id": row["employee_id"],
+                            "effective_month": applied,
+                            "annual_salary_thousand": row["decided_salary_thousand"],
+                            "reason": f"{year}년 연봉인상보고서 확정",
+                            "source_salary_increase_year": year,
+                        })
                 with ThreadPoolExecutor(max_workers=8) as pool:
                     list(pool.map(add_salary_history, rows))
 
@@ -736,8 +752,23 @@ class handler(BaseHTTPRequestHandler):
                             )
                         rest_request("DELETE", f"payroll_retroactive_log?id=eq.{log_entry['id']}")
 
-                    # 이 보고서가 만든 연봉이력 행 삭제
-                    rest_request("DELETE", f"salary_history?source_salary_increase_year=eq.{year}")
+                    # 이 보고서가 만든 연봉이력 행 처리 — 원래 값을 고쳐썼던 행은 그 값으로 되돌리고
+                    # (previous_salary_thousand가 있는 경우), 새로 추가했던 행은 통째로 삭제함.
+                    tagged_salaries = rest_request(
+                        "GET", f"salary_history?source_salary_increase_year=eq.{year}"
+                        f"&select=id,previous_salary_thousand,previous_reason"
+                    ) or []
+                    for sal_row in tagged_salaries:
+                        if sal_row.get("previous_salary_thousand") is not None:
+                            rest_request("PATCH", f"salary_history?id=eq.{sal_row['id']}", body={
+                                "annual_salary_thousand": sal_row["previous_salary_thousand"],
+                                "reason": sal_row.get("previous_reason"),
+                                "source_salary_increase_year": None,
+                                "previous_salary_thousand": None,
+                                "previous_reason": None,
+                            })
+                        else:
+                            rest_request("DELETE", f"salary_history?id=eq.{sal_row['id']}")
 
                 rest_request(
                     "POST", "period_locks?on_conflict=module,period_key",
