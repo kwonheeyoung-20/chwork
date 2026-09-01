@@ -5552,22 +5552,21 @@ function _siPrintLandscape() {
 
   $('siPrintArea').style.display = 'block';
 
-  // 이제 기본정보+2023~2025년 이력 / 기본정보(반복)+현재급여+결정, 이렇게 두 장으로 나눠서
-  // 각 장의 칸 수가 훨씬 적어졌으므로 대부분은 축소가 필요 없음. 그래도 혹시 폭을 넘는 표가
-  // 있으면(예: 직급명이 유난히 긴 경우 등) 그 표만 개별적으로 폭에 맞게 자동 축소함.
-  const tables = Array.from($('siPrintArea').querySelectorAll('table'));
+  // 컬럼이 많아(27칸) 폭을 넘으면 그 비율만큼 표 전체를 자동으로 축소함
+  // (헤더는 2줄 줄바꿈, 데이터 글씨·세로 여백은 CSS에서 최대한 키워둔 상태 — 그래도 안 맞으면 이걸로 보정).
+  const table = $('siPrintArea').querySelector('table');
   const availablePx = 1050;  // landscape A4(297mm) - 여백 8mm×2 ≈ 281mm ≈ 1060px 기준
-  tables.forEach(table => {
+  if (table) {
     table.style.zoom = '';
     const naturalWidth = table.scrollWidth;
     if (naturalWidth > availablePx) {
       table.style.zoom = String(availablePx / naturalWidth);
     }
-  });
+  }
 
   window.print();
   $('siPrintArea').style.display = 'none';
-  tables.forEach(table => { table.style.zoom = ''; });
+  if (table) { table.style.zoom = ''; }
   document.head.removeChild(style);
 }
 
@@ -5629,54 +5628,6 @@ function _cloneSiTableForPrint() {
   });
   return clone;
 }
-
-/* 컬럼이 너무 많아(27칸) 억지로 한 장에 우겨넣으면 글씨가 작아지므로, 기본정보(순번~입사일)를
-   양쪽에 반복해서 두 장으로 나눔: A=기본정보+2023~2025년 이력, B=기본정보(반복)+현재급여+결정.
-   적용월 제거·의사결정용 축소 등은 이 함수를 부르기 전에 이미 끝난 상태여야 함(그래야 뒤쪽
-   칸 개수가 가변이어도 동적으로 정확히 나뉨). */
-function _splitSiTableForPrint(fullTable) {
-  const pageA = fullTable.cloneNode(true);
-  const pageB = fullTable.cloneNode(true);
-  const removeAt = (row, indices) => {
-    if (!row) return;
-    const cells = Array.from(row.children);
-    [...indices].sort((a, b) => b - a).forEach(i => { if (cells[i]) cells[i].remove(); });
-  };
-  const rangeFrom = (start, end) => {
-    const arr = [];
-    for (let i = start; i < end; i++) arr.push(i);
-    return arr;
-  };
-
-  // 헤더 1행: [0~5]기본정보(rowspan2, 6칸) [6]y3그룹 [7]y2그룹 [8]y1그룹 [9]현재그룹 [10]결정그룹 — 총 11칸 고정
-  removeAt(pageA.querySelector('thead tr:nth-child(1)'), [9, 10]);
-  removeAt(pageB.querySelector('thead tr:nth-child(1)'), [6, 7, 8]);
-
-  // 헤더 2행: y3(0~2)+y2(3~7)+y1(8~12) = 13칸까지 고정, 그 뒤(현재+결정)는 칸 수가 가변(적용월 유무 등)
-  const head2A = pageA.querySelector('thead tr:nth-child(2)');
-  removeAt(head2A, rangeFrom(13, head2A.children.length));
-  const head2B = pageB.querySelector('thead tr:nth-child(2)');
-  removeAt(head2B, rangeFrom(0, 13));
-
-  // tbody: 기본정보(0~5)+y3+y2+y1 = 19칸까지 고정, 그 뒤(현재+결정)는 가변
-  Array.from(pageA.querySelectorAll('tbody tr')).forEach(tr => {
-    if (tr.classList.contains('si-grand-total-row')) {
-      removeAt(tr, rangeFrom(14, tr.children.length)); // 합계행: colspan라벨+y3+y2+y1=14칸 고정
-    } else {
-      removeAt(tr, rangeFrom(19, tr.children.length));
-    }
-  });
-  Array.from(pageB.querySelectorAll('tbody tr')).forEach(tr => {
-    if (tr.classList.contains('si-grand-total-row')) {
-      removeAt(tr, rangeFrom(1, 14));
-    } else {
-      removeAt(tr, rangeFrom(6, 19));
-    }
-  });
-
-  return { pageA, pageB };
-}
-
 
 /* 표에서 "적용월" 칸을 전부 빼고, 대신 상단에 한 줄로 표시할 문구를 돌려줌
    (직원마다 적용월이 다르면 그 사실을 그대로 안내함) */
@@ -5751,15 +5702,7 @@ function printSalaryIncreaseDecision() {
   }
 
   $('si_print_table_container').innerHTML = '';
-  const { pageA, pageB } = _splitSiTableForPrint(clone);
-  pageB.style.pageBreakBefore = 'always';
-  pageB.style.marginTop = '0';
-  const noteB = document.createElement('p');
-  noteB.style.cssText = 'font-size:12px; color:var(--text-secondary); margin:0 0 8px;';
-  noteB.textContent = '(2/2 — 순번·이름은 1페이지와 동일)';
-  $('si_print_table_container').appendChild(pageA);
-  $('si_print_table_container').appendChild(noteB);
-  $('si_print_table_container').appendChild(pageB);
+  $('si_print_table_container').appendChild(clone);
   _siPrintLandscape();
 }
 function printSalaryIncreaseFinal() {
@@ -5772,15 +5715,7 @@ function printSalaryIncreaseFinal() {
   $('si_print_applied').textContent = appliedLabel;
 
   $('si_print_table_container').innerHTML = '';
-  const { pageA, pageB } = _splitSiTableForPrint(clone);
-  pageB.style.pageBreakBefore = 'always';
-  pageB.style.marginTop = '0';
-  const noteB = document.createElement('p');
-  noteB.style.cssText = 'font-size:12px; color:var(--text-secondary); margin:0 0 8px;';
-  noteB.textContent = '(2/2 — 순번·이름은 1페이지와 동일)';
-  $('si_print_table_container').appendChild(pageA);
-  $('si_print_table_container').appendChild(noteB);
-  $('si_print_table_container').appendChild(pageB);
+  $('si_print_table_container').appendChild(clone);
   _siPrintLandscape();
 }
 

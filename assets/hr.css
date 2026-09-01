@@ -289,12 +289,19 @@
      표 아래 빈 공간이 전부 하늘색으로 찍히던 원인이었음 → html/body 배경을 흰색으로 강제. */
   html, body { background: #fff !important; }
 
-  /* 연봉인상보고서는 3개년(2024/2025/2026) + 결정칸까지 총 27칸이라 다른 인쇄표보다
-     훨씬 넓음. 가로 폭을 맞추는 건 JS(zoom 자동축소)가 처리하므로, 여기서는 글자를
-     과하게 줄이지 않고 세로 여백을 넉넉히 둬서(용지 2장 넘어가도 괜찮음) 답답해 보이지
-     않게 함 — zoom이 가로/세로 비율을 그대로 유지하며 줄여주므로 이 값이 실제 기준. */
-  #siPrintArea table { font-size: 13px !important; }
-  #siPrintArea table th, #siPrintArea table td { padding: 7px 6px !important; white-space: nowrap; }
+  /* 연봉인상보고서는 3개년(2024/2025/2026) + 결정칸까지 총 27칸이라 다른 인쇄표보다 훨씬 넓음.
+     헤더 글자는 데이터보다 살짝 크게 하되 2줄까지 줄바꿈을 허용해서(짧은 폭으로 접히게) 칸
+     너비를 절약하고, 데이터 칸은 줄바꿈 없이(nowrap) 유지하면서 글씨와 세로 여백을 최대한
+     키움 — 그래도 폭을 넘으면 JS(zoom)가 표 전체를 마지막 안전장치로 축소함. */
+  #siPrintArea table { font-size: 14.5px !important; }
+  #siPrintArea table th {
+    padding: 6px 4px !important;
+    font-size: 15px !important;
+    white-space: normal !important;
+    line-height: 1.25;
+    word-break: keep-all;
+  }
+  #siPrintArea table td { padding: 9px 6px !important; font-size: 16px !important; white-space: nowrap; }
 
   /* 화면에서 쓰던 옅은 배경색(표 헤더/합계행의 var(--bg), 옅은 하늘색 계열)은
      인쇄에서는 필요없으니, 앱에 있는 모든 인쇄 영역에 공통으로 투명하게 강제.
