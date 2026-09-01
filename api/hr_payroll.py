@@ -149,7 +149,7 @@ class handler(BaseHTTPRequestHandler):
             })
         return self._send(200, {"items": result})
 
-
+    def _get_salary_increase_report(self, year):
         # 성과급보고서(_get_bonus_report)와 같은 구조 — 전전년도/전년도 연봉+성과급(1,2차 합)은
         # 매번 실시간 조회(salary_history/other_payments), "결정"만 별도 테이블(salary_increase_reports)에 저장.
         # 연봉인상보고서는 성과급보고서와 달리 3개년(전전전년도~전년도)까지 이력을 같이 보여줌.
