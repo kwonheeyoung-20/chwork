@@ -108,6 +108,29 @@ def rpc(fn_name, params):
     return rest_request("POST", f"rpc/{fn_name}", body=params)
 
 
+def _calc_tenure(hire_date, as_of_date):
+    """입사일(hire_date)부터 기준일(as_of_date)까지의 근속을 (년, 개월) 튜플로 계산.
+    기준일이 입사일보다 이전이면(아직 입사 전) None."""
+    if not hire_date or not as_of_date or hire_date > as_of_date:
+        return None
+    years = as_of_date.year - hire_date.year
+    months = as_of_date.month - hire_date.month
+    if as_of_date.day < hire_date.day:
+        months -= 1
+    if months < 0:
+        years -= 1
+        months += 12
+    return (years, months)
+
+
+def _format_tenure(tenure):
+    """(년, 개월) 튜플을 "N년 M개월" 문자열로 변환. None이면 None 그대로."""
+    if tenure is None:
+        return None
+    years, months = tenure
+    return f"{years}년 {months}개월"
+
+
 def _cors_headers():
     return {
         "Access-Control-Allow-Origin": "*",
