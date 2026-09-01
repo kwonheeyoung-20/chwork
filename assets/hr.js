@@ -5552,34 +5552,69 @@ function _cloneSiTableForPrint() {
 }
 
 /* ── 인쇄(의사결정용): "당해년도 인상 결정" 4칸 중 결정연봉만 남김 ── */
+/* 표에서 "적용월" 칸을 전부 빼고, 대신 상단에 한 줄로 표시할 문구를 돌려줌
+   (직원마다 적용월이 다르면 그 사실을 그대로 안내함) */
+function _removeSiAppliedMonthColumn(clone) {
+  const appliedMonths = new Set();
+  document.querySelectorAll('#siTbody tr[data-emp-id]').forEach(tr => {
+    const v = tr.querySelector('.si-applied-input').value;
+    if (v) appliedMonths.add(v);
+  });
+
+  const headRow2 = clone.querySelector('thead tr:nth-child(2)');
+  const head2Cells = Array.from(headRow2.children);
+  // 0-based: [0~2]y2 [3~7]y1 [8~9]현재 [10]결정연봉 [11]적용월 [12]인상액 [13]인상률 [14]비고
+  if (head2Cells[11]) head2Cells[11].remove();
+
+  Array.from(clone.querySelectorAll('tbody tr')).forEach(tr => {
+    if (tr.classList.contains('si-grand-total-row')) {
+      const cells = Array.from(tr.children);
+      if (cells[12]) cells[12].remove(); // 합계행의 적용월 자리(빈칸)
+      return;
+    }
+    const cells = Array.from(tr.children);
+    if (cells[17]) cells[17].remove(); // 데이터행의 적용월 칸
+  });
+
+  if (appliedMonths.size === 0) return '';
+  if (appliedMonths.size === 1) {
+    const [only] = appliedMonths;
+    const [y, m] = only.split('-');
+    return `적용월: ${y}년 ${m}월`;
+  }
+  return `적용월: 직원별로 다름 (${[...appliedMonths].sort().map(v => { const [y, m] = v.split('-'); return `${y}.${m}`; }).join(', ')})`;
+}
+
 function printSalaryIncreaseDecision() {
   if (siReportCache.length === 0) { alert('먼저 조회해주세요.'); return; }
   const year = $('siYear').value;
   $('si_print_title').textContent = `${year}년 연봉인상 검토표 (의사결정용)`;
 
   const clone = _cloneSiTableForPrint();
+  const appliedLabel = _removeSiAppliedMonthColumn(clone);
+  $('si_print_applied').textContent = appliedLabel;
+
   const headRow1 = clone.querySelector('thead tr:nth-child(1)');
   const decisionGroupTh = headRow1.children[headRow1.children.length - 1]; // si-exclude-col 제거 후 마지막 = "당해년도 인상 결정" 그룹헤더
   decisionGroupTh.setAttribute('colspan', '1');
 
   const headRow2 = clone.querySelector('thead tr:nth-child(2)');
   const head2Cells = Array.from(headRow2.children);
-  // 0-based: [0~2]y2 [3~7]y1(연봉,월급여,성과급,인상액,인상률) [8~9]현재 [10]결정연봉 [11]적용월 [12]인상액 [13]인상률 [14]비고
-  [head2Cells[12], head2Cells[13], head2Cells[14]].forEach(el => el && el.remove());
+  // 적용월이 이미 빠진 뒤라: [0~2]y2 [3~7]y1 [8~9]현재 [10]결정연봉 [11]인상액 [12]인상률 [13]비고
+  [head2Cells[11], head2Cells[12], head2Cells[13]].forEach(el => el && el.remove());
   if (head2Cells[10]) head2Cells[10].textContent = '결정연봉';
-  if (head2Cells[11]) head2Cells[11].textContent = '적용월';
 
   Array.from(clone.querySelectorAll('tbody tr')).forEach(tr => {
     if (tr.classList.contains('si-grand-total-row')) return;
     const cells = Array.from(tr.children);
-    if (cells.length < 21) return;
-    [cells[18], cells[19], cells[20]].forEach(td => td && td.remove()); // 인상액,인상률,비고 (적용월은 남김)
+    if (cells.length < 20) return;
+    [cells[17], cells[18], cells[19]].forEach(td => td && td.remove()); // 인상액,인상률,비고
   });
   const totalRow = clone.querySelector('.si-grand-total-row');
   if (totalRow) {
     const cells = Array.from(totalRow.children);
-    // [0]colspan6 [1~7]y2,y1(연봉월급여성과급인상액) [8]빈(인상률) [9~10]현재 [11]결정연봉합계 [12]빈(적용월) [13]인상액합계 [14]빈(인상률) [15]빈(비고)
-    [cells[13], cells[14], cells[15]].forEach(td => td && td.remove());
+    // 적용월 자리가 이미 빠진 뒤라: [0]colspan6 [1~7]y2,y1 [8]빈 [9~10]현재 [11]결정연봉합계 [12]인상액합계 [13]빈 [14]빈
+    [cells[12], cells[13], cells[14]].forEach(td => td && td.remove());
   }
 
   $('si_print_table_container').innerHTML = '';
@@ -5587,13 +5622,16 @@ function printSalaryIncreaseDecision() {
   _siPrintLandscape();
 }
 
-/* ── 인쇄(확정 결정내용): 화면 표를 그대로(전체 컬럼) 복제 ── */
+/* ── 인쇄(확정 결정내용): 화면 표를 그대로(적용월 칸만 빼고 나머지 전체) 복제 ── */
 function printSalaryIncreaseFinal() {
   if (siReportCache.length === 0) { alert('먼저 조회해주세요.'); return; }
   const year = $('siYear').value;
   $('si_print_title').textContent = `${year}년 연봉인상 확정 결정내용`;
 
   const clone = _cloneSiTableForPrint();
+  const appliedLabel = _removeSiAppliedMonthColumn(clone);
+  $('si_print_applied').textContent = appliedLabel;
+
   $('si_print_table_container').innerHTML = '';
   $('si_print_table_container').appendChild(clone);
   _siPrintLandscape();
