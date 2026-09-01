@@ -5197,7 +5197,7 @@ async function loadSalaryIncreaseReport() {
 
 function renderSiRow(e, locked) {
   return `
-    <tr data-emp-id="${e.employee_id}" data-salary-y1="${e.salary_y1 || 0}">
+    <tr data-emp-id="${e.employee_id}" data-salary-now="${e.salary_now || 0}">
       <td class="num">${e.seq}</td>
       <td>${esc(e.name)}</td>
       <td>${esc(e.branch || '-')}</td>
@@ -5234,7 +5234,7 @@ function renderSiRow(e, locked) {
 
 function updateSiRowCalc(tr) {
   if (!tr) return;
-  const salaryY1 = Number(tr.dataset.salaryY1 || 0);
+  const salaryNow = Number(tr.dataset.salaryNow || 0);
   const decidedInput = tr.querySelector('.si-decided-input');
   const decided = decidedInput.value.trim() === '' ? null : Number(decidedInput.value);
   const diffCell = tr.querySelector('.si-diff-cell');
@@ -5244,11 +5244,11 @@ function updateSiRowCalc(tr) {
     pctCell.textContent = '-';
     return;
   }
-  const diff = decided - salaryY1;
+  const diff = decided - salaryNow;
   diffCell.textContent = fmt(diff);
   diffCell.style.color = diff < 0 ? 'var(--red)' : '';
-  if (salaryY1 > 0) {
-    pctCell.textContent = (diff / salaryY1 * 100).toFixed(1) + '%';
+  if (salaryNow > 0) {
+    pctCell.textContent = (diff / salaryNow * 100).toFixed(1) + '%';
     pctCell.style.color = diff < 0 ? 'var(--red)' : '';
   } else {
     pctCell.textContent = '-';
@@ -5269,7 +5269,7 @@ function renderSiTotals() {
     const decided = v === '' ? null : Number(v);
     if (decided != null) {
       sums.decided += decided;
-      sums.incAmt += decided - Number(tr.dataset.salaryY1 || 0);
+      sums.incAmt += decided - Number(tr.dataset.salaryNow || 0);
     }
   });
   const existing = document.querySelector('.si-grand-total-row');
@@ -5526,7 +5526,7 @@ function _cloneSiTableForPrint() {
       sums.nows += Number(e.salary_now || 0); sums.nowm += Number(e.monthly_now || 0);
       const decidedInput = tr.querySelector('.si-decided-input');
       const decided = decidedInput && decidedInput.value.trim() !== '' ? Number(decidedInput.value) : null;
-      if (decided != null) { sums.decided += decided; sums.incAmt += decided - Number(tr.dataset.salaryY1 || 0); }
+      if (decided != null) { sums.decided += decided; sums.incAmt += decided - Number(tr.dataset.salaryNow || 0); }
     });
     const totalRow = clone.querySelector('.si-grand-total-row');
     if (totalRow) {
