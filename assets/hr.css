@@ -159,26 +159,35 @@
 #siPrintArea .hr-total-row td {
   background: #d9d9d9 !important;
 }
-/* 전전년도 이력(3칸) 배경 */
+/* 전전전년도 이력(3칸) 배경 */
 #siTable tbody tr:not(.hr-total-row) td:nth-child(7),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(8),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(9),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(7),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(8),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(9) {
-  background: #f4f8fd;
+  background: #f5fafd;
 }
-/* 전년도 이력(연봉/월급여/성과급/전전년대비 인상액·인상률 5칸) 배경 */
+/* 전전년도 이력(3칸) 배경 */
 #siTable tbody tr:not(.hr-total-row) td:nth-child(10),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(11),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(12),
-#siTable tbody tr:not(.hr-total-row) td:nth-child(13),
-#siTable tbody tr:not(.hr-total-row) td:nth-child(14),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(10),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(11),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(12),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(12) {
+  background: #f4f8fd;
+}
+/* 전년도 이력(연봉/월급여/성과급/전년대비 인상액·인상률 5칸) 배경 */
+#siTable tbody tr:not(.hr-total-row) td:nth-child(13),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(14),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(15),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(16),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(17),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(13),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(14) {
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(14),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(15),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(16),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(17) {
   background: #f2faf5;
 }
 #siTable, #siPrintArea table {
@@ -188,44 +197,51 @@
 #siPrintArea th, #siPrintArea td {
   border: 1px solid #999 !important;
 }
-/* 헤더 1행: 그룹 시작 칸(전전년도/전년도/현재급여/결정) 왼쪽에 구분선 */
+/* 헤더 1행: 그룹 시작 칸(전전전년도/전전년도/전년도/현재급여/결정) 왼쪽에 구분선 */
+#siTable #siY3GroupHeader, #siPrintArea #siY3GroupHeader,
 #siTable #siY2GroupHeader, #siPrintArea #siY2GroupHeader,
 #siTable #siY1GroupHeader, #siPrintArea #siY1GroupHeader,
 #siTable #siNowGroupHeader, #siPrintArea #siNowGroupHeader,
 #siTable #siDecisionGroupHeader, #siPrintArea #siDecisionGroupHeader {
   border-left: 1px solid #999 !important;
 }
-/* 헤더 2행: 세부 항목 14칸 중 4번째(전년도 시작)/9번째(현재급여 시작)/11번째(결정 시작) */
+/* 헤더 2행: 세부 항목 18칸 중 4번째(전전년도 시작)/7번째(전년도 시작)/12번째(현재급여 시작)/14번째(결정 시작) */
 #siTable thead tr:last-child th:nth-child(4),
 #siPrintArea thead tr:last-child th:nth-child(4),
-#siTable thead tr:last-child th:nth-child(9),
-#siPrintArea thead tr:last-child th:nth-child(9),
-#siTable thead tr:last-child th:nth-child(11),
-#siPrintArea thead tr:last-child th:nth-child(11) {
+#siTable thead tr:last-child th:nth-child(7),
+#siPrintArea thead tr:last-child th:nth-child(7),
+#siTable thead tr:last-child th:nth-child(12),
+#siPrintArea thead tr:last-child th:nth-child(12),
+#siTable thead tr:last-child th:nth-child(14),
+#siPrintArea thead tr:last-child th:nth-child(14) {
   border-left: 1px solid #999 !important;
 }
-/* tbody(데이터 행): 순번~입사일 6칸 + 나머지가 이어지므로 7번째(전전년도 시작)/
-   10번째(전년도 시작)/15번째(현재급여 시작)/17번째(결정 시작) */
+/* tbody(데이터 행): 순번~입사일 6칸 + 나머지가 이어지므로 7번째(전전전년도 시작)/
+   10번째(전전년도 시작)/13번째(전년도 시작)/18번째(현재급여 시작)/20번째(결정 시작) */
 #siTable tbody tr:not(.hr-total-row) td:nth-child(7),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(7),
 #siTable tbody tr:not(.hr-total-row) td:nth-child(10),
 #siPrintArea tbody tr:not(.hr-total-row) td:nth-child(10),
-#siTable tbody tr:not(.hr-total-row) td:nth-child(15),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(15),
-#siTable tbody tr:not(.hr-total-row) td:nth-child(17),
-#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(17) {
+#siTable tbody tr:not(.hr-total-row) td:nth-child(13),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(13),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(18),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(18),
+#siTable tbody tr:not(.hr-total-row) td:nth-child(20),
+#siPrintArea tbody tr:not(.hr-total-row) td:nth-child(20) {
   border-left: 1px solid #999 !important;
 }
-/* 합계 행: [1]colspan6 다음부터 개별 칸이라 2번째(전전년도 시작)/5번째(전년도 시작)/
-   10번째(현재급여 시작)/12번째(결정 시작) */
+/* 합계 행: [1]colspan6 다음부터 개별 칸이라 2번째(전전전년도 시작)/5번째(전전년도 시작)/
+   8번째(전년도 시작)/13번째(현재급여 시작)/15번째(결정 시작) */
 #siTable tbody tr.hr-total-row td:nth-child(2),
 #siPrintArea tbody tr.hr-total-row td:nth-child(2),
 #siTable tbody tr.hr-total-row td:nth-child(5),
 #siPrintArea tbody tr.hr-total-row td:nth-child(5),
-#siTable tbody tr.hr-total-row td:nth-child(10),
-#siPrintArea tbody tr.hr-total-row td:nth-child(10),
-#siTable tbody tr.hr-total-row td:nth-child(12),
-#siPrintArea tbody tr.hr-total-row td:nth-child(12) {
+#siTable tbody tr.hr-total-row td:nth-child(8),
+#siPrintArea tbody tr.hr-total-row td:nth-child(8),
+#siTable tbody tr.hr-total-row td:nth-child(13),
+#siPrintArea tbody tr.hr-total-row td:nth-child(13),
+#siTable tbody tr.hr-total-row td:nth-child(15),
+#siPrintArea tbody tr.hr-total-row td:nth-child(15) {
   border-left: 1px solid #999 !important;
 }
 

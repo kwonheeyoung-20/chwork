@@ -5158,18 +5158,19 @@ function initSalaryIncreaseReportTab() {
 async function loadSalaryIncreaseReport() {
   const year = $('siYear').value;
   const tbody = $('siTbody');
-  tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="25" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_payroll?salary_increase_report=1&year=${year}`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}${data.detail ? '<br><span style="font-size:11px; color:var(--text-muted);">' + esc(data.detail) + '</span>' : ''}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="25" style="text-align:center; color:var(--red); padding:24px;">${esc(data.error || '불러오기 실패')}${data.detail ? '<br><span style="font-size:11px; color:var(--text-muted);">' + esc(data.detail) + '</span>' : ''}</td></tr>`;
       return;
     }
     siReportCache = data.employees || [];
     siReportMetaCache = { year: data.year, y1: data.y1, y2: data.y2, locked: data.locked };
+    $('siY3GroupHeader').textContent = `${data.y3}년 이력 (전전전년도)`;
     $('siY2GroupHeader').textContent = `${data.y2}년 이력 (전전년도)`;
     $('siY1GroupHeader').textContent = `${data.y1}년 이력 (직전년도)`;
     $('siLockStatus').textContent = data.locked ? `🔒 ${year}년 마감됨` : `${year}년 마감 전`;
@@ -5178,7 +5179,7 @@ async function loadSalaryIncreaseReport() {
 
     const locked = data.locked;
     if (siReportCache.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="25" style="text-align:center; color:var(--text-muted); padding:24px;">재직 직원이 없습니다.</td></tr>`;
       return;
     }
 
@@ -5191,7 +5192,7 @@ async function loadSalaryIncreaseReport() {
     document.querySelectorAll('#siTbody tr[data-emp-id]').forEach(tr => updateSiRowCalc(tr));
     renderSiTotals();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="25" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
   }
 }
 
@@ -5204,6 +5205,9 @@ function renderSiRow(e, locked) {
       <td>${esc(e.department || '-')}</td>
       <td>${esc(e.position || '-')}</td>
       <td>${esc(e.hire_date || '-')}</td>
+      <td class="num" style="background:#f8fbfd;">${fmtManwon(e.salary_y3)}</td>
+      <td class="num" style="background:#f8fbfd;">${fmt(e.monthly_y3)}</td>
+      <td class="num" style="background:#f8fbfd;">${fmt(e.bonus_y3)}</td>
       <td class="num" style="background:#f7f9fc;">${fmtManwon(e.salary_y2)}</td>
       <td class="num" style="background:#f7f9fc;">${fmt(e.monthly_y2)}</td>
       <td class="num" style="background:#f7f9fc;">${fmt(e.bonus_y2)}</td>
@@ -5256,11 +5260,12 @@ function updateSiRowCalc(tr) {
 }
 
 function renderSiTotals() {
-  const sums = { y2s: 0, y2m: 0, y2b: 0, y1s: 0, y1m: 0, y1b: 0, y1inc: 0, nows: 0, nowm: 0, decided: 0, incAmt: 0 };
+  const sums = { y3s: 0, y3m: 0, y3b: 0, y2s: 0, y2m: 0, y2b: 0, y1s: 0, y1m: 0, y1b: 0, y1inc: 0, nows: 0, nowm: 0, decided: 0, incAmt: 0 };
   let empCount = 0;
   document.querySelectorAll('#siTbody tr[data-emp-id]').forEach(tr => {
     empCount += 1;
     const e = siReportCache.find(x => x.employee_id === tr.dataset.empId) || {};
+    sums.y3s += Number(e.salary_y3 || 0); sums.y3m += Number(e.monthly_y3 || 0); sums.y3b += Number(e.bonus_y3 || 0);
     sums.y2s += Number(e.salary_y2 || 0); sums.y2m += Number(e.monthly_y2 || 0); sums.y2b += Number(e.bonus_y2 || 0);
     sums.y1s += Number(e.salary_y1 || 0); sums.y1m += Number(e.monthly_y1 || 0); sums.y1b += Number(e.bonus_y1 || 0);
     if (e.y1_increase_amount != null) sums.y1inc += Number(e.y1_increase_amount);
@@ -5277,6 +5282,9 @@ function renderSiTotals() {
   $('siTbody').insertAdjacentHTML('beforeend', `
     <tr class="hr-total-row si-grand-total-row">
       <td colspan="6">전체 합계 (${empCount}명)</td>
+      <td class="num">${fmt(sums.y3s)}</td>
+      <td class="num">${fmt(sums.y3m)}</td>
+      <td class="num">${fmt(sums.y3b)}</td>
       <td class="num">${fmt(sums.y2s)}</td>
       <td class="num">${fmt(sums.y2m)}</td>
       <td class="num">${fmt(sums.y2b)}</td>
@@ -5515,11 +5523,12 @@ function _cloneSiTableForPrint() {
       if (seqCell) seqCell.textContent = idx + 1;
     });
     // 제외된 인원이 있으면, 인쇄본 기준(남은 인원만)으로 합계 전부 다시 계산
-    const sums = { y2s: 0, y2m: 0, y2b: 0, y1s: 0, y1m: 0, y1b: 0, y1inc: 0, nows: 0, nowm: 0, decided: 0, incAmt: 0 };
+    const sums = { y3s: 0, y3m: 0, y3b: 0, y2s: 0, y2m: 0, y2b: 0, y1s: 0, y1m: 0, y1b: 0, y1inc: 0, nows: 0, nowm: 0, decided: 0, incAmt: 0 };
     let empCount = 0;
     clone.querySelectorAll('tbody tr[data-emp-id]').forEach(tr => {
       empCount += 1;
       const e = siReportCache.find(x => x.employee_id === tr.dataset.empId) || {};
+      sums.y3s += Number(e.salary_y3 || 0); sums.y3m += Number(e.monthly_y3 || 0); sums.y3b += Number(e.bonus_y3 || 0);
       sums.y2s += Number(e.salary_y2 || 0); sums.y2m += Number(e.monthly_y2 || 0); sums.y2b += Number(e.bonus_y2 || 0);
       sums.y1s += Number(e.salary_y1 || 0); sums.y1m += Number(e.monthly_y1 || 0); sums.y1b += Number(e.bonus_y1 || 0);
       if (e.y1_increase_amount != null) sums.y1inc += Number(e.y1_increase_amount);
@@ -5532,9 +5541,10 @@ function _cloneSiTableForPrint() {
     if (totalRow) {
       const cells = Array.from(totalRow.children);
       cells[0].textContent = `전체 합계 (${empCount}명)`;
-      // [1]y2s [2]y2m [3]y2b [4]y1s [5]y1m [6]y1b [7]y1inc [8]빈(인상률) [9]nows [10]nowm [11]decided [12]빈(적용월) [13]incAmt
-      const targets = [cells[1], cells[2], cells[3], cells[4], cells[5], cells[6], cells[7], null, cells[9], cells[10], cells[11], null, cells[13]];
-      const vals = [sums.y2s, sums.y2m, sums.y2b, sums.y1s, sums.y1m, sums.y1b, sums.y1inc, null, sums.nows, sums.nowm, sums.decided, null, sums.incAmt];
+      // [1]y3s [2]y3m [3]y3b [4]y2s [5]y2m [6]y2b [7]y1s [8]y1m [9]y1b [10]y1inc [11]빈(인상률)
+      // [12]nows [13]nowm [14]decided [15]빈(적용월) [16]incAmt
+      const targets = [cells[1], cells[2], cells[3], cells[4], cells[5], cells[6], cells[7], cells[8], cells[9], cells[10], null, cells[12], cells[13], cells[14], null, cells[16]];
+      const vals = [sums.y3s, sums.y3m, sums.y3b, sums.y2s, sums.y2m, sums.y2b, sums.y1s, sums.y1m, sums.y1b, sums.y1inc, null, sums.nows, sums.nowm, sums.decided, null, sums.incAmt];
       targets.forEach((cell, i) => {
         if (!cell) return;
         cell.textContent = fmt(vals[i]);
@@ -5563,17 +5573,17 @@ function _removeSiAppliedMonthColumn(clone) {
 
   const headRow2 = clone.querySelector('thead tr:nth-child(2)');
   const head2Cells = Array.from(headRow2.children);
-  // 0-based: [0~2]y2 [3~7]y1 [8~9]현재 [10]결정연봉 [11]적용월 [12]인상액 [13]인상률 [14]비고
-  if (head2Cells[11]) head2Cells[11].remove();
+  // 0-based: [0~2]y3 [3~5]y2 [6~10]y1 [11~12]현재 [13]결정연봉 [14]적용월 [15]인상액 [16]인상률 [17]비고
+  if (head2Cells[14]) head2Cells[14].remove();
 
   Array.from(clone.querySelectorAll('tbody tr')).forEach(tr => {
     if (tr.classList.contains('si-grand-total-row')) {
       const cells = Array.from(tr.children);
-      if (cells[12]) cells[12].remove(); // 합계행의 적용월 자리(빈칸)
+      if (cells[15]) cells[15].remove(); // 합계행의 적용월 자리(빈칸)
       return;
     }
     const cells = Array.from(tr.children);
-    if (cells[17]) cells[17].remove(); // 데이터행의 적용월 칸
+    if (cells[20]) cells[20].remove(); // 데이터행의 적용월 칸
   });
 
   if (appliedMonths.size === 0) return '';
@@ -5600,21 +5610,21 @@ function printSalaryIncreaseDecision() {
 
   const headRow2 = clone.querySelector('thead tr:nth-child(2)');
   const head2Cells = Array.from(headRow2.children);
-  // 적용월이 이미 빠진 뒤라: [0~2]y2 [3~7]y1 [8~9]현재 [10]결정연봉 [11]인상액 [12]인상률 [13]비고
-  [head2Cells[11], head2Cells[12], head2Cells[13]].forEach(el => el && el.remove());
-  if (head2Cells[10]) head2Cells[10].textContent = '결정연봉';
+  // 적용월이 이미 빠진 뒤라: [0~2]y3 [3~5]y2 [6~10]y1 [11~12]현재 [13]결정연봉 [14]인상액 [15]인상률 [16]비고
+  [head2Cells[14], head2Cells[15], head2Cells[16]].forEach(el => el && el.remove());
+  if (head2Cells[13]) head2Cells[13].textContent = '결정연봉';
 
   Array.from(clone.querySelectorAll('tbody tr')).forEach(tr => {
     if (tr.classList.contains('si-grand-total-row')) return;
     const cells = Array.from(tr.children);
-    if (cells.length < 20) return;
-    [cells[17], cells[18], cells[19]].forEach(td => td && td.remove()); // 인상액,인상률,비고
+    if (cells.length < 23) return;
+    [cells[20], cells[21], cells[22]].forEach(td => td && td.remove()); // 인상액,인상률,비고
   });
   const totalRow = clone.querySelector('.si-grand-total-row');
   if (totalRow) {
     const cells = Array.from(totalRow.children);
-    // 적용월 자리가 이미 빠진 뒤라: [0]colspan6 [1~7]y2,y1 [8]빈 [9~10]현재 [11]결정연봉합계 [12]인상액합계 [13]빈 [14]빈
-    [cells[12], cells[13], cells[14]].forEach(td => td && td.remove());
+    // 적용월 자리가 이미 빠진 뒤라: [0]colspan6 [1~9]y3,y2,y1 [10]y1inc [11]빈 [12~13]현재 [14]결정연봉합계 [15]인상액합계 [16]빈 [17]빈
+    [cells[15], cells[16], cells[17]].forEach(td => td && td.remove());
   }
 
   $('si_print_table_container').innerHTML = '';
