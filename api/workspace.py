@@ -824,6 +824,27 @@ class handler(BaseHTTPRequestHandler):
             )
             return self._send(200, {"ok": True})
 
+        if action == "bulk_position_history":
+            # 승진 일괄입력: {"type": "bulk_position_history", "items": [{employee_id, effective_date, position, note}, ...]}
+            # "직급이력 관리"에서 한 명씩 추가하는 것과 완전히 동일하게(급여 자동반영 없음),
+            # 여러 명을 한 번에 처리하기만 함. 직급/승진일이 비어있는 항목은 건너뜀.
+            items = payload.get("items") or []
+            body = []
+            for it in items:
+                if not it.get("employee_id") or not it.get("effective_date") or not it.get("position"):
+                    continue
+                body.append({
+                    "employee_id": it["employee_id"],
+                    "effective_date": it["effective_date"],
+                    "position": it["position"],
+                    "note": it.get("note"),
+                })
+            if not body:
+                return self._send(400, {"error": "승진일+승진 후 직급이 입력된 직원이 없습니다"})
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                list(pool.map(lambda b: rest_request("POST", "position_history", body=b), body))
+            return self._send(201, {"ok": True, "count": len(body)})
+
         if action == "save_report":
             report_year = payload.get("report_year")
             if not report_year:
