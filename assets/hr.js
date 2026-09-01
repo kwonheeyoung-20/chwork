@@ -5554,24 +5554,22 @@ function _siPrintLandscape() {
 
   // 연봉인상보고서는 컬럼이 많아(27칸) 글자를 줄이는 것만으로 폭이 안 맞을 수 있어서,
   // 표의 실제 너비를 재서 landscape A4 폭(여백 8mm 기준 대략 1100px)을 넘으면 그 비율만큼
-  // 자동으로 축소함(글자만 작아지는 게 아니라 표 전체가 줄어들어 안 잘리고 다 들어감).
+  // 자동으로 축소함. transform:scale은 시각적으로만 줄어들고 페이지 분할 계산에는 반영이
+  // 안 돼서 아래에 빈 공간이 크게 남는 문제가 있었음 — zoom은 레이아웃 자체를 줄여서
+  // 페이지 분할도 줄어든 크기 기준으로 정확히 다시 계산됨(Edge/Chrome 계열 지원).
   const table = $('siPrintArea').querySelector('table');
   if (table) {
-    table.style.transform = '';
-    table.style.marginBottom = '';
+    table.style.zoom = '';
     const naturalWidth = table.scrollWidth;
     const availablePx = 1100;
     if (naturalWidth > availablePx) {
-      const scale = availablePx / naturalWidth;
-      table.style.transformOrigin = 'top left';
-      table.style.transform = `scale(${scale})`;
-      table.style.marginBottom = `${-(table.offsetHeight * (1 - scale))}px`;
+      table.style.zoom = String(availablePx / naturalWidth);
     }
   }
 
   window.print();
   $('siPrintArea').style.display = 'none';
-  if (table) { table.style.transform = ''; table.style.marginBottom = ''; }
+  if (table) { table.style.zoom = ''; }
   document.head.removeChild(style);
 }
 
