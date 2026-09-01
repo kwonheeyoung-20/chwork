@@ -121,7 +121,8 @@ class handler(BaseHTTPRequestHandler):
     def _get_salary_increase_report(self, year):
         # 성과급보고서(_get_bonus_report)와 같은 구조 — 전전년도/전년도 연봉+성과급(1,2차 합)은
         # 매번 실시간 조회(salary_history/other_payments), "결정"만 별도 테이블(salary_increase_reports)에 저장.
-        y1, y2 = year - 1, year - 2
+        # 연봉인상보고서는 성과급보고서와 달리 3개년(전전전년도~전년도)까지 이력을 같이 보여줌.
+        y1, y2, y3 = year - 1, year - 2, year - 3
 
         with ThreadPoolExecutor(max_workers=5) as pool:
             employees_future = pool.submit(
@@ -178,6 +179,7 @@ class handler(BaseHTTPRequestHandler):
         for idx, emp in enumerate(employees, start=1):
             eid = emp["id"]
             decided = decided_by_emp.get(eid)
+            salary_y3 = salary_by_emp_year.get((eid, y3))
             salary_y2 = salary_by_emp_year.get((eid, y2))
             salary_y1 = salary_by_emp_year.get((eid, y1))
             salary_now = salary_by_emp_year.get((eid, year)) or salary_y1
@@ -195,6 +197,8 @@ class handler(BaseHTTPRequestHandler):
                 "name": emp.get("name"), "branch": emp.get("branch"),
                 "department": emp.get("department"), "position": emp.get("position"),
                 "hire_date": emp.get("hire_date"),
+                "salary_y3": salary_y3, "monthly_y3": monthly(salary_y3),
+                "bonus_y3": bonus_by_emp_year.get((eid, y3), 0),
                 "salary_y2": salary_y2, "monthly_y2": monthly(salary_y2),
                 "bonus_y2": bonus_by_emp_year.get((eid, y2), 0),
                 "salary_y1": salary_y1, "monthly_y1": monthly(salary_y1),
@@ -210,7 +214,7 @@ class handler(BaseHTTPRequestHandler):
             })
 
         return self._send(200, {
-            "year": year, "y1": y1, "y2": y2,
+            "year": year, "y1": y1, "y2": y2, "y3": y3,
             "locked": locked, "employees": result,
         })
 
