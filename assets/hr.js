@@ -569,7 +569,7 @@ function renderEmployees(list) {
   tbody.innerHTML = list.map(emp => `
     <tr>
       <td>${esc(emp.name)}</td>
-      <td>${esc(emp.position || '-')}</td>
+      <td>${esc(emp.position || '-')}${emp.position && emp.position !== emp.pay_position ? ` <span style="color:var(--red); font-size:11px; font-weight:600;" title="급여기준은 아직 '${esc(emp.pay_position || '-')}' 직급 그대로예요 — 직급이력 관리에서 '급여반영'을 누르면 바뀝니다.">⚠ 급여 미반영</span>` : ''}</td>
       <td>${esc(emp.branch || '-')}</td>
       <td>${esc(emp.department || '-')}</td>
       <td>${esc(emp.hire_date || '-')}</td>
@@ -1699,6 +1699,24 @@ function payrollYearMonthDate() {
   return m ? `${m}-01` : '';
 }
 
+/* 급여명세 조회 시, 재직자 중 직급은 승진됐는데 급여기준(pay_position)엔 아직
+   반영 안 된 사람이 있으면 상단에 빨간 배너로 알려줌 (직급이력 관리에서 "급여반영" 필요). */
+async function checkPayrollPositionWarning() {
+  const banner = $('payrollPositionWarning');
+  banner.style.display = 'none';
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees`, { headers: { 'X-HR-Password': hrPassword() } });
+    const data = await res.json();
+    if (!res.ok) return;
+    const pending = (data.employees || []).filter(e => e.position && e.pay_position && e.position !== e.pay_position);
+    if (pending.length === 0) return;
+    banner.style.display = 'block';
+    banner.textContent = `⚠ 급여기준 미반영 직원 ${pending.length}명 있음: ${pending.map(e => e.name).join(', ')} — 직급은 승진됐지만 급여기준표 반영 전이라, 이 달 급여는 아직 예전 직급 기준으로 계산됩니다. 반영하려면 "인사기록보고서 → 직급이력 관리"에서 급여반영을 눌러주세요.`;
+  } catch (e) {
+    // 이 배너는 부가 정보라 실패해도 급여명세 조회 자체엔 영향 없음
+  }
+}
+
 async function loadPayrollPreview() {
   const ym = payrollYearMonthDate();
   if (!ym) { alert('먼저 월을 선택해주세요.'); return; }
@@ -1706,6 +1724,7 @@ async function loadPayrollPreview() {
   tbody.innerHTML = `<tr><td colspan="15" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   $('retroAdjHeader').textContent = '소급인상분';
   $('finalTotalHeader').textContent = '최종 지급액';
+  checkPayrollPositionWarning();
   try {
     // 1) 저장된 자료가 있는지 먼저 확인 (있으면 그게 최종 진실)
     const savedRes = await fetch(`${apiBase()}/api/hr_payroll?year_month=${ym}&saved=1`, {
