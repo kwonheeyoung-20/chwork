@@ -5246,15 +5246,15 @@ function renderSiRow(e, locked) {
       <td>${esc(e.hire_date || '-')}</td>
       <td class="num" style="background:#f8fbfd;">${fmtManwon(e.salary_y3)}</td>
       <td class="num" style="background:#f8fbfd;">${fmt(e.monthly_y3)}</td>
-      <td class="num" style="background:#f8fbfd;">${fmt(e.bonus_y3)}</td>
+      <td class="num" style="background:#f8fbfd;">${e.bonus_y3 != null ? fmtManwon(Math.round(e.bonus_y3 / 1000)) : '-'}</td>
       <td class="num" style="background:#f7f9fc;">${fmtManwon(e.salary_y2)}</td>
       <td class="num" style="background:#f7f9fc;">${fmt(e.monthly_y2)}</td>
-      <td class="num" style="background:#f7f9fc;">${fmt(e.bonus_y2)}</td>
+      <td class="num" style="background:#f7f9fc;">${e.bonus_y2 != null ? fmtManwon(Math.round(e.bonus_y2 / 1000)) : '-'}</td>
       <td class="num" style="background:#f7f9fc;">${e.y2_increase_amount != null ? fmt(e.y2_increase_amount) : '-'}</td>
       <td class="num" style="background:#f7f9fc;">${e.y2_increase_rate != null ? (e.y2_increase_rate * 100).toFixed(1) + '%' : '-'}</td>
       <td class="num" style="background:#f7f9fc;">${fmtManwon(e.salary_y1)}</td>
       <td class="num" style="background:#f7f9fc;">${fmt(e.monthly_y1)}</td>
-      <td class="num" style="background:#f7f9fc;">${fmt(e.bonus_y1)}</td>
+      <td class="num" style="background:#f7f9fc;">${e.bonus_y1 != null ? fmtManwon(Math.round(e.bonus_y1 / 1000)) : '-'}</td>
       <td class="num" style="background:#f7f9fc;">${e.y1_increase_amount != null ? fmt(e.y1_increase_amount) : '-'}</td>
       <td class="num" style="background:#f7f9fc;">${e.y1_increase_rate != null ? (e.y1_increase_rate * 100).toFixed(1) + '%' : '-'}</td>
       <td class="num">${fmtManwon(e.salary_now)}</td>
@@ -5329,15 +5329,15 @@ function renderSiTotals() {
       <td colspan="6">전체 합계 (${empCount}명)</td>
       <td class="num">${fmt(sums.y3s)}</td>
       <td class="num">${fmt(sums.y3m)}</td>
-      <td class="num">${fmt(sums.y3b)}</td>
+      <td class="num">${fmtManwon(Math.round(sums.y3b / 1000))}</td>
       <td class="num">${fmt(sums.y2s)}</td>
       <td class="num">${fmt(sums.y2m)}</td>
-      <td class="num">${fmt(sums.y2b)}</td>
+      <td class="num">${fmtManwon(Math.round(sums.y2b / 1000))}</td>
       <td class="num">${fmt(sums.y2inc)}</td>
       <td style="background:var(--bg);"></td>
       <td class="num">${fmt(sums.y1s)}</td>
       <td class="num">${fmt(sums.y1m)}</td>
-      <td class="num">${fmt(sums.y1b)}</td>
+      <td class="num">${fmtManwon(Math.round(sums.y1b / 1000))}</td>
       <td class="num">${fmt(sums.y1inc)}</td>
       <td style="background:var(--bg);"></td>
       <td class="num">${fmt(sums.nows)}</td>
@@ -5546,13 +5546,32 @@ async function unlockSalaryIncreaseReport() {
 function _siPrintLandscape() {
   const style = document.createElement('style');
   style.id = 'siPrintLandscapeStyle';
-  style.textContent = `@page { size: landscape; margin: 10mm; }`;
+  style.textContent = `@page { size: landscape; margin: 8mm; }`;
   document.head.appendChild(style);
   $('si_print_asof').textContent = `기준일자: ${new Date().toISOString().slice(0, 10)}`;
 
   $('siPrintArea').style.display = 'block';
+
+  // 연봉인상보고서는 컬럼이 많아(27칸) 글자를 줄이는 것만으로 폭이 안 맞을 수 있어서,
+  // 표의 실제 너비를 재서 landscape A4 폭(여백 8mm 기준 대략 1100px)을 넘으면 그 비율만큼
+  // 자동으로 축소함(글자만 작아지는 게 아니라 표 전체가 줄어들어 안 잘리고 다 들어감).
+  const table = $('siPrintArea').querySelector('table');
+  if (table) {
+    table.style.transform = '';
+    table.style.marginBottom = '';
+    const naturalWidth = table.scrollWidth;
+    const availablePx = 1100;
+    if (naturalWidth > availablePx) {
+      const scale = availablePx / naturalWidth;
+      table.style.transformOrigin = 'top left';
+      table.style.transform = `scale(${scale})`;
+      table.style.marginBottom = `${-(table.offsetHeight * (1 - scale))}px`;
+    }
+  }
+
   window.print();
   $('siPrintArea').style.display = 'none';
+  if (table) { table.style.transform = ''; table.style.marginBottom = ''; }
   document.head.removeChild(style);
 }
 
@@ -5598,7 +5617,7 @@ function _cloneSiTableForPrint() {
       // [1]y3s [2]y3m [3]y3b [4]y2s [5]y2m [6]y2b [7]y2inc [8]빈 [9]y1s [10]y1m [11]y1b [12]y1inc [13]빈
       // [14]nows [15]nowm [16]decided [17]빈(적용월) [18]incAmt
       const targets = [cells[1], cells[2], cells[3], cells[4], cells[5], cells[6], cells[7], null, cells[9], cells[10], cells[11], cells[12], null, cells[14], cells[15], cells[16], null, cells[18]];
-      const vals = [sums.y3s, sums.y3m, sums.y3b, sums.y2s, sums.y2m, sums.y2b, sums.y2inc, null, sums.y1s, sums.y1m, sums.y1b, sums.y1inc, null, sums.nows, sums.nowm, sums.decided, null, sums.incAmt];
+      const vals = [sums.y3s, sums.y3m, Math.round(sums.y3b / 1000), sums.y2s, sums.y2m, Math.round(sums.y2b / 1000), sums.y2inc, null, sums.y1s, sums.y1m, Math.round(sums.y1b / 1000), sums.y1inc, null, sums.nows, sums.nowm, sums.decided, null, sums.incAmt];
       targets.forEach((cell, i) => {
         if (!cell) return;
         cell.textContent = fmt(vals[i]);
