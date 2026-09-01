@@ -888,6 +888,7 @@
             <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 6px;"></span>
             <span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:2px; white-space:nowrap;">✏️ 관리</span>
             <button class="tab-btn" data-promosub="history" onclick="switchPromotionsSubTab('history')">직급이력 관리</button>
+            <button class="tab-btn" data-promosub="bulk" onclick="switchPromotionsSubTab('bulk')">승진 일괄입력</button>
             <button class="tab-btn" data-promosub="standards" onclick="switchPromotionsSubTab('standards')">급여기준표</button>
           </div>
 
@@ -983,11 +984,45 @@
             </div>
           </div>
 
+          <!-- 승진 일괄입력 -->
+          <div id="promoBulkView" style="display:none;">
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+              여러 명의 승진을 한 번에 등록할 때 씁니다. <b>승진 후 직급을 입력한 사람만</b> 저장되고,
+              나머지는 그대로 건너뜁니다. 여기서도 직급이력만 기록되고, 급여에는 자동 반영되지
+              않습니다(반영 시점은 "직급이력 관리"에서 따로 지정).
+            </p>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+              <label style="font-size:13px; color:var(--text-secondary);">승진일 일괄입력:</label>
+              <input id="promoBulkDateInput" type="date" class="hr-input" style="width:150px;">
+              <button class="secondary" onclick="applyPromoBulkDate(false)">전체 적용</button>
+              <button class="secondary" onclick="applyPromoBulkDate(true)">빈 칸에만 적용</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
+              <button class="secondary" onclick="loadPromoBulkTable()">조회</button>
+              <button class="primary" onclick="savePromoBulk()">💾 일괄 저장</button>
+              <span id="promoBulkMsg" class="hr-msg"></span>
+            </div>
+            <div class="table-wrap">
+              <table class="table" id="promoBulkTable">
+                <thead>
+                  <tr>
+                    <th>이름</th><th>지사</th><th>부서</th><th>현재 직급</th>
+                    <th>승진일(입력)</th><th>승진 후 직급(입력)</th><th>비고</th>
+                  </tr>
+                </thead>
+                <tbody id="promoBulkTbody">
+                  <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">조회를 눌러주세요.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <!-- 급여기준표 -->
           <div id="promoStandardsView" style="display:none;">
             <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
-              직급별 만근수당·고정연장시간·식대 기준입니다. 신규입사 시 직급 입력하면 자동으로 채워지고,
-              "직급이력 관리"에서 승진 기록을 추가하면 그 시점부터 여기 기준으로 급여설정도 같이 갱신됩니다.
+              직급별 만근수당·고정연장시간·식대 기준입니다. 신규입사 시 직급 입력하면 자동으로 채워집니다.
+              "직급이력 관리"에서 승진 기록을 추가해도 급여에는 자동 반영되지 않으며, 반영할 시점이 되면
+              직급이력 목록에서 "급여반영"을 따로 눌러야 이 기준표 값이 적용됩니다.
             </p>
             <div class="hr-form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr auto; align-items:end; gap:8px; margin-bottom:16px;">
               <label style="font-size:12px;">직급 <input id="ps_position" class="hr-input" placeholder="예: 부장"></label>
