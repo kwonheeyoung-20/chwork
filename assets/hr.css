@@ -274,13 +274,13 @@
   border-top: 1.5px solid #999 !important;
 }
 /* 표 맨 오른쪽 칸(비고)의 오른쪽 선이 다른 세로선보다 가늘어 보이던 문제 —
-   맨 끝 칸만 인접한 칸이 없어서 border-right 하나만 단독으로 그려지다 보니
-   상대적으로 얇아 보였음. 명시적으로 다른 구분선과 같은 두께로 지정. */
+   border-collapse 상태에서 표 자체 테두리(1.5px)와 셀 테두리(1px)가 겹칠 때
+   더 얇은 쪽이 이기는 경우가 있어서, 맨 끝 칸 자체를 프레임과 같은 두께로 명시. */
 #siTable tbody tr td:last-child,
 #siPrintArea tbody tr td:last-child,
 #siTable thead tr th:last-child,
 #siPrintArea thead tr th:last-child {
-  border-right: 1px solid #999 !important;
+  border-right: 1.5px solid #999 !important;
 }
 @media print {
   /* #pensionPrintArea 등 인쇄 영역은 .layout 바깥(= body 바로 아래)에 있는 별도 div라서,
