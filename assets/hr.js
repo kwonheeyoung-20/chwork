@@ -5821,18 +5821,30 @@ function applyPromoBulkDate(emptyOnly) {
     alert('일괄 적용할 승진일을 먼저 선택해주세요.');
     return;
   }
-  const inputs = document.querySelectorAll('#promoBulkTbody .promo-bulk-date');
-  if (inputs.length === 0) {
+  const rows = document.querySelectorAll('#promoBulkTbody tr[data-emp-id]');
+  if (rows.length === 0) {
     alert('먼저 조회를 눌러 직원 목록을 불러와주세요.');
     return;
   }
+  // "승진 후 직급"을 입력해둔 사람한테만 승진일을 채움 — 전체 직원한테 무작정 날짜부터
+  // 채워버리면(직급은 안 정한 상태로) 화면에 승진 대상이 아닌 사람까지 날짜가 찍혀 보여서
+  // 헷갈릴 수 있으므로, 직급을 먼저 입력해두시는 걸 기준으로 동작함.
   let count = 0;
-  inputs.forEach(input => {
-    if (emptyOnly && input.value !== '') return;
-    input.value = value;
+  let skippedNoPosition = 0;
+  rows.forEach(tr => {
+    const dateInput = tr.querySelector('.promo-bulk-date');
+    const posInput = tr.querySelector('.promo-bulk-position');
+    if (!dateInput || !posInput) return;
+    if (!posInput.value.trim()) { skippedNoPosition += 1; return; }
+    if (emptyOnly && dateInput.value !== '') return;
+    dateInput.value = value;
     count += 1;
   });
-  alert(`${count}명에게 적용했습니다.`);
+  if (count === 0 && skippedNoPosition > 0) {
+    alert('"승진 후 직급"을 먼저 입력한 직원이 없어서 적용할 대상이 없습니다. 직급부터 입력해주세요.');
+    return;
+  }
+  alert(`${count}명에게 적용했습니다. (직급을 아직 안 입력한 ${skippedNoPosition}명은 건너뜀)`);
 }
 
 async function savePromoBulk() {
