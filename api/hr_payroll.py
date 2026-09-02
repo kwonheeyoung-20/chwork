@@ -199,6 +199,16 @@ class handler(BaseHTTPRequestHandler):
             decided_rows = decided_future.result() or []
             locked = locked_future.result()
 
+            # "직급"은 조회 시점의 현재 직급이 아니라 "당해년도(year) 12/31 기준" 직급으로 보여줌.
+            # 안 그러면 예전 연도를 조회해도 그 뒤에 있었던 승진이 소급 반영되어 보이는 문제가 생김
+            # (예: 2025년 자료 조회인데 2026년 9월 승진한 새 직급이 보임) — 매년 그 해 말일 기준으로
+            # 고정해두면, 나중에 2027년에 2026년 자료를 봐도 항상 2026년 말 기준 그대로 나옴.
+            year_end = f"{year}-12-31"
+            as_of_position = self._positions_as_of(year_end)
+            for emp in employees:
+                if emp["id"] in as_of_position:
+                    emp["position"] = as_of_position[emp["id"]]
+
         salary_by_emp_year = {}
         for r in salary_rows:
             emp_id = r.get("employee_id")
