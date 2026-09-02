@@ -4655,8 +4655,6 @@ function closeRenewHistoryModal() {
 
 /* ── 인사기록보고서 ── */
 let promoLiveCache = [];
-let promoReportListCache = [];
-let promoCurrentDetailReport = null;
 let promoHistoryEmployeeId = null;
 let promoHistoryCache = [];
 
@@ -5749,11 +5747,9 @@ function initPromotionsTab() {
 function switchPromotionsSubTab(name) {
   document.querySelectorAll('[data-promosub]').forEach(b => b.classList.toggle('active', b.dataset.promosub === name));
   $('promoLiveView').style.display = name === 'live' ? 'block' : 'none';
-  $('promoSavedView').style.display = name === 'saved' ? 'block' : 'none';
   $('promoHistoryView').style.display = name === 'history' ? 'block' : 'none';
   $('promoBulkView').style.display = name === 'bulk' ? 'block' : 'none';
   $('promoStandardsView').style.display = name === 'standards' ? 'block' : 'none';
-  if (name === 'saved') loadPromotionReportList();
   if (name === 'history') {
     populatePromoHistoryEmployeeSelect();
     populatePositionSelect('ph_position', '');
@@ -5916,158 +5912,6 @@ function downloadPromotionsExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '인사기록');
   XLSX.writeFile(wb, `인사기록보고서_${$('promoAsOf').value || 'now'}.xlsx`);
-}
-
-function openSaveReportModal() {
-  const now = new Date();
-  $('sr_year').value = now.getFullYear();
-  $('sr_asof').value = now.toISOString().slice(0, 10);
-  $('sr_note').value = '';
-  $('sr_include_retired').checked = false;
-  $('saveReportModalMsg').textContent = '';
-  $('saveReportBtn').disabled = false;
-  $('saveReportModal').style.display = 'flex';
-}
-
-function closeSaveReportModal() {
-  $('saveReportModal').style.display = 'none';
-}
-
-async function confirmSaveReport() {
-  const btn = $('saveReportBtn');
-  if (btn.disabled) return;
-  const year = $('sr_year').value;
-  const asof = $('sr_asof').value;
-  if (!year || !asof) {
-    $('saveReportModalMsg').textContent = '보고 연도와 기준일자는 필수입니다.';
-    return;
-  }
-  btn.disabled = true;
-  try {
-    const res = await fetch(`${apiBase()}/api/promotions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-      body: JSON.stringify({
-        type: 'save_report',
-        report_year: Number(year),
-        as_of: asof,
-        note: $('sr_note').value.trim() || null,
-        include_all: $('sr_include_retired').checked,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'save failed');
-    closeSaveReportModal();
-    switchPromotionsSubTab('saved');
-  } catch (e) {
-    $('saveReportModalMsg').textContent = '생성 중 오류가 발생했습니다.';
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-async function loadPromotionReportList() {
-  const tbody = $('promoReportListTbody');
-  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">불러오는 중…</td></tr>`;
-  $('promoReportDetailWrap').style.display = 'none';
-  try {
-    const res = await fetch(`${apiBase()}/api/promotions?reports=1`, {
-      headers: { 'X-HR-Password': hrPassword() },
-    });
-    const data = await res.json();
-    promoReportListCache = data.reports || [];
-    if (promoReportListCache.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">저장된 보고서가 없습니다.</td></tr>`;
-      return;
-    }
-    tbody.innerHTML = promoReportListCache.map(r => `
-      <tr>
-        <td>${r.report_year}년</td>
-        <td>${esc(r.as_of_date)}</td>
-        <td>${esc(r.prior_year_end_date)}</td>
-        <td>${esc((r.generated_at || '').slice(0, 16).replace('T', ' '))}</td>
-        <td style="font-size:12px; color:var(--text-secondary);">${esc(r.note || '-')}</td>
-        <td>
-          <a class="hr-edit-link" onclick="viewPromotionReport('${r.id}')">보기</a>
-          <a class="hr-edit-link" onclick="downloadPromotionReportExcel('${r.id}')">엑셀</a>
-          <a class="hr-edit-link" onclick="deletePromotionReport('${r.id}')">삭제</a>
-        </td>
-      </tr>
-    `).join('');
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--red); padding:16px;">불러오기 실패</td></tr>`;
-  }
-}
-
-async function viewPromotionReport(id) {
-  try {
-    const res = await fetch(`${apiBase()}/api/promotions?report_id=${id}`, {
-      headers: { 'X-HR-Password': hrPassword() },
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error('failed');
-    promoCurrentDetailReport = data.report;
-    $('promoReportDetailTitle').textContent = `${data.report.report_year}년 진급자 보고서(기준일: ${data.report.as_of_date})`;
-    const tbody = $('promoReportDetailTbody');
-    const list = data.report.snapshot || [];
-    if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:16px;">데이터 없음</td></tr>`;
-    } else {
-      tbody.innerHTML = list.map(e => `
-        <tr>
-          <td>${esc(e.branch || '-')}</td>
-          <td>${esc(e.department || '-')}</td>
-          <td>${esc(e.name)}</td>
-          <td>${esc(e.position || '-')}</td>
-          <td>${esc(e.hire_date || '-')}</td>
-          <td class="num">${esc(e.tenure_current || '-')}</td>
-          <td class="num">${esc(e.tenure_prior_year_end || '-')}</td>
-          <td>${esc(e.last_promotion_date || '-')}</td>
-          <td>${esc(e.last_promotion_position || '-')}</td>
-        </tr>
-      `).join('');
-    }
-    $('promoReportDetailWrap').style.display = 'block';
-  } catch (e) {
-    alert('보고서를 불러오지 못했습니다.');
-  }
-}
-
-function downloadPromotionReportExcel(id) {
-  const r = promoReportListCache.find(x => x.id === id);
-  const doDownload = (report) => {
-    const rows = [['지사', '부서', '성명', '직급', '입사일', '근속(기준일)', '근속(전년말)', '최근승진일', '최근승진직급']];
-    (report.snapshot || []).forEach(e => {
-      rows.push([e.branch || '', e.department || '', e.name, e.position || '', e.hire_date || '',
-        e.tenure_current || '', e.tenure_prior_year_end || '', e.last_promotion_date || '', e.last_promotion_position || '']);
-    });
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `${report.report_year}년`);
-    XLSX.writeFile(wb, `인사기록보고서_${report.report_year}.xlsx`);
-  };
-  if (promoCurrentDetailReport && promoCurrentDetailReport.id === id) {
-    doDownload(promoCurrentDetailReport);
-    return;
-  }
-  fetch(`${apiBase()}/api/promotions?report_id=${id}`, { headers: { 'X-HR-Password': hrPassword() } })
-    .then(res => res.json())
-    .then(data => doDownload(data.report))
-    .catch(() => alert('다운로드 중 오류가 발생했습니다.'));
-}
-
-async function deletePromotionReport(id) {
-  if (!confirm('이 보고서를 삭제하시겠습니까?')) return;
-  try {
-    const res = await fetch(`${apiBase()}/api/promotions?id=${id}&type=report`, {
-      method: 'DELETE',
-      headers: { 'X-HR-Password': hrPassword() },
-    });
-    if (!res.ok) throw new Error('failed');
-    loadPromotionReportList();
-  } catch (e) {
-    alert('삭제 중 오류가 발생했습니다.');
-  }
 }
 
 /* ── 직급이력 관리 ── */
@@ -6372,15 +6216,6 @@ function switchPromoViewMode(mode) {
   }
 }
 
-function switchPromoSavedViewMode(mode) {
-  document.querySelectorAll('[data-promosavedview]').forEach(b => b.classList.toggle('active', b.dataset.promosavedview === mode));
-  $('promoReportDetailTableWrap').style.display = mode === 'list' ? 'block' : 'none';
-  $('promoReportDetailMatrixWrap').style.display = mode === 'matrix' ? 'block' : 'none';
-  if (mode === 'matrix' && promoCurrentDetailReport) {
-    ensurePositionStandardsLoaded().then(() => renderPromotionMatrixInto('promoReportDetailMatrixWrap', promoCurrentDetailReport.snapshot || []));
-  }
-}
-
 function buildPromotionMatrixColumns(list) {
   // 급여기준표 순서(만근수당 오름차순 = 사원→대표이사)를 기본 컬럼 순서로 쓰고,
   // 기준표에 없는 직급명(과거 이력의 오타/이명 등)은 뒤에 별도로 붙임.
@@ -6449,16 +6284,10 @@ function renderPromotionMatrixInto(containerId, list) {
 
 /* ── 직급별 이력표 인쇄 ── */
 /* ── 직급별 이력표 인쇄 ── */
-function printCurrentPromoView(context) {
-  // context: 'live'(현재 기준 미리보기) 또는 'saved'(저장된 보고서) — 지금 보고 있는 게
+function printCurrentPromoView() {
   // "목록형"인지 "직급별 이력표"인지 자동으로 판단해서 그 화면 그대로 인쇄함.
-  if (context === 'live') {
-    const isMatrix = document.querySelector('[data-promoview="matrix"]').classList.contains('active');
-    printPromotionMatrix(isMatrix ? 'promoMatrixWrap' : 'promoLiveTableWrap');
-  } else {
-    const isMatrix = document.querySelector('[data-promosavedview="matrix"]').classList.contains('active');
-    printPromotionMatrix(isMatrix ? 'promoReportDetailMatrixWrap' : 'promoReportDetailTableWrap');
-  }
+  const isMatrix = document.querySelector('[data-promoview="matrix"]').classList.contains('active');
+  printPromotionMatrix(isMatrix ? 'promoMatrixWrap' : 'promoLiveTableWrap');
 }
 
 function printPromotionMatrix(containerId) {
@@ -6468,10 +6297,7 @@ function printPromotionMatrix(containerId) {
     return;
   }
   const asOfDate = $('promoAsOf').value || new Date().toISOString().slice(0, 10);
-  const isSaved = containerId === 'promoReportDetailMatrixWrap' || containerId === 'promoReportDetailTableWrap';
-  const title = isSaved
-    ? $('promoReportDetailTitle').textContent
-    : `${asOfDate.slice(0, 4)}년 진급자 보고서(기준일: ${asOfDate})`;
+  const title = `${asOfDate.slice(0, 4)}년 진급자 보고서(기준일: ${asOfDate})`;
 
   $('promoMatrixPrintTitle').textContent = title;
   $('promoMatrixPrintBody').innerHTML = source.innerHTML;
