@@ -66,6 +66,24 @@ def rpc(fn_name, params):
     return rest_request("POST", f"rpc/{fn_name}", body=params)
 
 
+def positions_as_of(as_of_date):
+    """직급이력(position_history)에서 as_of_date 시점까지 도래한 것 중 직원별 가장 최근 직급을
+    {employee_id: position} 형태로 돌려줌. employees.position(현재값)을 그대로 참조하면 나중
+    승진이 과거 시점(스냅샷/인쇄 시점)에도 소급 반영되어 보이는 문제가 생기므로, 항상 이 함수로
+    그 시점 기준값을 따로 계산해서 씀."""
+    try:
+        rows = rest_request(
+            "GET", f"position_history?effective_date=lte.{as_of_date}"
+            "&select=employee_id,effective_date,position&order=effective_date.asc"
+        ) or []
+        result = {}
+        for r in rows:
+            result[r["employee_id"]] = r["position"]  # asc 정렬이라 마지막 값이 그 시점 기준 최신
+        return result
+    except SupabaseError:
+        return {}
+
+
 def year_of(date_str):
     return date_str[:4] if date_str else None
 
@@ -216,6 +234,14 @@ class handler(BaseHTTPRequestHandler):
                     emp["as_of_paid"] = extra.get("as_of_paid", 0)
                     emp["as_of_balance"] = extra.get("as_of_balance", 0)
 
+            # 직급도 "기준일자" 시점 기준으로 보여줌 — pension_status 뷰 자체는 현재 직급을
+            # 그대로 반환하므로, 여기서 선택한 기준일자 시점 값으로 덮어씀(과거 기준일 조회 시
+            # 나중 승진이 소급 반영되어 보이는 문제 방지). 직급이력이 없는 직원은 원래 값 유지.
+            as_of_pos = positions_as_of(effective_as_of)
+            for emp in data:
+                if emp["id"] in as_of_pos:
+                    emp["position"] = as_of_pos[emp["id"]]
+
             return self._send(200, {"pension": data, "ytd_as_of": effective_as_of})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -301,8 +327,11 @@ class handler(BaseHTTPRequestHandler):
         if legacy_employee_ids:
             base = rest_request("GET", "pension_status?select=id,name,branch,department,hire_date") or []
             base_by_id = {b["id"]: b for b in base}
+            # 여기도 "to_date(그 차수 마지막 날) 시점" 직급이 정확함 — 오늘 기준(라이브)으로
+            # 보여주면 나중 승진이 예전 인쇄분에도 소급 반영되어 보이는 문제가 생김.
             emp_rows = rest_request("GET", "employees?select=id,position") or []
             position_by_id = {e["id"]: e.get("position") for e in emp_rows}
+            position_by_id.update(positions_as_of(to_date))
 
             year_of_to = to_date[:4]
             year_start = f"{year_of_to}-01-01"
@@ -411,8 +440,12 @@ class handler(BaseHTTPRequestHandler):
 
         base = rest_request("GET", "pension_status?select=id,name,branch,department,hire_date") or []
         base_by_id = {b["id"]: b for b in base}
+        # 스냅샷은 "이 지급일(date_str) 시점" 직급으로 얼려야 함 — 나중에 재생성하더라도
+        # 그 사이 승진이 있었다면 (오늘 기준이 아니라) 지급일 당시 직급 그대로 남아야 정확함.
+        # 직급이력이 아예 없는 직원(승진 기록 없이 처음부터 그 직급)은 employees.position을 기본값으로 씀.
         emp_rows = rest_request("GET", "employees?select=id,position") or []
         position_by_id = {e["id"]: e.get("position") for e in emp_rows}
+        position_by_id.update(positions_as_of(date_str))
 
         as_of_now = rpc("pension_status_as_of", {"p_as_of": today_str}) or []
         now_map = {r["id"]: r for r in as_of_now}
