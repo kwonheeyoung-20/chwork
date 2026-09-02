@@ -569,7 +569,7 @@ function renderEmployees(list) {
   tbody.innerHTML = list.map(emp => `
     <tr>
       <td>${esc(emp.name)}</td>
-      <td>${esc(emp.position || '-')}${emp.position && emp.position !== emp.pay_position ? ` <span style="color:var(--red); font-size:11px; font-weight:600;" title="급여기준은 아직 '${esc(emp.pay_position || '-')}' 직급 그대로예요 — 직급이력 관리에서 '급여반영'을 누르면 바뀝니다.">⚠ 급여 미반영</span>` : ''}</td>
+      <td>${esc(emp.computed_position || emp.position || '-')}${emp.computed_position && emp.computed_position !== emp.pay_position ? ` <span style="color:var(--red); font-size:11px; font-weight:600;" title="급여기준은 아직 '${esc(emp.pay_position || '-')}' 직급 그대로예요 — 직급이력 관리에서 '급여반영'을 누르면 바뀝니다.">⚠ 급여 미반영</span>` : ''}</td>
       <td>${esc(emp.branch || '-')}</td>
       <td>${esc(emp.department || '-')}</td>
       <td>${esc(emp.hire_date || '-')}</td>
@@ -1708,7 +1708,7 @@ async function checkPayrollPositionWarning() {
     const res = await fetch(`${apiBase()}/api/hr_employees`, { headers: { 'X-HR-Password': hrPassword() } });
     const data = await res.json();
     if (!res.ok) return;
-    const pending = (data.employees || []).filter(e => e.position && e.pay_position && e.position !== e.pay_position);
+    const pending = (data.employees || []).filter(e => e.computed_position && e.pay_position && e.computed_position !== e.pay_position);
     if (pending.length === 0) return;
     banner.style.display = 'block';
     banner.textContent = `⚠ 급여기준 미반영 직원 ${pending.length}명 있음: ${pending.map(e => e.name).join(', ')} — 직급은 승진됐지만 급여기준표 반영 전이라, 이 달 급여는 아직 예전 직급 기준으로 계산됩니다. 반영하려면 "인사기록보고서 → 직급이력 관리"에서 급여반영을 눌러주세요.`;
