@@ -264,11 +264,10 @@ class handler(BaseHTTPRequestHandler):
                 hist = sorted(emp.get("salary_history") or [], key=lambda h: h["effective_month"])
                 emp["current_salary_thousand"] = hist[-1]["annual_salary_thousand"] if hist else None
 
-            # 직급이력(승진 기록)에 오늘 이미 지난(도래한) 항목이 있는데 아직 표시용 직급(position)에
-            # 반영이 안 됐으면 여기서 자동으로 동기화함. "직급이력 관리"에서 승진일자만 등록해두고
-            # 급여반영(pay_position)은 나중에 해도, 승진일이 지나면 표시용 직급은 자동으로 바뀜.
-            # (급여계산에 쓰이는 pay_position/payroll_settings_history는 여기서 안 건드림 — 그건
-            # "급여반영"을 눌러야만 바뀌는 별개 절차.)
+            # 직급이력(승진 기록)에 오늘 이미 지난(도래한) 항목이 있으면, "오늘 기준 실제 직급"을
+            # 계산해서 별도 필드(computed_position)로만 붙여줌 — employees.position 자체는 절대
+            # 안 건드림. 그 필드는 급여명세 등 여러 화면이 그대로 참조하고 있어서, 여기서 고쳐버리면
+            # 이미 마감한 과거 달 급여대장까지 (그때는 아니었던) 새 직급으로 보이게 되기 때문.
             try:
                 today_str = datetime.date.today().isoformat()
                 due_history = rest_request(
@@ -280,11 +279,10 @@ class handler(BaseHTTPRequestHandler):
                     latest_due_position[h["employee_id"]] = h["position"]  # asc 정렬이라 마지막 값이 최신
                 for emp in data:
                     due_pos = latest_due_position.get(emp["id"])
-                    if due_pos and emp.get("position") != due_pos:
-                        rest_request("PATCH", f"employees?id=eq.{emp['id']}", body={"position": due_pos})
-                        emp["position"] = due_pos  # 이번 응답에도 바로 반영
+                    emp["computed_position"] = due_pos or emp.get("position")
             except SupabaseError:
-                pass  # 동기화 실패해도 목록 자체는 정상 반환
+                for emp in data:
+                    emp["computed_position"] = emp.get("position")
 
             # 오늘 날짜 기준 실제 적용 중인 고용형태/요율/급여조건을 한 번에 조회해서 병합
             try:

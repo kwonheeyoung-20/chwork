@@ -118,6 +118,23 @@ class handler(BaseHTTPRequestHandler):
         except SupabaseError:
             return {}
 
+    def _positions_as_of(self, as_of_date):
+        """직급이력(position_history)에서 as_of_date 시점까지 도래한 것 중 직원별 가장 최근 직급을
+        {employee_id: position} 형태로 돌려줌. 급여대장·퇴직연금 등에서 "그 시점 직급"을 정확히
+        보여주기 위한 용도 — employees.position(현재값)을 그대로 참조하면 나중 승진이 과거 시점에도
+        소급 반영되어 보이는 문제가 생기므로, 항상 이 함수로 그 시점 기준값을 따로 계산해서 씀."""
+        try:
+            rows = rest_request(
+                "GET", f"position_history?effective_date=lte.{as_of_date}"
+                "&select=employee_id,effective_date,position&order=effective_date.asc"
+            ) or []
+            result = {}
+            for r in rows:
+                result[r["employee_id"]] = r["position"]  # asc 정렬이라 마지막 값이 그 시점 기준 최신
+            return result
+        except SupabaseError:
+            return {}
+
     def _get_salary_increase_history_list(self):
         # 연봉인상보고서 확정으로 실제 반영된 소급분을, 퇴직연금 불입차수 목록과 같은 방식으로
         # "소급분 반영월" 단위로 묶어서 보여줌. source_salary_increase_year가 있는 것만
@@ -533,8 +550,17 @@ class handler(BaseHTTPRequestHandler):
                     f"monthly_payroll?year_month=eq.{year_month}&select=*,employees(name,branch,department,position,hire_date)&order=created_at",
                 ) or []
                 settings_map = self._fetch_settings_map()
+                # 급여대장의 직급은 "지금 현재" 직급이 아니라 "이 급여명세가 속한 달의 말일 기준"
+                # 직급으로 보여줘야 함 — 나중에 승진이 있어도 이미 마감한 과거 달 급여대장은
+                # 항상 그때 그 직급 그대로 나와야 하기 때문(employees.position을 그대로 참조하면
+                # 나중 승진이 과거 달에도 소급 반영되어 보이는 문제가 생김).
+                month_end = month_end_of(year_month)
+                as_of_positions = self._positions_as_of(month_end)
                 for row in data:
-                    info = settings_map.get(row.get("employee_id"))
+                    emp_id = row.get("employee_id")
+                    if row.get("employees") and emp_id in as_of_positions:
+                        row["employees"]["position"] = as_of_positions[emp_id]
+                    info = settings_map.get(emp_id)
                     row["current_settings"] = info
                 return self._send(200, {"payroll": data})
 
@@ -543,6 +569,11 @@ class handler(BaseHTTPRequestHandler):
                 f"employees?hire_date=lte.{month_end_of(year_month)}&or=(retire_date.is.null,retire_date.gte.{year_month})"
                 f"&select=id,name,branch,department,position&order=hire_date.asc,name.asc"
             ) or []
+            month_end = month_end_of(year_month)
+            as_of_positions = self._positions_as_of(month_end)
+            for emp in employees:
+                if emp["id"] in as_of_positions:
+                    emp["position"] = as_of_positions[emp["id"]]
 
             settings_map = self._fetch_settings_map()
 
