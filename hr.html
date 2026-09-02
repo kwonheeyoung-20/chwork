@@ -954,15 +954,16 @@
           <!-- 승진 일괄입력 -->
           <div id="promoBulkView" style="display:none;">
             <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
-              여러 명의 승진을 한 번에 등록할 때 씁니다. <b>승진 후 직급을 입력한 사람만</b> 저장되고,
-              나머지는 그대로 건너뜁니다. 여기서도 직급이력만 기록되고, 급여에는 자동 반영되지
-              않습니다(반영 시점은 "직급이력 관리"에서 따로 지정).
+              여러 명의 승진을 한 번에 등록할 때 씁니다. <b>먼저 이번에 승진하는 분들의 "승진 후 직급"부터 입력</b>해두시고,
+              그 다음 아래에서 승진일을 일괄입력하시면 <b>직급을 입력해둔 사람한테만</b> 자동으로 승진일이 채워집니다
+              (직급 안 입력한 사람은 승진일을 넣어도 저장되지 않습니다). 여기서도 직급이력만 기록되고, 급여에는
+              자동 반영되지 않습니다(반영 시점은 "직급이력 관리"에서 따로 지정).
             </p>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
               <label style="font-size:13px; color:var(--text-secondary);">승진일 일괄입력:</label>
               <input id="promoBulkDateInput" type="date" class="hr-input" style="width:150px;">
-              <button class="secondary" onclick="applyPromoBulkDate(false)">전체 적용</button>
-              <button class="secondary" onclick="applyPromoBulkDate(true)">빈 칸에만 적용</button>
+              <button class="secondary" onclick="applyPromoBulkDate(false)">직급 입력된 사람 전체 적용</button>
+              <button class="secondary" onclick="applyPromoBulkDate(true)">직급 입력됐고 승진일 빈 칸인 사람만</button>
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px;">
               <button class="secondary" onclick="loadPromoBulkTable()">조회</button>
