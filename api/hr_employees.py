@@ -372,7 +372,10 @@ class handler(BaseHTTPRequestHandler):
                     meal_allowance = base.get("meal_allowance", 0)
                     note = f"계약 종료 후 정규직 전환 — 직급기준표에 '{position}' 없어 기존 계약직 설정값 유지(확인 필요)"
 
-                rest_request("POST", "payroll_settings_history", body={
+                existing_settings = rest_request(
+                    "GET", f"payroll_settings_history?employee_id=eq.{emp_id}&effective_month=eq.{effective_month}&select=id"
+                )
+                new_settings_body = {
                     "employee_id": emp_id,
                     "effective_month": effective_month,
                     "standard_hours": base.get("standard_hours", 209),
@@ -382,7 +385,13 @@ class handler(BaseHTTPRequestHandler):
                     "employment_type": "정규직",
                     "pay_rate": 1.0,
                     "note": note,
-                })
+                }
+                if existing_settings:
+                    # 이미 그 날짜로 급여설정이 있으면(예: 수습 등록 시 자동 예약해둔 정규직 전환 행)
+                    # 새로 추가하지 않고 그 값을 덮어씀 — 같은 날짜에 두 개가 겹쳐서 계산이 꼬이는 걸 방지.
+                    rest_request("PATCH", f"payroll_settings_history?id=eq.{existing_settings[0]['id']}", body=new_settings_body)
+                else:
+                    rest_request("POST", "payroll_settings_history", body=new_settings_body)
                 if payload.get("annual_salary_thousand") is not None:
                     existing_sal = rest_request(
                         "GET", f"salary_history?employee_id=eq.{emp_id}&effective_month=eq.{effective_month}&select=id"
