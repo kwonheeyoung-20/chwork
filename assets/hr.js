@@ -527,7 +527,10 @@ async function loadContractExpiring() {
     $('contractExpiryList').innerHTML = list.map(e => {
       let actions = '';
       if (e.kind === '수습종료' || e.kind === '계약만료') {
-        actions += `<a class="hr-edit-link" onclick="convertContractToRegular('${e.employee_id}', '${esc(e.name)}')">정규직 전환</a>`;
+        actions += `<a class="hr-edit-link" onclick="convertContractToRegular('${e.employee_id}', '${esc(e.name)}', '${e.scheduled_date || ''}')">정규직 전환</a>`;
+      }
+      if (e.kind === '수습종료') {
+        actions += `<a class="hr-edit-link" style="margin-left:8px;" onclick="openExtendProbationModal('${e.employee_id}', '${esc(e.name)}')">수습연장</a>`;
       }
       actions += `<a class="hr-edit-link" style="margin-left:8px;" onclick="openEditModal('${e.employee_id}')">직원정보 수정</a>`;
       const overdue = e.days_left < 0;
@@ -545,10 +548,10 @@ async function loadContractExpiring() {
 
 let convertRegularEmpId = null;
 
-function convertContractToRegular(empId, name) {
+function convertContractToRegular(empId, name, scheduledDate) {
   convertRegularEmpId = empId;
   $('convertRegularTitle').textContent = `${name} 님 — 정규직 전환`;
-  $('cr_date').value = '';
+  $('cr_date').value = scheduledDate || '';
   $('cr_salary').value = '';
   $('convertRegularModalMsg').textContent = '';
   $('convertRegularModal').style.display = 'flex';
@@ -583,6 +586,45 @@ async function confirmConvertRegular() {
   } catch (e) {
     $('convertRegularModalMsg').className = 'hr-msg';
     $('convertRegularModalMsg').textContent = '전환 중 오류가 발생했습니다: ' + (e.message || '');
+  }
+}
+
+let extendProbationEmpId = null;
+
+function openExtendProbationModal(empId, name) {
+  extendProbationEmpId = empId;
+  $('extendProbationTitle').textContent = `${name} 님 — 수습연장`;
+  $('ep_months').value = '';
+  $('extendProbationModalMsg').textContent = '';
+  $('extendProbationModal').style.display = 'flex';
+}
+
+function closeExtendProbationModal() {
+  $('extendProbationModal').style.display = 'none';
+}
+
+async function confirmExtendProbation() {
+  const months = $('ep_months').value;
+  if (!months || Number(months) < 1) {
+    $('extendProbationModalMsg').className = 'hr-msg';
+    $('extendProbationModalMsg').textContent = '연장할 개월수를 입력해주세요.';
+    return;
+  }
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'extend_probation', employee_id: extendProbationEmpId, additional_months: Number(months) }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '연장 실패');
+    $('extendProbationModalMsg').className = 'hr-msg success';
+    $('extendProbationModalMsg').textContent = `연장되었습니다. (새 정규직 전환 예정일: ${data.new_date})`;
+    loadContractExpiring();
+    setTimeout(closeExtendProbationModal, 1800);
+  } catch (e) {
+    $('extendProbationModalMsg').className = 'hr-msg';
+    $('extendProbationModalMsg').textContent = '연장 중 오류가 발생했습니다: ' + (e.message || '');
   }
 }
 
