@@ -1924,6 +1924,25 @@
 </div>
 
 <!-- 급여기준 반영 모달 -->
+<!-- 계약직 → 정규직 전환 모달 -->
+<div id="convertRegularModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:420px;">
+    <h2 id="convertRegularTitle">정규직 전환</h2>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+      전환일이 월 중간이면(예: 9월 3일), 그 달 급여는 자동으로 일할계산되어 반영됩니다
+      (1일~전환일 전날은 계약직 조건, 전환일~말일은 정규직 조건으로 섞어서 계산).
+    </p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>정규직 전환일 <input id="cr_date" type="date" class="hr-input"></label>
+    </div>
+    <div id="convertRegularModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeConvertRegularModal()">취소</button>
+      <button class="primary" onclick="confirmConvertRegular()">전환</button>
+    </div>
+  </div>
+</div>
+
 <div id="applyStandardModal" class="hr-modal-backdrop" style="display:none;">
   <div class="hr-modal" style="width:420px;">
     <h2>급여기준 반영</h2>
