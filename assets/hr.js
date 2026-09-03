@@ -514,25 +514,30 @@ async function loadEmployees() {
 
 async function loadContractExpiring() {
   try {
-    const res = await fetch(`${apiBase()}/api/hr_employees?contract_expiring=1`, {
+    const res = await fetch(`${apiBase()}/api/hr_employees?upcoming=1`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
-    const list = data.employees || [];
+    const list = data.upcoming || [];
     if (list.length === 0) {
       $('contractExpiryBox').style.display = 'none';
       return;
     }
     $('contractExpiryBox').style.display = 'block';
-    $('contractExpiryList').innerHTML = list.map(e => `
+    $('contractExpiryList').innerHTML = list.map(e => {
+      let actions = '';
+      if (e.kind === '수습종료' || e.kind === '계약만료') {
+        actions += `<a class="hr-edit-link" onclick="convertContractToRegular('${e.employee_id}', '${esc(e.name)}')">정규직 전환</a>`;
+      }
+      actions += `<a class="hr-edit-link" style="margin-left:8px;" onclick="openEditModal('${e.employee_id}')">직원정보 수정</a>`;
+      const overdue = e.days_left < 0;
+      return `
       <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; font-size:12px;">
-        <span><b>${esc(e.name)}</b>(${esc(e.branch || '-')}/${esc(e.department || '-')}) — 계약 ${esc(e.contract_end_date)} ${e.is_expired ? '만료됨' : '만료 예정'}</span>
-        <span>
-          <a class="hr-edit-link" onclick="convertContractToRegular('${e.employee_id}', '${esc(e.name)}')">정규직 전환</a>
-          <a class="hr-edit-link" style="margin-left:8px;" onclick="openEditModal('${e.employee_id}')">퇴사 처리(수정에서)</a>
-        </span>
+        <span>${esc(e.title)} ${overdue ? `<b style="color:var(--red);">(D+${Math.abs(e.days_left)})</b>` : `(D-${e.days_left})`}</span>
+        <span>${actions}</span>
       </div>
-    `).join('');
+    `;
+    }).join('');
   } catch (e) {
     $('contractExpiryBox').style.display = 'none';
   }
@@ -544,6 +549,7 @@ function convertContractToRegular(empId, name) {
   convertRegularEmpId = empId;
   $('convertRegularTitle').textContent = `${name} 님 — 정규직 전환`;
   $('cr_date').value = '';
+  $('cr_salary').value = '';
   $('convertRegularModalMsg').textContent = '';
   $('convertRegularModal').style.display = 'flex';
 }
@@ -563,7 +569,10 @@ async function confirmConvertRegular() {
     const res = await fetch(`${apiBase()}/api/hr_employees`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-      body: JSON.stringify({ type: 'convert_to_regular', employee_id: convertRegularEmpId, effective_month: dateVal }),
+      body: JSON.stringify({
+        type: 'convert_to_regular', employee_id: convertRegularEmpId, effective_month: dateVal,
+        annual_salary_thousand: $('cr_salary').value ? Number($('cr_salary').value) : null,
+      }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'convert failed');
