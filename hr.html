@@ -284,7 +284,7 @@
           </div>
 
           <div id="contractExpiryBox" style="display:none; margin-bottom:16px; padding:12px 16px; background:var(--bg); border:1px solid var(--red); border-radius:var(--radius-sm);">
-            <h3 style="font-size:13px; margin-bottom:8px; color:var(--red);">⚠ 계약 만료 예정/경과 대상</h3>
+            <h3 style="font-size:13px; margin-bottom:8px; color:var(--red);">⚠ 인사 알림 (수습종료·계약만료·퇴직연금 가입기한)</h3>
             <div id="contractExpiryList"></div>
           </div>
 
@@ -1934,6 +1934,9 @@
     </p>
     <div class="hr-form-grid" style="grid-template-columns:1fr;">
       <label>정규직 전환일 <input id="cr_date" type="date" class="hr-input"></label>
+      <label>연봉(천원) — 선택 입력, 비워두면 기존대로 유지
+        <input id="cr_salary" type="number" class="hr-input" placeholder="예: 45000">
+      </label>
     </div>
     <div id="convertRegularModalMsg" class="hr-msg"></div>
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
