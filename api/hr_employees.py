@@ -185,6 +185,8 @@ class handler(BaseHTTPRequestHandler):
                 if days_left <= 30:
                     alerts.append({
                         "kind": "수습종료",
+                        "employee_id": eid,
+                        "name": emp["name"],
                         "days_left": days_left,
                         "title": f"👤 {emp['name']}({emp.get('branch') or '-'}/{emp.get('department') or '-'}) — 수습기간 {end_date.isoformat()} 종료 예정(정규직 전환)",
                     })
@@ -202,6 +204,9 @@ class handler(BaseHTTPRequestHandler):
             if days_left <= 30:
                 alerts.append({
                     "kind": "계약만료",
+                    "employee_id": eid,
+                    "name": emp["name"],
+                    "contract_end_date": end_date.isoformat(),
                     "days_left": days_left,
                     "title": f"📄 {emp['name']}({emp.get('branch') or '-'}/{emp.get('department') or '-'}) — 계약 {end_date.isoformat()} 만료 예정",
                 })
@@ -222,6 +227,8 @@ class handler(BaseHTTPRequestHandler):
             if days_left <= 30:
                 alerts.append({
                     "kind": "퇴직연금",
+                    "employee_id": emp["id"],
+                    "name": emp["name"],
                     "days_left": days_left,
                     "title": f"🏦 {emp['name']}({emp.get('branch') or '-'}/{emp.get('department') or '-'}) — 입사 1년 {one_year_mark.isoformat()} 도래, 퇴직연금(DC) 가입 필요",
                 })
@@ -376,6 +383,22 @@ class handler(BaseHTTPRequestHandler):
                     "pay_rate": 1.0,
                     "note": note,
                 })
+                if payload.get("annual_salary_thousand") is not None:
+                    existing_sal = rest_request(
+                        "GET", f"salary_history?employee_id=eq.{emp_id}&effective_month=eq.{effective_month}&select=id"
+                    )
+                    if existing_sal:
+                        rest_request("PATCH", f"salary_history?id=eq.{existing_sal[0]['id']}", body={
+                            "annual_salary_thousand": payload["annual_salary_thousand"],
+                            "reason": "정규직 전환과 함께 연봉 갱신",
+                        })
+                    else:
+                        rest_request("POST", "salary_history", body={
+                            "employee_id": emp_id,
+                            "effective_month": effective_month,
+                            "annual_salary_thousand": payload["annual_salary_thousand"],
+                            "reason": "정규직 전환과 함께 연봉 신규 등록",
+                        })
                 return self._send(200, {"ok": True, "applied_standard": bool(standard)})
 
             emp_fields = {k: payload.get(k) for k in (
