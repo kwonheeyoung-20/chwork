@@ -187,6 +187,7 @@ class handler(BaseHTTPRequestHandler):
                         "kind": "수습종료",
                         "employee_id": eid,
                         "name": emp["name"],
+                        "scheduled_date": end_date.isoformat(),
                         "days_left": days_left,
                         "title": f"👤 {emp['name']}({emp.get('branch') or '-'}/{emp.get('department') or '-'}) — 수습기간 {end_date.isoformat()} 종료 예정(정규직 전환)",
                     })
@@ -338,6 +339,28 @@ class handler(BaseHTTPRequestHandler):
                     return self._send(400, {"error": "유효한 항목이 없습니다"})
                 created = rest_request("POST", "salary_history", body=body, prefer="return=representation")
                 return self._send(201, {"count": len(created) if created else 0})
+
+            # 수습연장: {"type": "extend_probation", employee_id, additional_months}
+            # 이미 예약되어 있는 "수습기간 종료 → 정규직 전환" 행을 찾아서, 그 날짜를 몇 개월 더 뒤로 미룸.
+            # (그 사이 기간은 계속 기존 수습 행이 그대로 적용되므로, 새 수습 행을 따로 만들 필요 없음)
+            if isinstance(payload, dict) and payload.get("type") == "extend_probation":
+                emp_id = payload.get("employee_id")
+                additional_months = payload.get("additional_months")
+                if not emp_id or not additional_months:
+                    return self._send(400, {"error": "employee_id, additional_months는 필수입니다"})
+                scheduled = rest_request(
+                    "GET", f"payroll_settings_history?employee_id=eq.{emp_id}&employment_type=eq." + quote("정규직")
+                    + "&note=like.*" + quote("수습기간 종료") + "*&select=*&order=effective_month.desc&limit=1"
+                )
+                if not scheduled:
+                    return self._send(404, {"error": "예약된 수습 종료(정규직 전환) 일정을 찾을 수 없습니다."})
+                row = scheduled[0]
+                new_date = calendar_months_later_first_day(row["effective_month"][:10], int(additional_months))
+                rest_request("PATCH", f"payroll_settings_history?id=eq.{row['id']}", body={
+                    "effective_month": new_date,
+                    "note": f"수습기간 종료 → 정규직 전환(자동) — {additional_months}개월 연장 반영",
+                })
+                return self._send(200, {"ok": True, "new_date": new_date})
 
             # 계약직 정규직 전환: {"type": "convert_to_regular", employee_id, effective_month}
             if isinstance(payload, dict) and payload.get("type") == "convert_to_regular":
