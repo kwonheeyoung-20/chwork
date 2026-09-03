@@ -1946,6 +1946,25 @@
   </div>
 </div>
 
+<!-- 수습연장 모달 -->
+<div id="extendProbationModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:380px;">
+    <h2 id="extendProbationTitle">수습연장</h2>
+    <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+      예약되어 있는 "정규직 전환 예정일"을 몇 개월 더 뒤로 미룹니다. 그 사이 기간은 계속 기존 수습 조건이 그대로 적용됩니다.
+    </p>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>추가 연장 개월수 <input id="ep_months" type="number" min="1" class="hr-input" placeholder="예: 1"></label>
+    </div>
+    <div id="extendProbationModalMsg" class="hr-msg"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeExtendProbationModal()">취소</button>
+      <button class="primary" onclick="confirmExtendProbation()">연장</button>
+    </div>
+  </div>
+</div>
+
+
 <div id="applyStandardModal" class="hr-modal-backdrop" style="display:none;">
   <div class="hr-modal" style="width:420px;">
     <h2>급여기준 반영</h2>
