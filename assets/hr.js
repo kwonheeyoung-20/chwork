@@ -538,20 +538,42 @@ async function loadContractExpiring() {
   }
 }
 
-async function convertContractToRegular(empId, name) {
-  const month = prompt(`${name} 님을 정규직으로 전환할 시작월을 입력해주세요 (예: 2026-08)`);
-  if (!month) return;
+let convertRegularEmpId = null;
+
+function convertContractToRegular(empId, name) {
+  convertRegularEmpId = empId;
+  $('convertRegularTitle').textContent = `${name} 님 — 정규직 전환`;
+  $('cr_date').value = '';
+  $('convertRegularModalMsg').textContent = '';
+  $('convertRegularModal').style.display = 'flex';
+}
+
+function closeConvertRegularModal() {
+  $('convertRegularModal').style.display = 'none';
+}
+
+async function confirmConvertRegular() {
+  const dateVal = $('cr_date').value;
+  if (!dateVal) {
+    $('convertRegularModalMsg').className = 'hr-msg';
+    $('convertRegularModalMsg').textContent = '정규직 전환일을 선택해주세요.';
+    return;
+  }
   try {
     const res = await fetch(`${apiBase()}/api/hr_employees`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-      body: JSON.stringify({ type: 'convert_to_regular', employee_id: empId, effective_month: `${month}-01` }),
+      body: JSON.stringify({ type: 'convert_to_regular', employee_id: convertRegularEmpId, effective_month: dateVal }),
     });
-    if (!res.ok) throw new Error('convert failed');
-    alert('정규직으로 전환되었습니다.');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'convert failed');
+    $('convertRegularModalMsg').className = 'hr-msg success';
+    $('convertRegularModalMsg').textContent = `정규직으로 전환되었습니다. (${dateVal}부터 적용 — 월 중간이면 그 달 급여는 자동으로 일할계산됩니다)`;
     loadContractExpiring();
+    setTimeout(closeConvertRegularModal, 1800);
   } catch (e) {
-    alert('전환 중 오류가 발생했습니다.');
+    $('convertRegularModalMsg').className = 'hr-msg';
+    $('convertRegularModalMsg').textContent = '전환 중 오류가 발생했습니다: ' + (e.message || '');
   }
 }
 
