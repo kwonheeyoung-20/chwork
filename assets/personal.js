@@ -257,18 +257,33 @@ async function loadPersonalReminderBanner() {
     let html = '';
     if (overdue.length > 0) {
       html += `<div class="sch-banner danger"><h3>⚠ 지난 일정 (${overdue.length}건)</h3>`;
-      html += overdue.map(x => `<div class="sch-banner-row"><span><span class="sch-dday overdue">D+${Math.abs(x.days_left)}</span> ${categoryEmoji(x.category)} [${esc(x.member_name)}] ${esc(x.title)}</span></div>`).join('');
+      html += overdue.map(x => `<div class="sch-banner-row" onclick="goToPersonalDate('${x.due_date}')" style="cursor:pointer;"><span><span class="sch-dday overdue">D+${Math.abs(x.days_left)}</span> ${categoryEmoji(x.category)} [${esc(x.member_name)}] ${esc(x.title)}</span></div>`).join('');
       html += `</div>`;
     }
     if (soon.length > 0) {
       html += `<div class="sch-banner warn"><h3>🔔 다가오는 일정 (${soon.length}건)</h3>`;
-      html += soon.map(x => `<div class="sch-banner-row"><span><span class="sch-dday soon">${x.days_left === 0 ? 'D-DAY' : 'D-' + x.days_left}</span> ${categoryEmoji(x.category)} [${esc(x.member_name)}] ${esc(x.title)}</span></div>`).join('');
+      html += soon.map(x => `<div class="sch-banner-row" onclick="goToPersonalDate('${x.due_date}')" style="cursor:pointer;"><span><span class="sch-dday soon">${x.days_left === 0 ? 'D-DAY' : 'D-' + x.days_left}</span> ${categoryEmoji(x.category)} [${esc(x.member_name)}] ${esc(x.title)}</span></div>`).join('');
       html += `</div>`;
     }
     wrap.innerHTML = html;
   } catch (e) {
     wrap.innerHTML = '';
   }
+}
+
+/* 알림 배너의 일정을 누르면, 그 날짜가 속한 달로 달력을 이동시키고 화면을 그쪽으로
+   스크롤한 뒤, 그 날짜의 상세 일정을 바로 열어줌(항목이 없는 날짜여도 빈 상세창이 뜸). */
+async function goToPersonalDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (d.getFullYear() !== perCalYear || d.getMonth() !== perCalMonth) {
+    perCalYear = d.getFullYear();
+    perCalMonth = d.getMonth();
+    await loadPerCalendar();
+    syncPerCalMonthPicker();
+  }
+  const grid = $('perCalGrid');
+  if (grid) grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  openPerDayDetail(dateStr);
 }
 
 /* ── 달력 ── */
