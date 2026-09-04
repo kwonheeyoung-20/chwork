@@ -1969,17 +1969,35 @@
 
 <!-- 계약연장(재계약) 모달 -->
 <div id="extendContractModal" class="hr-modal-backdrop" style="display:none;">
-  <div class="hr-modal" style="width:420px;">
+  <div class="hr-modal" style="width:460px;">
     <h2 id="extendContractTitle">계약연장(재계약)</h2>
     <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
-      현재 계약종료일을 기준으로 몇 개월 더 연장합니다. 급여(연봉)가 바뀌면 아래에 입력하세요 —
-      원래 계약종료일 다음날부터 새 연봉이 적용됩니다. 비워두면 기존 조건 그대로 기간만 늘어납니다.
+      현재 계약종료일을 기준으로 몇 개월 더 연장합니다. 급여조건은 그대로 두려면 아래는 비워두시면 되고,
+      재계약하면서 요율/정액을 새로 정하실 거면 입력해주세요 — 입력하시면 원래 계약종료일 다음날부터
+      새 조건이 적용됩니다.
     </p>
     <div class="hr-form-grid" style="grid-template-columns:1fr;">
       <label>추가 연장 개월수 <input id="ec_months" type="number" min="1" class="hr-input" placeholder="예: 6"></label>
-      <label>연봉(천원) — 선택 입력, 비워두면 기존대로 유지
-        <input id="ec_salary" type="number" class="hr-input" placeholder="예: 45000">
+    </div>
+    <div style="margin-top:10px; padding-top:10px; border-top:0.5px dashed var(--border);">
+      <label class="hr-checkbox" style="margin-bottom:8px; display:block;">
+        <input type="checkbox" id="ec_change_terms" onchange="document.getElementById('ecTermsFields').style.display = this.checked ? 'grid' : 'none';">
+        급여조건도 새로 정하기 (재계약)
       </label>
+      <div id="ecTermsFields" class="hr-form-grid" style="display:none;">
+        <label>연봉(천원) <input id="ec_salary" type="number" class="hr-input" placeholder="예: 45000"></label>
+        <label>계약 요율(%) <input id="ec_rate" type="number" class="hr-input" value="100"></label>
+        <label class="hr-span2">정액(월 고정지급액, 입력 시 요율 대신 이 금액 그대로 적용)
+          <input id="ec_fixed_amount" type="number" class="hr-input" placeholder="예: 2200000">
+        </label>
+        <label class="hr-span2">마지막 달 급여 반영 방식
+          <select id="ec_proration_mode" class="hr-input">
+            <option value="daily">일할계산 (그 달 재직일수만큼 비례 지급)</option>
+            <option value="current_month">당월반영 (그 달 전액 지급)</option>
+            <option value="next_month">익월반영 (그 달 0원, 다음달에 합산 지급)</option>
+          </select>
+        </label>
+      </div>
     </div>
     <div id="extendContractModalMsg" class="hr-msg"></div>
     <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
