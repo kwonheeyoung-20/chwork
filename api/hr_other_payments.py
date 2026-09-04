@@ -68,15 +68,9 @@ def year_of(date_str):
     return date_str[:4] if date_str else None
 
 
-def default_fiscal_year(payment_type, payment_date):
-    """귀속연도를 직접 안 넣었을 때의 기본값. 원칙은 지급일의 연도 그대로지만,
-    "성과급2차"는 보통 익년 1~2월에 지급되는 관행이 있어서, 그 경우엔 전년도
-    실적으로 보고 한 해 앞당김."""
-    y = int(payment_date[:4])
-    m = int(payment_date[5:7])
-    if payment_type == "성과급2차" and m in (1, 2):
-        return y - 1
-    return y
+def default_fiscal_year(belongs_month):
+    """귀속연도 = 귀속월의 연도. 귀속월을 직접 입력받으므로 더 이상 추측할 필요 없음."""
+    return int(belongs_month[:4])
 
 
 def is_period_locked(period_key):
@@ -268,9 +262,10 @@ class handler(BaseHTTPRequestHandler):
     def _finalize_bonus_report(self, payload):
         year = payload.get("year")
         round_no = payload.get("round")
-        pay_date = payload.get("pay_date")
-        if not year or round_no not in (1, 2) or not pay_date:
-            return self._send(400, {"error": "year, round(1 또는 2), pay_date는 필수입니다"})
+        belongs_month = payload.get("belongs_month")  # 귀속월 — 이 실적이 어느 달 몫인지
+        pay_date = payload.get("pay_date")  # 실제 지급일자
+        if not year or round_no not in (1, 2) or not belongs_month or not pay_date:
+            return self._send(400, {"error": "year, round(1 또는 2), belongs_month, pay_date는 필수입니다"})
         if is_period_locked(f"bonus-{year}-{round_no}"):
             return self._send(423, {"error": f"{year}년 {round_no}차 성과급은 이미 마감되어 있습니다."})
 
@@ -287,6 +282,7 @@ class handler(BaseHTTPRequestHandler):
             op = rest_request("POST", "other_payments", body={
                 "employee_id": r["employee_id"],
                 "payment_type": f"성과급{round_no}차",
+                "belongs_month": belongs_month,
                 "payment_date": pay_date,
                 "fiscal_year": year,
                 "amount": r["decided_amount"],
@@ -375,7 +371,8 @@ class handler(BaseHTTPRequestHandler):
                     if not it.get("employee_id") or not it.get("payment_date") or it.get("amount") is None:
                         continue
                     ptype = it.get("payment_type") or "기타수당"
-                    fy = it.get("fiscal_year") or default_fiscal_year(ptype, it["payment_date"])
+                    belongs_month = it.get("belongs_month") or it["payment_date"][:7] + "-01"
+                    fy = it.get("fiscal_year") or default_fiscal_year(belongs_month)
                     if is_period_locked(str(fy)):
                         locked_years.add(str(fy))
                         continue
@@ -383,6 +380,7 @@ class handler(BaseHTTPRequestHandler):
                         "employee_id": it["employee_id"],
                         "payment_type": ptype,
                         "payment_date": it["payment_date"],
+                        "belongs_month": belongs_month,
                         "fiscal_year": fy,
                         "amount": it["amount"],
                         "note": it.get("note"),
@@ -398,7 +396,8 @@ class handler(BaseHTTPRequestHandler):
             amount = payload.get("amount")
             if not emp_id or not payment_type or not payment_date or amount is None:
                 return self._send(400, {"error": "employee_id, payment_type, payment_date, amount는 필수입니다"})
-            fiscal_year = payload.get("fiscal_year") or default_fiscal_year(payment_type, payment_date)
+            belongs_month = payload.get("belongs_month") or (payment_date[:7] + "-01")
+            fiscal_year = payload.get("fiscal_year") or default_fiscal_year(belongs_month)
             if is_period_locked(str(fiscal_year)):
                 return self._send(423, {"error": f"{fiscal_year}년은 마감되어 있습니다. 먼저 마감해제해주세요."})
 
@@ -406,6 +405,7 @@ class handler(BaseHTTPRequestHandler):
                 "employee_id": emp_id,
                 "payment_type": payment_type,
                 "payment_date": payment_date,
+                "belongs_month": belongs_month,
                 "fiscal_year": fiscal_year,
                 "amount": amount,
                 "note": payload.get("note"),
@@ -428,17 +428,17 @@ class handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
 
-            existing = rest_request("GET", f"other_payments?id=eq.{item_id}&select=payment_date,payment_type,fiscal_year")
+            existing = rest_request("GET", f"other_payments?id=eq.{item_id}&select=payment_date,belongs_month,fiscal_year")
             if existing:
-                old_fy = existing[0].get("fiscal_year") or default_fiscal_year(existing[0]["payment_type"], existing[0]["payment_date"])
-                new_type = payload.get("payment_type") or existing[0]["payment_type"]
-                new_date = payload.get("payment_date") or existing[0]["payment_date"]
-                new_fy = payload.get("fiscal_year") or default_fiscal_year(new_type, new_date)
+                old_belongs = existing[0].get("belongs_month") or existing[0]["payment_date"][:7] + "-01"
+                old_fy = existing[0].get("fiscal_year") or default_fiscal_year(old_belongs)
+                new_belongs = payload.get("belongs_month") or old_belongs
+                new_fy = payload.get("fiscal_year") or default_fiscal_year(new_belongs)
                 if is_period_locked(str(new_fy)) or is_period_locked(str(old_fy)):
                     return self._send(423, {"error": "마감된 연도의 데이터는 수정할 수 없습니다. 먼저 마감해제해주세요."})
 
             update_fields = {}
-            for f in ("payment_type", "payment_date", "amount", "note", "fiscal_year"):
+            for f in ("payment_type", "payment_date", "belongs_month", "amount", "note", "fiscal_year"):
                 if f in payload and payload[f] is not None:
                     update_fields[f] = payload[f]
             if not update_fields:
@@ -460,9 +460,10 @@ class handler(BaseHTTPRequestHandler):
             if not item_id:
                 return self._send(400, {"error": "id는 필수입니다"})
 
-            existing = rest_request("GET", f"other_payments?id=eq.{item_id}&select=payment_date,payment_type,fiscal_year")
+            existing = rest_request("GET", f"other_payments?id=eq.{item_id}&select=payment_date,belongs_month,fiscal_year")
             if existing:
-                fy = existing[0].get("fiscal_year") or default_fiscal_year(existing[0]["payment_type"], existing[0]["payment_date"])
+                belongs = existing[0].get("belongs_month") or existing[0]["payment_date"][:7] + "-01"
+                fy = existing[0].get("fiscal_year") or default_fiscal_year(belongs)
                 if is_period_locked(str(fy)):
                     return self._send(423, {"error": "마감된 연도의 데이터는 삭제할 수 없습니다. 먼저 마감해제해주세요."})
 
