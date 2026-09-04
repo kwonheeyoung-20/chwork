@@ -642,6 +642,11 @@ function openExtendContractModal(empId, name) {
   $('extendContractTitle').textContent = `${name} 님 — 계약연장(재계약)`;
   $('ec_months').value = '';
   $('ec_salary').value = '';
+  $('ec_rate').value = '100';
+  $('ec_fixed_amount').value = '';
+  $('ec_proration_mode').value = 'daily';
+  $('ec_change_terms').checked = false;
+  $('ecTermsFields').style.display = 'none';
   $('extendContractModalMsg').textContent = '';
   $('extendContractModal').style.display = 'flex';
 }
@@ -657,14 +662,19 @@ async function confirmExtendContract() {
     $('extendContractModalMsg').textContent = '연장할 개월수를 입력해주세요.';
     return;
   }
+  const changeTerms = $('ec_change_terms').checked;
+  const body = { type: 'extend_contract', employee_id: extendContractEmpId, additional_months: Number(months) };
+  if (changeTerms) {
+    body.annual_salary_thousand = $('ec_salary').value ? Number($('ec_salary').value) : null;
+    body.contract_rate = $('ec_rate').value ? Number($('ec_rate').value) : 100;
+    body.contract_fixed_amount = $('ec_fixed_amount').value ? Number($('ec_fixed_amount').value) : null;
+    body.contract_proration_mode = $('ec_proration_mode').value;
+  }
   try {
     const res = await fetch(`${apiBase()}/api/hr_employees`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-      body: JSON.stringify({
-        type: 'extend_contract', employee_id: extendContractEmpId, additional_months: Number(months),
-        annual_salary_thousand: $('ec_salary').value ? Number($('ec_salary').value) : null,
-      }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '연장 실패');
