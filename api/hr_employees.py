@@ -356,6 +356,40 @@ class handler(BaseHTTPRequestHandler):
                     return self._send(404, {"error": "예약된 수습 종료(정규직 전환) 일정을 찾을 수 없습니다."})
                 row = scheduled[0]
                 new_date = calendar_months_later_first_day(row["effective_month"][:10], int(additional_months))
+
+                # 근로기준법상 수습 감액(급여 90% 등)은 입사일로부터 최대 3개월까지만 가능.
+                # 연장한 정규직 전환일이 "입사일+3개월" 시점을 넘어가면, 그 시점에 "신분은 계속
+                # 수습이지만 급여는 전액 지급"으로 바뀌는 중간 단계를 자동으로 하나 더 끼워넣음.
+                emp_rows = rest_request("GET", f"employees?id=eq.{emp_id}&select=hire_date")
+                hire_date = emp_rows[0]["hire_date"] if emp_rows else None
+                full_pay_note_tag = "수습 감액 적용기한(3개월) 도과"
+                if hire_date:
+                    full_pay_deadline = calendar_months_later_first_day(hire_date, 3)
+                    if new_date > full_pay_deadline:
+                        already = rest_request(
+                            "GET", f"payroll_settings_history?employee_id=eq.{emp_id}"
+                            f"&effective_month=eq.{full_pay_deadline}&select=id"
+                        )
+                        if not already:
+                            # 3개월 시점 기준값(만근수당 등)은 지금 예약되어 있던 수습 행의 값을 그대로 쓰고,
+                            # pay_rate만 100%로, employment_type은 계속 "수습"으로 유지.
+                            base_row = rest_request(
+                                "GET", f"payroll_settings_history?employee_id=eq.{emp_id}"
+                                f"&effective_month=lte.{full_pay_deadline}&select=*&order=effective_month.desc&limit=1"
+                            )
+                            base = base_row[0] if base_row else {}
+                            rest_request("POST", "payroll_settings_history", body={
+                                "employee_id": emp_id,
+                                "effective_month": full_pay_deadline,
+                                "standard_hours": base.get("standard_hours", 209),
+                                "fixed_overtime_hours": base.get("fixed_overtime_hours", 0),
+                                "attendance_allowance": base.get("attendance_allowance", 0),
+                                "meal_allowance": base.get("meal_allowance", 0),
+                                "employment_type": "수습",
+                                "pay_rate": 1.0,
+                                "note": f"{full_pay_note_tag} — 신분은 수습 유지, 급여만 전액 지급(자동)",
+                            })
+
                 rest_request("PATCH", f"payroll_settings_history?id=eq.{row['id']}", body={
                     "effective_month": new_date,
                     "note": f"수습기간 종료 → 정규직 전환(자동) — {additional_months}개월 연장 반영",
