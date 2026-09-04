@@ -4970,23 +4970,30 @@ function collectBonusReportInputs() {
   return items;
 }
 
-/* 결정기준/율(입력) 칸을 표 전체(또는 아직 비어있는 칸만)에 한 번에 채워넣음.
-   emptyOnly=true면 이미 값이 있는 칸은 건드리지 않고 빈 칸만 채움. */
-function applyBonusCriteriaBulk(emptyOnly) {
+/* 결정기준/율(입력) 칸을 표 전체(또는 아직 비어있는 칸만, 또는 결정성과급이 입력된 사람만)에 채워넣음.
+   emptyOnly=true면 이미 값이 있는 칸은 건드리지 않고 빈 칸만 채움.
+   hasDecidedOnly=true면 그 행의 "결정성과급"(지금 조회 중인 회차 지급액)이 입력된 사람만 채움
+   — 예: 성과급보고서 2차 조회 중 "2차 지급액 있는 사람만" 버튼. */
+function applyBonusCriteriaBulk(emptyOnly, hasDecidedOnly) {
   const value = $('bonusCriteriaBulkInput').value.trim();
   if (!value) {
     alert('일괄 적용할 결정기준/율 값을 먼저 입력해주세요.');
     return;
   }
-  const inputs = document.querySelectorAll('#bonusReportTbody tr[data-emp-id] .bonus-criteria-input');
-  if (inputs.length === 0) {
+  const rows = document.querySelectorAll('#bonusReportTbody tr[data-emp-id]');
+  if (rows.length === 0) {
     alert('먼저 조회를 눌러 직원 목록을 불러와주세요.');
     return;
   }
   let count = 0;
-  inputs.forEach(input => {
-    if (input.disabled) return;  // 마감된 보고서는 건드리지 않음
+  rows.forEach(tr => {
+    const input = tr.querySelector('.bonus-criteria-input');
+    if (!input || input.disabled) return;  // 마감된 보고서는 건드리지 않음
     if (emptyOnly && input.value.trim() !== '') return;
+    if (hasDecidedOnly) {
+      const decidedInput = tr.querySelector('.bonus-decided-input');
+      if (!decidedInput || decidedInput.value.trim() === '') return;
+    }
     input.value = value;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     count += 1;
