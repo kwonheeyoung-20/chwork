@@ -2448,8 +2448,10 @@ async function loadBulkOtherPayList() {
     return loadBulkLeavePayList(year);
   }
 
-  const month = $('bulkOpDate').value;
-  if (!month) { alert('먼저 지급월을 선택해주세요.'); return; }
+  const belongsMonth = $('bulkOpBelongsMonth').value;
+  const payDate = $('bulkOpDate').value;
+  if (!belongsMonth) { alert('먼저 귀속월을 선택해주세요.'); return; }
+  if (!payDate) { alert('먼저 지급일자를 선택해주세요.'); return; }
   $('bulkOpLeaveNote').style.display = 'none';
   $('bulkOpThead').innerHTML = `<tr><th>이름</th><th>지사</th><th>부서</th><th class="num">지급 금액</th></tr>`;
   try {
@@ -2527,15 +2529,18 @@ function recalcLeavePayAmount(inputEl) {
 
 async function saveBulkOtherPayments() {
   const paymentType = $('bulkOpType').value;
-  let date;
+  let belongsMonth, payDate;
   if (paymentType === '연차수당') {
     const year = $('bulkLeaveYear').value;
     if (!year) { alert('귀속연도를 선택해주세요.'); return; }
-    date = `${year}-12-01`;
+    belongsMonth = `${year}-12-01`;
+    payDate = `${year}-12-31`;
   } else {
-    const month = $('bulkOpDate').value;
-    if (!month) { alert('지급월을 선택해주세요.'); return; }
-    date = `${month}-01`;
+    belongsMonth = $('bulkOpBelongsMonth').value;
+    payDate = $('bulkOpDate').value;
+    if (!belongsMonth) { alert('귀속월을 선택해주세요.'); return; }
+    if (!payDate) { alert('지급일자를 선택해주세요.'); return; }
+    belongsMonth = `${belongsMonth}-01`;
   }
 
   const items = [];
@@ -2544,14 +2549,14 @@ async function saveBulkOtherPayments() {
     const input = tr.querySelector('.bulk-op-amount');
     const amount = Number(input?.value || 0);
     if (empId && amount > 0) {
-      items.push({ employee_id: empId, payment_type: paymentType, payment_date: date, amount });
+      items.push({ employee_id: empId, payment_type: paymentType, belongs_month: belongsMonth, payment_date: payDate, amount });
     }
   });
   if (items.length === 0) {
     $('otherPayBulkMsg').textContent = '입력된 금액이 없습니다.';
     return;
   }
-  if (!confirm(`${items.length}명에게 "${paymentType}" ${fmt(items.reduce((s,i)=>s+i.amount,0))}원을 ${date.slice(0,7)}월로 저장하시겠습니까?`)) return;
+  if (!confirm(`${items.length}명에게 "${paymentType}" ${fmt(items.reduce((s,i)=>s+i.amount,0))}원을 귀속월 ${belongsMonth.slice(0,7)}로 저장하시겠습니까?`)) return;
 
   try {
     const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
