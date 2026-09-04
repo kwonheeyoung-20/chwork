@@ -880,7 +880,7 @@
             의사결정 시점에 조회해서 그대로 인쇄해 보고하시고, 이후 기록은 "직급이력 관리"에 계속 쌓입니다.
           </p>
 
-          <div style="display:flex; align-items:center; gap:4px; border-bottom: 0.5px solid var(--border); margin-bottom:14px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:4px; margin-bottom:20px; flex-wrap:wrap;">
             <span style="font-size:10px; color:var(--text-muted); font-weight:600; margin-right:2px; white-space:nowrap;">📊 조회</span>
             <button class="tab-btn active" data-promosub="live" onclick="switchPromotionsSubTab('live')">현재 기준 미리보기</button>
             <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 6px;"></span>
@@ -898,7 +898,6 @@
               <label style="font-size:13px; color:var(--text-secondary);">기준일자:</label>
               <input id="promoAsOf" type="date" class="hr-input" style="width:150px;">
               <button class="secondary" onclick="loadPromotionsLive()">조회</button>
-              <button class="secondary" onclick="downloadPromotionsExcel()">엑셀 다운로드</button>
               <label class="hr-checkbox" style="margin-left:8px;">
                 <input type="checkbox" id="promoIncludeRetired" onchange="loadPromotionsLive()">
                 퇴사자 포함
@@ -910,6 +909,7 @@
             </div>
             <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:14px; flex-wrap:wrap;">
               <button class="secondary" onclick="printCurrentPromoView()">🖨 인쇄</button>
+              <button class="secondary" onclick="downloadPromotionsExcel()">📊 엑셀 다운로드</button>
             </div>
             <div class="table-wrap" id="promoLiveTableWrap">
               <table class="table promo-list-table" id="promoLiveTable">
@@ -1052,6 +1052,7 @@
           <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:14px; flex-wrap:wrap;">
             <button class="secondary" onclick="printBonusReportDecision()">🖨 인쇄(의사결정용)</button>
             <button class="secondary" onclick="printBonusReportFinal()">🖨 인쇄(확정 결정내용)</button>
+            <button class="secondary" onclick="downloadBonusReportExcel()">📊 엑셀 다운로드(확정 결정내용)</button>
           </div>
 
           <div class="table-wrap">
@@ -1147,6 +1148,7 @@
           <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:14px; flex-wrap:wrap;">
             <button class="secondary" onclick="printSalaryIncreaseDecision()">🖨 인쇄(의사결정용)</button>
             <button class="secondary" onclick="printSalaryIncreaseFinal()">🖨 인쇄(확정 결정내용)</button>
+            <button class="secondary" onclick="downloadSalaryIncreaseExcel()">📊 엑셀 다운로드(확정 결정내용)</button>
           </div>
 
           <div class="table-wrap">
