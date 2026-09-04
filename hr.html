@@ -1047,7 +1047,8 @@
             <input id="bonusCriteriaBulkInput" class="hr-input" style="width:180px;" placeholder="예: 기타 기준">
             <button class="secondary" onclick="applyBonusCriteriaBulk(false)">전체 적용</button>
             <button class="secondary" onclick="applyBonusCriteriaBulk(true)">빈 칸에만 적용</button>
-            <span style="font-size:11px; color:var(--text-muted);">아래 표 전체(또는 아직 안 채운 칸만) "결정기준/율(입력)" 칸에 한 번에 채워넣습니다. 그 뒤에 개별로 수정하셔도 됩니다.</span>
+            <button class="secondary" onclick="applyBonusCriteriaBulk(false, true)">2차 지급액 있는 사람만</button>
+            <span style="font-size:11px; color:var(--text-muted);">아래 표 전체(또는 아직 안 채운 칸만, 또는 2차 지급액이 입력된 사람만) "결정기준/율(입력)" 칸에 한 번에 채워넣습니다. 그 뒤에 개별로 수정하셔도 됩니다.</span>
           </div>
 
           <div class="table-wrap">
@@ -1951,7 +1952,9 @@
   <div class="hr-modal" style="width:380px;">
     <h2 id="extendProbationTitle">수습연장</h2>
     <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
-      예약되어 있는 "정규직 전환 예정일"을 몇 개월 더 뒤로 미룹니다. 그 사이 기간은 계속 기존 수습 조건이 그대로 적용됩니다.
+      예약되어 있는 "정규직 전환 예정일"을 몇 개월 더 뒤로 미룹니다. 근로기준법상 수습 감액(급여 일부 차감)은
+      입사일로부터 최대 3개월까지만 가능해서, 연장한 전환일이 그 3개월 시점을 넘어가면 <b>그 시점부터는
+      신분은 계속 수습이지만 급여는 자동으로 전액(100%) 지급</b>으로 바뀝니다.
     </p>
     <div class="hr-form-grid" style="grid-template-columns:1fr;">
       <label>추가 연장 개월수 <input id="ep_months" type="number" min="1" class="hr-input" placeholder="예: 1"></label>
