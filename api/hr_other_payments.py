@@ -68,6 +68,17 @@ def year_of(date_str):
     return date_str[:4] if date_str else None
 
 
+def default_fiscal_year(payment_type, payment_date):
+    """귀속연도를 직접 안 넣었을 때의 기본값. 원칙은 지급일의 연도 그대로지만,
+    "성과급2차"는 보통 익년 1~2월에 지급되는 관행이 있어서, 그 경우엔 전년도
+    실적으로 보고 한 해 앞당김."""
+    y = int(payment_date[:4])
+    m = int(payment_date[5:7])
+    if payment_type == "성과급2차" and m in (1, 2):
+        return y - 1
+    return y
+
+
 def is_period_locked(period_key):
     rows = rest_request("GET", f"period_locks?module=eq.other_payments&period_key=eq.{period_key}&select=locked") or []
     return bool(rows) and rows[0].get("locked", False)
@@ -277,6 +288,7 @@ class handler(BaseHTTPRequestHandler):
                 "employee_id": r["employee_id"],
                 "payment_type": f"성과급{round_no}차",
                 "payment_date": pay_date,
+                "fiscal_year": year,
                 "amount": r["decided_amount"],
                 "note": note_text,
             }, prefer="return=representation")
@@ -319,7 +331,7 @@ class handler(BaseHTTPRequestHandler):
             if employee_id:
                 filt += f"&employee_id=eq.{employee_id}"
             if year:
-                filt += f"&payment_date=gte.{year}-01-01&payment_date=lte.{year}-12-31"
+                filt += f"&fiscal_year=eq.{year}"
             data = rest_request("GET", f"other_payments?{filt}&order=payment_date.desc")
             return self._send(200, {"payments": data})
         except SupabaseError as e:
@@ -362,14 +374,16 @@ class handler(BaseHTTPRequestHandler):
                 for it in items:
                     if not it.get("employee_id") or not it.get("payment_date") or it.get("amount") is None:
                         continue
-                    y = year_of(it["payment_date"])
-                    if is_period_locked(y):
-                        locked_years.add(y)
+                    ptype = it.get("payment_type") or "기타수당"
+                    fy = it.get("fiscal_year") or default_fiscal_year(ptype, it["payment_date"])
+                    if is_period_locked(str(fy)):
+                        locked_years.add(str(fy))
                         continue
                     body.append({
                         "employee_id": it["employee_id"],
-                        "payment_type": it.get("payment_type") or "기타수당",
+                        "payment_type": ptype,
                         "payment_date": it["payment_date"],
+                        "fiscal_year": fy,
                         "amount": it["amount"],
                         "note": it.get("note"),
                     })
@@ -384,13 +398,15 @@ class handler(BaseHTTPRequestHandler):
             amount = payload.get("amount")
             if not emp_id or not payment_type or not payment_date or amount is None:
                 return self._send(400, {"error": "employee_id, payment_type, payment_date, amount는 필수입니다"})
-            if is_period_locked(year_of(payment_date)):
-                return self._send(423, {"error": f"{year_of(payment_date)}년은 마감되어 있습니다. 먼저 마감해제해주세요."})
+            fiscal_year = payload.get("fiscal_year") or default_fiscal_year(payment_type, payment_date)
+            if is_period_locked(str(fiscal_year)):
+                return self._send(423, {"error": f"{fiscal_year}년은 마감되어 있습니다. 먼저 마감해제해주세요."})
 
             created = rest_request("POST", "other_payments", body={
                 "employee_id": emp_id,
                 "payment_type": payment_type,
                 "payment_date": payment_date,
+                "fiscal_year": fiscal_year,
                 "amount": amount,
                 "note": payload.get("note"),
             }, prefer="return=representation")
@@ -412,14 +428,17 @@ class handler(BaseHTTPRequestHandler):
             raw = self.rfile.read(length) if length else b"{}"
             payload = json.loads(raw or b"{}")
 
-            existing = rest_request("GET", f"other_payments?id=eq.{item_id}&select=payment_date")
+            existing = rest_request("GET", f"other_payments?id=eq.{item_id}&select=payment_date,payment_type,fiscal_year")
             if existing:
-                check_date = payload.get("payment_date") or existing[0]["payment_date"]
-                if is_period_locked(year_of(check_date)) or is_period_locked(year_of(existing[0]["payment_date"])):
+                old_fy = existing[0].get("fiscal_year") or default_fiscal_year(existing[0]["payment_type"], existing[0]["payment_date"])
+                new_type = payload.get("payment_type") or existing[0]["payment_type"]
+                new_date = payload.get("payment_date") or existing[0]["payment_date"]
+                new_fy = payload.get("fiscal_year") or default_fiscal_year(new_type, new_date)
+                if is_period_locked(str(new_fy)) or is_period_locked(str(old_fy)):
                     return self._send(423, {"error": "마감된 연도의 데이터는 수정할 수 없습니다. 먼저 마감해제해주세요."})
 
             update_fields = {}
-            for f in ("payment_type", "payment_date", "amount", "note"):
+            for f in ("payment_type", "payment_date", "amount", "note", "fiscal_year"):
                 if f in payload and payload[f] is not None:
                     update_fields[f] = payload[f]
             if not update_fields:
@@ -441,9 +460,11 @@ class handler(BaseHTTPRequestHandler):
             if not item_id:
                 return self._send(400, {"error": "id는 필수입니다"})
 
-            existing = rest_request("GET", f"other_payments?id=eq.{item_id}&select=payment_date")
-            if existing and is_period_locked(year_of(existing[0]["payment_date"])):
-                return self._send(423, {"error": "마감된 연도의 데이터는 삭제할 수 없습니다. 먼저 마감해제해주세요."})
+            existing = rest_request("GET", f"other_payments?id=eq.{item_id}&select=payment_date,payment_type,fiscal_year")
+            if existing:
+                fy = existing[0].get("fiscal_year") or default_fiscal_year(existing[0]["payment_type"], existing[0]["payment_date"])
+                if is_period_locked(str(fy)):
+                    return self._send(423, {"error": "마감된 연도의 데이터는 삭제할 수 없습니다. 먼저 마감해제해주세요."})
 
             rest_request("DELETE", f"other_payments?id=eq.{item_id}")
             return self._send(200, {"ok": True})

@@ -370,7 +370,7 @@ class handler(BaseHTTPRequestHandler):
 
                 other_rows = rest_request(
                     "GET",
-                    f"other_payments?payment_date=gte.{year}-01-01&payment_date=lte.{year}-12-31"
+                    f"other_payments?fiscal_year=eq.{year}"
                     f"&select=employee_id,payment_type,amount",
                 ) or []
                 PAYMENT_TYPES = ["성과급1차", "성과급2차", "상여금", "기타수당", "연차수당"]
@@ -422,7 +422,7 @@ class handler(BaseHTTPRequestHandler):
 
                 other_rows = rest_request(
                     "GET",
-                    f"other_payments?employee_id=eq.{emp_id}&payment_date=gte.{year}-01-01&payment_date=lte.{year}-12-31"
+                    f"other_payments?employee_id=eq.{emp_id}&fiscal_year=eq.{year}"
                     f"&select=payment_date,payment_type,amount",
                 ) or []
 
@@ -430,6 +430,11 @@ class handler(BaseHTTPRequestHandler):
                 other_by_month = {}
                 for r in other_rows:
                     mo = r["payment_date"][:7]
+                    # 성과급2차처럼 "익년 지급"이라 실제 지급월이 이 귀속연도 범위(1~12월) 밖이면,
+                    # 이 연도의 12월 칸으로 접어서 보여줌(빠뜨리지 않기 위함) — 위쪽 별도
+                    # 지급일자 안내로 실제 지급월은 따로 확인 가능.
+                    if mo[:4] != str(year):
+                        mo = f"{year}-12"
                     other_by_month.setdefault(mo, {t: 0 for t in PAYMENT_TYPES})
                     ptype = r["payment_type"] if r["payment_type"] in PAYMENT_TYPES else "기타수당"
                     other_by_month[mo][ptype] = other_by_month[mo].get(ptype, 0) + (r["amount"] or 0)
