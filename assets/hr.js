@@ -2273,33 +2273,42 @@ async function populateOtherPayEmployeeSelect() {
 async function loadOtherPayments() {
   const year = $('otherpayYear').value;
   const tbody = $('otherpayTbody');
-  tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
     const res = await fetch(`${apiBase()}/api/hr_other_payments?year=${year}`, {
       headers: { 'X-HR-Password': hrPassword() },
     });
     const data = await res.json();
     const list = data.payments || [];
+    otherPaymentsCache = list;
     $('otherpayCount').textContent = `총 ${list.length}건`;
     if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">${year}년 지급 내역이 없습니다.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">${year}년 지급 내역이 없습니다.</td></tr>`;
     } else {
-      tbody.innerHTML = list.map(p => `
+      tbody.innerHTML = list.map(p => {
+        const fy = p.fiscal_year || (p.payment_date || '').slice(0, 4);
+        const fyDiffers = String(fy) !== (p.payment_date || '').slice(0, 4);
+        return `
         <tr>
           <td>${esc(p.employees?.name || '-')}</td>
           <td>${esc(p.employees?.branch || '-')}</td>
           <td>${esc(p.employees?.department || '-')}</td>
           <td>${esc(p.payment_type)}</td>
           <td>${esc((p.payment_date || '').slice(0,7))}</td>
+          <td${fyDiffers ? ' style="color:var(--red); font-weight:600;"' : ''}>${esc(String(fy))}${fyDiffers ? ' ⚠' : ''}</td>
           <td class="num">${fmt(p.amount)}</td>
           <td>${esc(p.note || '-')}</td>
-          <td><a class="hr-edit-link" onclick="deleteOtherPayment('${p.id}')">삭제</a></td>
+          <td>
+            <a class="hr-edit-link" onclick="openOtherPayModal('${p.id}')">수정</a>
+            <a class="hr-edit-link" style="margin-left:6px;" onclick="deleteOtherPayment('${p.id}')">삭제</a>
+          </td>
         </tr>
-      `).join('');
+      `;
+      }).join('');
       const total = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
       tbody.innerHTML += `
         <tr class="hr-total-row">
-          <td colspan="5">합계 (${list.length}건)</td>
+          <td colspan="6">합계 (${list.length}건)</td>
           <td class="num">${fmt(total)}</td>
           <td colspan="2"></td>
         </tr>
@@ -2314,14 +2323,14 @@ async function loadOtherPayments() {
         byBranch[b].push(p);
       });
       tbody.innerHTML += `
-        <tr><td colspan="8" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
+        <tr><td colspan="9" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
       `;
       branchOrder.forEach(b => {
         const arr = byBranch[b];
         const branchTotal = arr.reduce((s, p) => s + (Number(p.amount) || 0), 0);
         tbody.innerHTML += `
           <tr class="hr-total-row">
-            <td colspan="5">${esc(b)} (${arr.length}건)</td>
+            <td colspan="6">${esc(b)} (${arr.length}건)</td>
             <td class="num">${fmt(branchTotal)}</td>
             <td colspan="2"></td>
           </tr>
@@ -2330,19 +2339,40 @@ async function loadOtherPayments() {
     }
     refreshOtherPayLockStatus();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
-function openOtherPayModal() {
-  $('op_date').value = '';
-  $('op_amount').value = '';
-  $('op_note').value = '';
+let otherPaymentsCache = [];
+let editingOtherPayId = null;
+
+function openOtherPayModal(id) {
+  editingOtherPayId = id || null;
+  const existing = id ? otherPaymentsCache.find(p => p.id === id) : null;
+  $('otherPayModalTitle').textContent = existing ? '성과급/기타지급 수정' : '성과급/기타지급 추가';
+  $('op_employee_id').value = existing ? existing.employee_id : '';
+  $('op_payment_type').value = existing ? existing.payment_type : '성과급1차';
+  $('op_date').value = existing ? (existing.payment_date || '').slice(0, 7) : '';
+  $('op_amount').value = existing ? existing.amount : '';
+  $('op_note').value = existing ? (existing.note || '') : '';
+  $('op_fiscal_year').value = existing ? (existing.fiscal_year || (existing.payment_date || '').slice(0, 4)) : '';
   $('otherPayMsg').textContent = '';
   $('otherPayModal').style.display = 'flex';
 }
 function closeOtherPayModal() {
   $('otherPayModal').style.display = 'none';
+}
+
+/* 지급월/지급유형을 고르면, "성과급2차 + 1~2월"인 경우만 전년도로 자동 채움
+   (그 외엔 지급월과 같은 해). 사용자가 직접 고친 값은 안 건드림 — 지급월/유형을
+   바꿀 때마다 다시 계산해서 채워주는 정도로만 도와줌. */
+function autofillOtherPayFiscalYear() {
+  const dateVal = $('op_date').value;
+  if (!dateVal) return;
+  const [y, m] = dateVal.split('-').map(Number);
+  const type = $('op_payment_type').value;
+  const fy = (type === '성과급2차' && (m === 1 || m === 2)) ? y - 1 : y;
+  $('op_fiscal_year').value = fy;
 }
 
 async function saveOtherPayment() {
@@ -2352,14 +2382,18 @@ async function saveOtherPayment() {
     payment_date: $('op_date').value ? `${$('op_date').value}-01` : '',
     amount: Number($('op_amount').value),
     note: $('op_note').value.trim() || null,
+    fiscal_year: $('op_fiscal_year').value ? Number($('op_fiscal_year').value) : null,
   };
   if (!payload.employee_id || !payload.payment_date || !payload.amount) {
     $('otherPayMsg').textContent = '직원, 지급월, 금액은 필수입니다.';
     return;
   }
   try {
-    const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
-      method: 'POST',
+    const url = editingOtherPayId
+      ? `${apiBase()}/api/hr_other_payments?id=${editingOtherPayId}`
+      : `${apiBase()}/api/hr_other_payments`;
+    const res = await fetch(url, {
+      method: editingOtherPayId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
       body: JSON.stringify(payload),
     });
