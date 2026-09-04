@@ -6060,6 +6060,37 @@ function downloadPromotionsExcel() {
   XLSX.writeFile(wb, `인사기록보고서_${$('promoAsOf').value || 'now'}.xlsx`);
 }
 
+function downloadBonusReportExcel() {
+  if (!bonusReportCache || bonusReportCache.length === 0) { alert('먼저 조회해주세요.'); return; }
+  const { year, round } = bonusReportMetaCache;
+  const rows = [['순번', '이름', '지사', '부서', '직급', '결정기준/율', '결정성과급', '비고']];
+  bonusReportCache.forEach((e, idx) => {
+    rows.push([idx + 1, e.name, e.branch || '', e.department || '', e.position || '',
+      e.criteria || '', e.decided_amount ?? '', e.note || '']);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${year}년 ${round}차`);
+  XLSX.writeFile(wb, `성과급보고서_${year}_${round}차_확정내용.xlsx`);
+}
+
+function downloadSalaryIncreaseExcel() {
+  if (!siReportCache || siReportCache.length === 0) { alert('먼저 조회해주세요.'); return; }
+  const { year } = siReportMetaCache;
+  const rows = [['순번', '이름', '지사', '부서', '직급', '결정연봉', '적용월', '인상액', '인상률', '비고']];
+  siReportCache.forEach((e, idx) => {
+    rows.push([idx + 1, e.name, e.branch || '', e.department || '', e.position || '',
+      e.decided_salary ?? '', e.applied_month || '',
+      (e.decided_salary != null && e.salary_now != null) ? e.decided_salary - e.salary_now : '',
+      (e.decided_salary != null && e.salary_now) ? (((e.decided_salary - e.salary_now) / e.salary_now) * 100).toFixed(1) + '%' : '',
+      e.note || '']);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${year}년`);
+  XLSX.writeFile(wb, `연봉인상보고서_${year}_확정내용.xlsx`);
+}
+
 /* ── 직급이력 관리 ── */
 async function populatePromoHistoryEmployeeSelect() {
   const sel = $('promoHistoryEmployeeSelect');
