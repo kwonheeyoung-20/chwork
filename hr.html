@@ -1046,9 +1046,14 @@
             <label style="font-size:13px; color:var(--text-secondary); white-space:nowrap;">결정기준/율 일괄입력:</label>
             <input id="bonusCriteriaBulkInput" class="hr-input" style="width:180px;" placeholder="예: 기타 기준">
             <button class="secondary" onclick="applyBonusCriteriaBulk(false)">전체 적용</button>
-            <button class="secondary" onclick="applyBonusCriteriaBulk(true)">빈 칸에만 적용</button>
-            <button class="secondary" onclick="applyBonusCriteriaBulk(false, true)">2차 지급액 있는 사람만</button>
-            <span style="font-size:11px; color:var(--text-muted);">아래 표 전체(또는 아직 안 채운 칸만, 또는 2차 지급액이 입력된 사람만) "결정기준/율(입력)" 칸에 한 번에 채워넣습니다. 그 뒤에 개별로 수정하셔도 됩니다.</span>
+            <span style="font-size:11px; color:var(--text-muted);">아래 표 전체 "결정기준/율(입력)" 칸에 한 번에 채워넣습니다. 그 뒤에 개별로 수정하셔도 됩니다.</span>
+          </div>
+
+          <div id="bonusHistCriteriaBar" style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:10px 12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary); white-space:nowrap;">과거 연도 기준/율 일괄채우기(지급액 있는 사람만, 빈칸인 경우만):</label>
+            <input id="bonusHistCriteriaInput" class="hr-input" style="width:150px;" placeholder="예: 기타기준">
+            <button class="secondary" id="bonusHistY2Btn" onclick="applyBonusHistCriteria('y2')">- </button>
+            <button class="secondary" id="bonusHistY1Btn" onclick="applyBonusHistCriteria('y1')">- </button>
           </div>
 
           <div class="table-wrap">
