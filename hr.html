@@ -904,10 +904,12 @@
                 퇴사자 포함
               </label>
             </div>
-            <div style="display:flex; gap:4px; margin-bottom:12px;">
+            <div style="display:flex; gap:4px; margin-bottom:14px;">
               <button class="tab-btn active" data-promoview="list" onclick="switchPromoViewMode('list')">목록형</button>
               <button class="tab-btn" data-promoview="matrix" onclick="switchPromoViewMode('matrix')">직급별 이력표</button>
-              <button class="secondary" onclick="printCurrentPromoView()" style="margin-left:8px;">🖨 인쇄</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:14px; flex-wrap:wrap;">
+              <button class="secondary" onclick="printCurrentPromoView()">🖨 인쇄</button>
             </div>
             <div class="table-wrap" id="promoLiveTableWrap">
               <table class="table promo-list-table" id="promoLiveTable">
@@ -1032,9 +1034,14 @@
             <span id="bonusLockStatus" style="font-size:12px; color:var(--text-muted); margin-left:8px;"></span>
           </div>
 
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-            <button class="secondary" onclick="printBonusReportDecision()">🖨 인쇄(의사결정용)</button>
-            <button class="secondary" onclick="printBonusReportFinal()">🖨 인쇄(확정 결정내용)</button>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:10px 12px; background:#fff9ec; border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary); white-space:nowrap;">결정기준/율 일괄입력:</label>
+            <input id="bonusCriteriaBulkInput" class="hr-input" style="width:180px;" placeholder="예: 기타 기준">
+            <button class="secondary" onclick="applyBonusCriteriaBulk(false)">전체 적용</button>
+            <span style="font-size:11px; color:var(--text-muted);">아래 표 전체 "결정기준/율(입력)" 칸에 한 번에 채워넣습니다. 그 뒤에 개별로 수정하셔도 됩니다.</span>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:10px 12px; background:#fff9ec; border-radius:var(--radius-sm); flex-wrap:wrap;">
             <button class="primary" onclick="saveBonusReportDraft()">💾 입력내용 저장(초안)</button>
             <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 4px;"></span>
             <label style="font-size:13px; color:var(--text-secondary);">지급일자:</label>
@@ -1042,11 +1049,9 @@
             <button class="primary" onclick="finalizeBonusReport()" style="background:var(--red,#c82828);">✅ 확정(마감) — 성과급/기타지급에 반영</button>
           </div>
 
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding:10px 12px; background:#fff9ec; border-radius:var(--radius-sm); flex-wrap:wrap;">
-            <label style="font-size:13px; color:var(--text-secondary); white-space:nowrap;">결정기준/율 일괄입력:</label>
-            <input id="bonusCriteriaBulkInput" class="hr-input" style="width:180px;" placeholder="예: 기타 기준">
-            <button class="secondary" onclick="applyBonusCriteriaBulk(false)">전체 적용</button>
-            <span style="font-size:11px; color:var(--text-muted);">아래 표 전체 "결정기준/율(입력)" 칸에 한 번에 채워넣습니다. 그 뒤에 개별로 수정하셔도 됩니다.</span>
+          <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:14px; flex-wrap:wrap;">
+            <button class="secondary" onclick="printBonusReportDecision()">🖨 인쇄(의사결정용)</button>
+            <button class="secondary" onclick="printBonusReportFinal()">🖨 인쇄(확정 결정내용)</button>
           </div>
 
           <div class="table-wrap">
@@ -1133,13 +1138,15 @@
             <span style="font-size:11px; color:var(--text-muted);">결정연봉이 실제로 적용되는 시작월이에요. 확정 시 이 월부터 연봉이력에 반영되고, 소급분 계산의 시작점이 됩니다.</span>
           </div>
 
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-            <button class="secondary" onclick="printSalaryIncreaseDecision()">🖨 인쇄(의사결정용)</button>
-            <button class="secondary" onclick="printSalaryIncreaseFinal()">🖨 인쇄(확정 결정내용)</button>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:10px 12px; background:#fff9ec; border-radius:var(--radius-sm); flex-wrap:wrap;">
             <button class="primary" onclick="saveSalaryIncreaseDraft()">💾 입력내용 저장(초안)</button>
-            <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 4px;"></span>
             <button class="primary" id="siFinalizeBtn" onclick="openSiFinalizeModal()" style="background:var(--red,#c82828);">✅ 확정(마감) — 연봉·소급 반영</button>
             <button class="secondary" id="siUnlockBtn" onclick="unlockSalaryIncreaseReport()" style="display:none;">이 연도 반영분 전체 되돌리기</button>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:14px; flex-wrap:wrap;">
+            <button class="secondary" onclick="printSalaryIncreaseDecision()">🖨 인쇄(의사결정용)</button>
+            <button class="secondary" onclick="printSalaryIncreaseFinal()">🖨 인쇄(확정 결정내용)</button>
           </div>
 
           <div class="table-wrap">
