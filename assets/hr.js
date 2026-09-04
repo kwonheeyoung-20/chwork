@@ -4897,6 +4897,8 @@ async function loadBonusReport() {
     bonusReportMetaCache = { year: data.year, round: data.round, y1: data.y1, y2: data.y2, locked: data.locked };
     $('bonusY2GroupHeader').textContent = `${data.y2}년 이력 (전전년도)`;
     $('bonusY1GroupHeader').textContent = `${data.y1}년 이력 (직전년도)`;
+    $('bonusHistY2Btn').textContent = `${data.y2}년(${round}차) 채우기`;
+    $('bonusHistY1Btn').textContent = `${data.y1}년(${round}차) 채우기`;
     $('bonusLockStatus').textContent = data.locked ? `🔒 ${year}년 ${round}차 마감됨` : `${year}년 ${round}차 마감 전`;
     const parsed = parseBonusCriteriaNote(data.criteria_note || '');
     $('bonusCriteriaNote').value = parsed.freeText;
@@ -4921,6 +4923,37 @@ async function loadBonusReport() {
     renderBonusReportTotals();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
+  }
+}
+
+/* 과거 연도(y1/y2)의 "기준/율" — 실제로는 그 해 지급기록(other_payments)의 note에
+   저장되어 있어서, 화면 입력이 아니라 별도 API로 그 해 기록을 직접 고쳐써야 함.
+   지급액이 있고, 아직 note가 비어있는 사람만 채움(이미 적어둔 내용은 안 건드림). */
+async function applyBonusHistCriteria(which) {
+  const value = $('bonusHistCriteriaInput').value.trim();
+  if (!value) {
+    alert('채워넣을 기준/율 값을 먼저 입력해주세요.');
+    return;
+  }
+  if (!bonusReportMetaCache.year) {
+    alert('먼저 조회를 눌러주세요.');
+    return;
+  }
+  const targetYear = which === 'y2' ? bonusReportMetaCache.y2 : bonusReportMetaCache.y1;
+  const round = bonusReportMetaCache.round;
+  if (!confirm(`${targetYear}년 ${round}차 성과급 지급기록 중, 지급액이 있고 기준/율이 비어있는 사람만 "${value}"로 채우시겠습니까?`)) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'bulk_set_history_criteria', year: targetYear, round, criteria_text: value }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '처리 실패');
+    alert(`${data.count}명에게 채워넣었습니다.`);
+    loadBonusReport();
+  } catch (e) {
+    alert('처리 중 오류가 발생했습니다: ' + (e.message || ''));
   }
 }
 
@@ -5031,30 +5064,23 @@ function collectBonusReportInputs() {
   return items;
 }
 
-/* 결정기준/율(입력) 칸을 표 전체(또는 아직 비어있는 칸만, 또는 결정성과급이 입력된 사람만)에 채워넣음.
-   emptyOnly=true면 이미 값이 있는 칸은 건드리지 않고 빈 칸만 채움.
-   hasDecidedOnly=true면 그 행의 "결정성과급"(지금 조회 중인 회차 지급액)이 입력된 사람만 채움
-   — 예: 성과급보고서 2차 조회 중 "2차 지급액 있는 사람만" 버튼. */
-function applyBonusCriteriaBulk(emptyOnly, hasDecidedOnly) {
+/* 결정기준/율(입력) 칸을 표 전체(또는 아직 비어있는 칸만)에 한 번에 채워넣음.
+   emptyOnly=true면 이미 값이 있는 칸은 건드리지 않고 빈 칸만 채움. */
+function applyBonusCriteriaBulk(emptyOnly) {
   const value = $('bonusCriteriaBulkInput').value.trim();
   if (!value) {
     alert('일괄 적용할 결정기준/율 값을 먼저 입력해주세요.');
     return;
   }
-  const rows = document.querySelectorAll('#bonusReportTbody tr[data-emp-id]');
-  if (rows.length === 0) {
+  const inputs = document.querySelectorAll('#bonusReportTbody tr[data-emp-id] .bonus-criteria-input');
+  if (inputs.length === 0) {
     alert('먼저 조회를 눌러 직원 목록을 불러와주세요.');
     return;
   }
   let count = 0;
-  rows.forEach(tr => {
-    const input = tr.querySelector('.bonus-criteria-input');
-    if (!input || input.disabled) return;  // 마감된 보고서는 건드리지 않음
+  inputs.forEach(input => {
+    if (input.disabled) return;  // 마감된 보고서는 건드리지 않음
     if (emptyOnly && input.value.trim() !== '') return;
-    if (hasDecidedOnly) {
-      const decidedInput = tr.querySelector('.bonus-decided-input');
-      if (!decidedInput || decidedInput.value.trim() === '') return;
-    }
     input.value = value;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     count += 1;
