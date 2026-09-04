@@ -2285,17 +2285,21 @@ async function loadOtherPayments() {
     if (list.length === 0) {
       tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">${year}년 지급 내역이 없습니다.</td></tr>`;
     } else {
-      tbody.innerHTML = list.map(p => {
-        const fy = p.fiscal_year || (p.payment_date || '').slice(0, 4);
-        const fyDiffers = String(fy) !== (p.payment_date || '').slice(0, 4);
+      tbody.innerHTML = list.map((p, idx) => {
+        const belongsMonth = (p.belongs_month || p.payment_date || '').slice(0, 7);
+        const payDate = p.payment_date || '-';
+        const fy = p.fiscal_year || belongsMonth.slice(0, 4);
+        const fyDiffers = String(fy) !== belongsMonth.slice(0, 4);
         return `
         <tr>
+          <td>${idx + 1}</td>
           <td>${esc(p.employees?.name || '-')}</td>
           <td>${esc(p.employees?.branch || '-')}</td>
           <td>${esc(p.employees?.department || '-')}</td>
+          <td>${esc(p.employees?.position || '-')}</td>
           <td>${esc(p.payment_type)}</td>
-          <td>${esc((p.payment_date || '').slice(0,7))}</td>
-          <td${fyDiffers ? ' style="color:var(--red); font-weight:600;"' : ''}>${esc(String(fy))}${fyDiffers ? ' ⚠' : ''}</td>
+          <td${fyDiffers ? ' style="color:var(--red); font-weight:600;"' : ''}>${esc(belongsMonth)}${fyDiffers ? ' ⚠' : ''}</td>
+          <td>${esc(payDate)}</td>
           <td class="num">${fmt(p.amount)}</td>
           <td>${esc(p.note || '-')}</td>
           <td>
@@ -2308,7 +2312,7 @@ async function loadOtherPayments() {
       const total = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
       tbody.innerHTML += `
         <tr class="hr-total-row">
-          <td colspan="6">합계 (${list.length}건)</td>
+          <td colspan="8">합계 (${list.length}건)</td>
           <td class="num">${fmt(total)}</td>
           <td colspan="2"></td>
         </tr>
@@ -2323,14 +2327,14 @@ async function loadOtherPayments() {
         byBranch[b].push(p);
       });
       tbody.innerHTML += `
-        <tr><td colspan="9" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
+        <tr><td colspan="11" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
       `;
       branchOrder.forEach(b => {
         const arr = byBranch[b];
         const branchTotal = arr.reduce((s, p) => s + (Number(p.amount) || 0), 0);
         tbody.innerHTML += `
           <tr class="hr-total-row">
-            <td colspan="6">${esc(b)} (${arr.length}건)</td>
+            <td colspan="8">${esc(b)} (${arr.length}건)</td>
             <td class="num">${fmt(branchTotal)}</td>
             <td colspan="2"></td>
           </tr>
@@ -2339,7 +2343,7 @@ async function loadOtherPayments() {
     }
     refreshOtherPayLockStatus();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
@@ -2352,10 +2356,11 @@ function openOtherPayModal(id) {
   $('otherPayModalTitle').textContent = existing ? '성과급/기타지급 수정' : '성과급/기타지급 추가';
   $('op_employee_id').value = existing ? existing.employee_id : '';
   $('op_payment_type').value = existing ? existing.payment_type : '성과급1차';
-  $('op_date').value = existing ? (existing.payment_date || '').slice(0, 7) : '';
+  $('op_belongs_month').value = existing ? (existing.belongs_month || existing.payment_date || '').slice(0, 7) : '';
+  $('op_date').value = existing ? (existing.payment_date || '') : '';
   $('op_amount').value = existing ? existing.amount : '';
   $('op_note').value = existing ? (existing.note || '') : '';
-  $('op_fiscal_year').value = existing ? (existing.fiscal_year || (existing.payment_date || '').slice(0, 4)) : '';
+  $('op_fiscal_year').value = existing ? (existing.fiscal_year || (existing.belongs_month || existing.payment_date || '').slice(0, 4)) : '';
   $('otherPayMsg').textContent = '';
   $('otherPayModal').style.display = 'flex';
 }
@@ -2363,29 +2368,25 @@ function closeOtherPayModal() {
   $('otherPayModal').style.display = 'none';
 }
 
-/* 지급월/지급유형을 고르면, "성과급2차 + 1~2월"인 경우만 전년도로 자동 채움
-   (그 외엔 지급월과 같은 해). 사용자가 직접 고친 값은 안 건드림 — 지급월/유형을
-   바꿀 때마다 다시 계산해서 채워주는 정도로만 도와줌. */
+/* 귀속월을 고르면 귀속연도는 그 연도로 자동 채움(직접 고쳐도 됨). */
 function autofillOtherPayFiscalYear() {
-  const dateVal = $('op_date').value;
-  if (!dateVal) return;
-  const [y, m] = dateVal.split('-').map(Number);
-  const type = $('op_payment_type').value;
-  const fy = (type === '성과급2차' && (m === 1 || m === 2)) ? y - 1 : y;
-  $('op_fiscal_year').value = fy;
+  const belongsVal = $('op_belongs_month').value;
+  if (!belongsVal) return;
+  $('op_fiscal_year').value = Number(belongsVal.split('-')[0]);
 }
 
 async function saveOtherPayment() {
   const payload = {
     employee_id: $('op_employee_id').value,
     payment_type: $('op_payment_type').value,
-    payment_date: $('op_date').value ? `${$('op_date').value}-01` : '',
+    belongs_month: $('op_belongs_month').value ? `${$('op_belongs_month').value}-01` : '',
+    payment_date: $('op_date').value || '',
     amount: Number($('op_amount').value),
     note: $('op_note').value.trim() || null,
     fiscal_year: $('op_fiscal_year').value ? Number($('op_fiscal_year').value) : null,
   };
-  if (!payload.employee_id || !payload.payment_date || !payload.amount) {
-    $('otherPayMsg').textContent = '직원, 지급월, 금액은 필수입니다.';
+  if (!payload.employee_id || !payload.belongs_month || !payload.payment_date || !payload.amount) {
+    $('otherPayMsg').textContent = '직원, 귀속월, 지급일자, 금액은 필수입니다.';
     return;
   }
   try {
@@ -5128,7 +5129,9 @@ async function saveBonusCriteriaNote() {
 async function finalizeBonusReport() {
   const year = Number($('bonusYear').value);
   const round = Number($('bonusRound').value);
+  const belongsMonth = $('bonusBelongsMonth').value;
   const payDate = $('bonusPayDate').value;
+  if (!belongsMonth) { alert('귀속월을 먼저 선택해주세요.'); return; }
   if (!payDate) { alert('지급일자를 먼저 선택해주세요.'); return; }
   if (!confirm(`${year}년 ${round}차 성과급을 확정(마감)하시겠습니까?\n결정된 금액이 "성과급/기타지급"에 자동 등록되고, 이 차수는 잠깁니다.`)) return;
 
@@ -5142,7 +5145,7 @@ async function finalizeBonusReport() {
     const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
-      body: JSON.stringify({ type: 'bonus_finalize', year, round, pay_date: payDate }),
+      body: JSON.stringify({ type: 'bonus_finalize', year, round, belongs_month: `${belongsMonth}-01`, pay_date: payDate }),
     });
     const data = await res.json();
     if (!res.ok) { alert('확정 실패: ' + (data.error || '')); return; }
