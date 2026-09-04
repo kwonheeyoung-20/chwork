@@ -343,6 +343,44 @@ class handler(BaseHTTPRequestHandler):
             # 수습연장: {"type": "extend_probation", employee_id, additional_months}
             # 이미 예약되어 있는 "수습기간 종료 → 정규직 전환" 행을 찾아서, 그 날짜를 몇 개월 더 뒤로 미룸.
             # (그 사이 기간은 계속 기존 수습 행이 그대로 적용되므로, 새 수습 행을 따로 만들 필요 없음)
+            # 계약연장(재계약): {"type": "extend_contract", employee_id, additional_months, annual_salary_thousand(선택)}
+            # 현재 계약직 상태인 최신 급여설정 행을 찾아서, 계약종료일만 뒤로 미룸.
+            # 급여(연봉)를 같이 입력하면, 원래 계약종료일 다음날부터 새 조건으로 salary_history도 갱신.
+            if isinstance(payload, dict) and payload.get("type") == "extend_contract":
+                emp_id = payload.get("employee_id")
+                additional_months = payload.get("additional_months")
+                if not emp_id or not additional_months:
+                    return self._send(400, {"error": "employee_id, additional_months는 필수입니다"})
+                current = rest_request(
+                    "GET", f"payroll_settings_history?employee_id=eq.{emp_id}&contract_end_date=not.is.null"
+                    "&select=*&order=effective_month.desc&limit=1"
+                )
+                if not current:
+                    return self._send(404, {"error": "현재 계약직 상태의 급여설정을 찾을 수 없습니다."})
+                row = current[0]
+                old_end_date = row["contract_end_date"][:10]
+                new_end_date = add_months(old_end_date, int(additional_months))
+                rest_request("PATCH", f"payroll_settings_history?id=eq.{row['id']}", body={
+                    "contract_end_date": new_end_date,
+                    "note": (row.get("note") or "") + f" — {additional_months}개월 연장(재계약, {new_end_date}까지)",
+                })
+                if payload.get("annual_salary_thousand") is not None:
+                    new_terms_start = (datetime.date.fromisoformat(old_end_date) + datetime.timedelta(days=1)).isoformat()
+                    existing_sal = rest_request(
+                        "GET", f"salary_history?employee_id=eq.{emp_id}&effective_month=eq.{new_terms_start}&select=id"
+                    )
+                    sal_body = {
+                        "employee_id": emp_id,
+                        "effective_month": new_terms_start,
+                        "annual_salary_thousand": payload["annual_salary_thousand"],
+                        "reason": "계약연장(재계약)과 함께 연봉 갱신",
+                    }
+                    if existing_sal:
+                        rest_request("PATCH", f"salary_history?id=eq.{existing_sal[0]['id']}", body=sal_body)
+                    else:
+                        rest_request("POST", "salary_history", body=sal_body)
+                return self._send(200, {"ok": True, "new_end_date": new_end_date})
+
             if isinstance(payload, dict) and payload.get("type") == "extend_probation":
                 emp_id = payload.get("employee_id")
                 additional_months = payload.get("additional_months")
