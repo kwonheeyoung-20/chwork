@@ -360,10 +360,45 @@ class handler(BaseHTTPRequestHandler):
                 row = current[0]
                 old_end_date = row["contract_end_date"][:10]
                 new_end_date = add_months(old_end_date, int(additional_months))
-                rest_request("PATCH", f"payroll_settings_history?id=eq.{row['id']}", body={
-                    "contract_end_date": new_end_date,
-                    "note": (row.get("note") or "") + f" — {additional_months}개월 연장(재계약, {new_end_date}까지)",
-                })
+
+                if payload.get("contract_rate") is not None or payload.get("contract_fixed_amount") is not None:
+                    # 재계약 — 급여조건을 새로 정하는 경우: 예전 행은 그대로 두고(그 행의 계약종료일도
+                    # 원래 날짜 그대로 유지 — "그 조건이 실제로 적용됐던 기간"의 기록이므로), 원래
+                    # 종료일 다음날부터 새 조건으로 별도 행을 추가함(신규 계약직 등록과 같은 방식).
+                    new_terms_start = (datetime.date.fromisoformat(old_end_date) + datetime.timedelta(days=1)).isoformat()
+                    rate = float(payload.get("contract_rate") or 100) / 100
+                    fixed_amount = payload.get("contract_fixed_amount")
+                    note = f"계약연장(재계약) — {additional_months}개월, {new_end_date}까지"
+                    note += f", 정액 {fixed_amount:,.0f}원" if fixed_amount else f", 요율 {payload.get('contract_rate') or 100}%"
+                    new_settings_body = {
+                        "employee_id": emp_id,
+                        "effective_month": new_terms_start,
+                        "standard_hours": row.get("standard_hours", 209),
+                        "fixed_overtime_hours": row.get("fixed_overtime_hours", 0),
+                        "attendance_allowance": row.get("attendance_allowance", 0),
+                        "meal_allowance": row.get("meal_allowance", 0),
+                        "employment_type": "계약직",
+                        "pay_rate": rate,
+                        "contract_end_date": new_end_date,
+                        "proration_mode": payload.get("contract_proration_mode") or "daily",
+                        "note": note,
+                    }
+                    if fixed_amount:
+                        new_settings_body["fixed_monthly_amount"] = fixed_amount
+                    existing_new = rest_request(
+                        "GET", f"payroll_settings_history?employee_id=eq.{emp_id}&effective_month=eq.{new_terms_start}&select=id"
+                    )
+                    if existing_new:
+                        rest_request("PATCH", f"payroll_settings_history?id=eq.{existing_new[0]['id']}", body=new_settings_body)
+                    else:
+                        rest_request("POST", "payroll_settings_history", body=new_settings_body)
+                else:
+                    # 급여조건은 그대로, 계약기간만 연장하는 단순한 경우 — 기존 행의 계약종료일만 미룸.
+                    rest_request("PATCH", f"payroll_settings_history?id=eq.{row['id']}", body={
+                        "contract_end_date": new_end_date,
+                        "note": (row.get("note") or "") + f" — {additional_months}개월 연장(재계약, {new_end_date}까지)",
+                    })
+
                 if payload.get("annual_salary_thousand") is not None:
                     new_terms_start = (datetime.date.fromisoformat(old_end_date) + datetime.timedelta(days=1)).isoformat()
                     existing_sal = rest_request(
