@@ -768,12 +768,12 @@
             <table class="table" id="otherpayTable">
               <thead>
                 <tr>
-                  <th>이름</th><th>지사</th><th>부서</th><th>지급유형</th>
-                  <th>지급월</th><th>귀속연도</th><th class="num">금액</th><th>비고</th><th></th>
+                  <th>순번</th><th>이름</th><th>지사</th><th>부서</th><th>직급</th><th>지급유형</th>
+                  <th>귀속월</th><th>지급일자</th><th class="num">금액</th><th>비고</th><th></th>
                 </tr>
               </thead>
               <tbody id="otherpayTbody">
-                <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+                <tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
               </tbody>
             </table>
           </div>
@@ -1028,7 +1028,7 @@
             <label style="font-size:13px; color:var(--text-secondary); margin-left:8px;">차수:</label>
             <select id="bonusRound" class="hr-input" style="width:90px;" onchange="loadBonusReport()">
               <option value="1">1차(9월 지급)</option>
-              <option value="2">2차(익년 2월 지급)</option>
+              <option value="2">2차(12월 귀속, 익년 2~3월 지급)</option>
             </select>
             <button class="secondary" onclick="loadBonusReport()">조회</button>
             <span id="bonusLockStatus" style="font-size:12px; color:var(--text-muted); margin-left:8px;"></span>
@@ -1044,6 +1044,8 @@
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:10px 12px; background:#fff9ec; border-radius:var(--radius-sm); flex-wrap:wrap;">
             <button class="primary" onclick="saveBonusReportDraft()">💾 입력내용 저장(초안)</button>
             <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 4px;"></span>
+            <label style="font-size:13px; color:var(--text-secondary);">귀속월:</label>
+            <input id="bonusBelongsMonth" type="month" class="hr-input" style="width:130px;">
             <label style="font-size:13px; color:var(--text-secondary);">지급일자:</label>
             <input id="bonusPayDate" type="date" class="hr-input" style="width:150px;">
             <button class="primary" onclick="finalizeBonusReport()" style="background:var(--red,#c82828);">✅ 확정(마감) — 성과급/기타지급에 반영</button>
@@ -1364,7 +1366,7 @@
         <select id="op_employee_id" class="hr-input"></select>
       </label>
       <label>지급유형
-        <select id="op_payment_type" class="hr-input" onchange="autofillOtherPayFiscalYear()">
+        <select id="op_payment_type" class="hr-input">
           <option value="성과급1차">성과급1차</option>
           <option value="성과급2차">성과급2차</option>
           <option value="상여금">상여금</option>
@@ -1372,12 +1374,13 @@
           <option value="연차수당">연차수당</option>
         </select>
       </label>
-      <label>지급월 <input id="op_date" type="month" class="hr-input" onchange="autofillOtherPayFiscalYear()"></label>
+      <label>귀속월(이 실적이 어느 달 몫인지) <input id="op_belongs_month" type="month" class="hr-input" onchange="autofillOtherPayFiscalYear()"></label>
+      <label>지급일자(실제 돈 나가는 날) <input id="op_date" type="date" class="hr-input"></label>
       <label>귀속연도 <input id="op_fiscal_year" type="number" class="hr-input" placeholder="예: 2026"></label>
       <p style="font-size:11px; color:var(--text-muted); margin:-6px 0 0;">
-        보통 지급월과 같은 해예요. 다만 "성과급2차"처럼 다음 해 1~2월에 지급하면서
-        그 전해 실적으로 계산해야 하는 경우엔, 지급월을 고르면 자동으로 그 전해로 채워줍니다
-        (직접 고치셔도 됩니다). "직원별 연간 급여 종합"·"연도 마감"은 전부 이 귀속연도 기준입니다.
+        예: 2026년 2차 성과급이 귀속월 2026-12, 실제 지급일 2027-02(또는 3월)인 경우 —
+        귀속월만 고르면 귀속연도는 자동으로 채워집니다. "직원별 연간 급여 종합"·"연도 마감"은
+        전부 귀속연도(=귀속월의 연도) 기준입니다. 지급일자는 실제 지급 기록용이라 아무 영향 없습니다.
       </p>
       <label>금액 <input id="op_amount" type="number" class="hr-input"></label>
       <label>비고 <input id="op_note" class="hr-input"></label>
