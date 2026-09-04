@@ -254,6 +254,26 @@ class handler(BaseHTTPRequestHandler):
         )
         return self._send(200, {"ok": True})
 
+    def _bulk_set_history_criteria(self, payload):
+        # 과거 연도(예: 2024/2025년)의 실제 지급기록(other_payments) 중, 그 해에 지급액이
+        # 있는데 note(기준/율)가 비어있는 것만 골라서 한 번에 채워넣음. 이미 note가 있는
+        # 기록은(직접 적어두신 내용일 수 있으므로) 건드리지 않음.
+        year = payload.get("year")
+        round_no = payload.get("round")
+        criteria_text = payload.get("criteria_text")
+        if not year or round_no not in (1, 2) or not criteria_text:
+            return self._send(400, {"error": "year, round(1 또는 2), criteria_text는 필수입니다"})
+        bonus_type = f"성과급{round_no}차"
+        rows = rest_request(
+            "GET", f"other_payments?payment_type=eq.{bonus_type}"
+            f"&payment_date=gte.{year}-01-01&payment_date=lt.{year + 1}-01-01"
+            "&select=id,amount,note"
+        ) or []
+        targets = [r["id"] for r in rows if (r.get("amount") or 0) > 0 and not r.get("note")]
+        for rid in targets:
+            rest_request("PATCH", f"other_payments?id=eq.{rid}", body={"note": criteria_text})
+        return self._send(200, {"ok": True, "count": len(targets)})
+
     def _finalize_bonus_report(self, payload):
         year = payload.get("year")
         round_no = payload.get("round")
@@ -341,6 +361,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._finalize_bonus_report(payload)
             if isinstance(payload, dict) and payload.get("type") == "bonus_criteria_note":
                 return self._save_bonus_criteria_note(payload)
+            if isinstance(payload, dict) and payload.get("type") == "bulk_set_history_criteria":
+                return self._bulk_set_history_criteria(payload)
 
             if isinstance(payload, dict) and payload.get("type") == "lock":
                 period_key = payload.get("period_key")
