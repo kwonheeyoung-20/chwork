@@ -2423,10 +2423,10 @@ async function deleteOtherPayment(id) {
 }
 
 function downloadOtherPaymentsExcel() {
-  const rows = [['이름', '지사', '부서', '지급유형', '지급월', '금액', '비고']];
+  const rows = [['순번', '이름', '지사', '부서', '직급', '지급유형', '귀속월', '지급일자', '금액', '비고']];
   document.querySelectorAll('#otherpayTbody tr:not(.hr-total-row)').forEach(tr => {
-    const cells = Array.from(tr.children).slice(0, 7).map(td => td.textContent.trim());
-    if (cells.length === 7) rows.push(cells);
+    const cells = Array.from(tr.children).slice(0, 10).map(td => td.textContent.trim());
+    if (cells.length === 10) rows.push(cells);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -6104,33 +6104,58 @@ function downloadPromotionsExcel() {
 
 function downloadBonusReportExcel() {
   if (!bonusReportCache || bonusReportCache.length === 0) { alert('먼저 조회해주세요.'); return; }
-  const { year, round } = bonusReportMetaCache;
-  const rows = [['순번', '이름', '지사', '부서', '직급', '결정기준/율', '결정성과급', '비고']];
-  bonusReportCache.forEach((e, idx) => {
-    rows.push([idx + 1, e.name, e.branch || '', e.department || '', e.position || '',
-      e.criteria || '', e.decided_amount ?? '', e.note || '']);
+  const { year, round, y1, y2 } = bonusReportMetaCache;
+  const rows = [
+    ['순번', '이름', '지사', '부서', '직급', '입사일',
+     `${y2}년 연봉(천원)`, `${y2}년 월급여`, `${y2}년 기준/율`, `${y2}년 성과급`,
+     `${y1}년 연봉(천원)`, `${y1}년 월급여`, `${y1}년 기준/율`, `${y1}년 성과급`,
+     '당해년도 현재 연봉(천원)', '당해년도 현재 월급여',
+     '결정기준/율', '결정성과급', '비고'],
+  ];
+  bonusReportCache.forEach(e => {
+    rows.push([
+      e.seq, e.name, e.branch || '', e.department || '', e.position || '', e.hire_date || '',
+      e.salary_y2 ?? '', e.monthly_y2 ?? '', e.criteria_y2 || '', e.bonus_y2 ?? '',
+      e.salary_y1 ?? '', e.monthly_y1 ?? '', e.criteria_y1 || '', e.bonus_y1 ?? '',
+      e.salary_now ?? '', e.monthly_now ?? '',
+      e.criteria || '', e.decided_amount ?? '', e.note || '',
+    ]);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, `${year}년 ${round}차`);
-  XLSX.writeFile(wb, `성과급보고서_${year}_${round}차_확정내용.xlsx`);
+  XLSX.writeFile(wb, `성과급보고서_${year}_${round}차.xlsx`);
 }
 
 function downloadSalaryIncreaseExcel() {
   if (!siReportCache || siReportCache.length === 0) { alert('먼저 조회해주세요.'); return; }
-  const { year } = siReportMetaCache;
-  const rows = [['순번', '이름', '지사', '부서', '직급', '결정연봉', '적용월', '인상액', '인상률', '비고']];
-  siReportCache.forEach((e, idx) => {
-    rows.push([idx + 1, e.name, e.branch || '', e.department || '', e.position || '',
-      e.decided_salary ?? '', e.applied_month || '',
-      (e.decided_salary != null && e.salary_now != null) ? e.decided_salary - e.salary_now : '',
-      (e.decided_salary != null && e.salary_now) ? (((e.decided_salary - e.salary_now) / e.salary_now) * 100).toFixed(1) + '%' : '',
-      e.note || '']);
+  const { year, y1, y2, y3 } = siReportMetaCache;
+  const rows = [
+    ['순번', '이름', '지사', '부서', '직급', '입사일',
+     `${y3}년 연봉(천원)`, `${y3}년 월급여`, `${y3}년 성과급(천원)`,
+     `${y2}년 연봉(천원)`, `${y2}년 월급여`, `${y2}년 성과급(천원)`, `${y2}년 전년대비 인상액`, `${y2}년 전년대비 인상률`,
+     `${y1}년 연봉(천원)`, `${y1}년 월급여`, `${y1}년 성과급(천원)`, `${y1}년 전년대비 인상액`, `${y1}년 전년대비 인상률`,
+     '당해년도 현재 연봉(천원)', '당해년도 현재 월급여',
+     '결정연봉', '적용월', '인상액', '인상률', '비고'],
+  ];
+  siReportCache.forEach(e => {
+    const incAmt = (e.decided_salary != null && e.salary_now != null) ? e.decided_salary - e.salary_now : '';
+    const incRate = (e.decided_salary != null && e.salary_now) ? (((e.decided_salary - e.salary_now) / e.salary_now) * 100).toFixed(1) + '%' : '';
+    rows.push([
+      e.seq, e.name, e.branch || '', e.department || '', e.position || '', e.hire_date || '',
+      e.salary_y3 ?? '', e.monthly_y3 ?? '', e.bonus_y3 != null ? Math.round(e.bonus_y3 / 1000) : '',
+      e.salary_y2 ?? '', e.monthly_y2 ?? '', e.bonus_y2 != null ? Math.round(e.bonus_y2 / 1000) : '',
+      e.y2_increase_amount ?? '', e.y2_increase_rate != null ? (e.y2_increase_rate * 100).toFixed(1) + '%' : '',
+      e.salary_y1 ?? '', e.monthly_y1 ?? '', e.bonus_y1 != null ? Math.round(e.bonus_y1 / 1000) : '',
+      e.y1_increase_amount ?? '', e.y1_increase_rate != null ? (e.y1_increase_rate * 100).toFixed(1) + '%' : '',
+      e.salary_now ?? '', e.monthly_now ?? '',
+      e.decided_salary ?? '', e.applied_month || '', incAmt, incRate, e.note || '',
+    ]);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, `${year}년`);
-  XLSX.writeFile(wb, `연봉인상보고서_${year}_확정내용.xlsx`);
+  XLSX.writeFile(wb, `연봉인상보고서_${year}.xlsx`);
 }
 
 /* ── 직급이력 관리 ── */
