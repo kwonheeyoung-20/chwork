@@ -558,6 +558,7 @@ function convertContractToRegular(empId, name, scheduledDate) {
   $('convertRegularTitle').textContent = `${name} 님 — 정규직 전환`;
   $('cr_date').value = scheduledDate || '';
   $('cr_salary').value = '';
+  $('cr_proration_mode').value = 'daily';
   $('convertRegularModalMsg').textContent = '';
   $('convertRegularModal').style.display = 'flex';
 }
@@ -580,6 +581,7 @@ async function confirmConvertRegular() {
       body: JSON.stringify({
         type: 'convert_to_regular', employee_id: convertRegularEmpId, effective_month: dateVal,
         annual_salary_thousand: $('cr_salary').value ? Number($('cr_salary').value) : null,
+        proration_mode: $('cr_proration_mode').value,
       }),
     });
     const data = await res.json();
