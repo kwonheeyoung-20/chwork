@@ -1948,13 +1948,19 @@
   <div class="hr-modal" style="width:420px;">
     <h2 id="convertRegularTitle">정규직 전환</h2>
     <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
-      전환일이 월 중간이면(예: 9월 3일), 그 달 급여는 자동으로 일할계산되어 반영됩니다
-      (1일~전환일 전날은 계약직 조건, 전환일~말일은 정규직 조건으로 섞어서 계산).
+      전환일이 월 중간이면(예: 9월 3일), 아래 "첫/마지막 달 급여 반영 방식"에 따라 그 달 급여가 자동 계산됩니다.
     </p>
     <div class="hr-form-grid" style="grid-template-columns:1fr;">
       <label>정규직 전환일 <input id="cr_date" type="date" class="hr-input"></label>
       <label>연봉(천원) — 선택 입력, 비워두면 기존대로 유지
         <input id="cr_salary" type="number" class="hr-input" placeholder="예: 45000">
+      </label>
+      <label>첫/마지막 달 급여 반영 방식
+        <select id="cr_proration_mode" class="hr-input">
+          <option value="daily">일할계산 (전환 전/후를 일수 비례로 섞어서 계산 — 전환 전 급여가 아직 정산 안 된 경우)</option>
+          <option value="current_month">당월반영(전액) (전환 이전 부분은 이미 전월에 전액 지급됨 — 전환일부터만 일할계산)</option>
+          <option value="next_month">익월반영(합산) (이 달은 정산 안 하고, 다음달에 합산 — 준비 중)</option>
+        </select>
       </label>
     </div>
     <div id="convertRegularModalMsg" class="hr-msg"></div>
