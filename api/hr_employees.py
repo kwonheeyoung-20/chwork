@@ -515,6 +515,7 @@ class handler(BaseHTTPRequestHandler):
                     "employment_type": "정규직",
                     "pay_rate": 1.0,
                     "note": note,
+                    "proration_mode": payload.get("proration_mode") or "daily",
                 }
                 if existing_settings:
                     # 이미 그 날짜로 급여설정이 있으면(예: 수습 등록 시 자동 예약해둔 정규직 전환 행)
