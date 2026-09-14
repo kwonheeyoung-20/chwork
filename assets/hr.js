@@ -532,8 +532,48 @@ async function loadEmployees() {
     const data = await res.json();
     renderEmployees(data.employees || []);
     loadContractExpiring();
+    checkHolidaySyncWarning();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+  }
+}
+
+/* ── 공휴일 자동 동기화 상태 점검 (직원마스터 화면 진입 시 매번 확인) ──
+   1) 올해 공휴일이 아예 없으면 → 작년 12/31 자동 동기화가 실패했다는 뜻 → 즉시 경고
+   2) 12/20 이후인데 내년 공휴일이 아직 없으면 → 곧 있을 자동 동기화 전에 미리 확인해볼 수 있게 사전 안내 */
+async function checkHolidaySyncWarning() {
+  if (sessionStorage.getItem('chwork_hr_role') !== 'admin') return;
+  const box = $('holidaySyncWarningBox');
+  if (!box) return;
+  const today = new Date();
+  const thisYear = today.getFullYear();
+  const nextYear = thisYear + 1;
+  const isLateDecember = today.getMonth() === 11 && today.getDate() >= 20;
+  try {
+    const res = await fetch(`${apiBase()}/api/holidays?year=${thisYear}`, { headers: { 'X-HR-Password': hrPassword() } });
+    const data = await res.json();
+    const thisYearMissing = !(data.holidays || []).length;
+
+    if (thisYearMissing) {
+      box.style.display = 'block';
+      box.innerHTML = `⚠ <b>${thisYear}년 공휴일 데이터가 없습니다.</b> data.go.kr 인증키 만료(활용기간 보통 2년) 등으로 자동 동기화가 실패했을 수 있습니다. 설정 → 데이터 백업에서 "지금 동기화"를 눌러 확인해주세요. 계속 실패하면 data.go.kr에서 인증키 활용기간 연장이 필요할 수 있습니다.`;
+      return;
+    }
+
+    if (isLateDecember) {
+      const res2 = await fetch(`${apiBase()}/api/holidays?year=${nextYear}`, { headers: { 'X-HR-Password': hrPassword() } });
+      const data2 = await res2.json();
+      const nextYearMissing = !(data2.holidays || []).length;
+      if (nextYearMissing) {
+        box.style.display = 'block';
+        box.innerHTML = `⚠ <b>${nextYear}년 공휴일이 아직 동기화되지 않았습니다.</b> 12월 31일 자동 동기화 예정이지만, 걱정되시면 설정 → 데이터 백업에서 미리 "지금 동기화"를 눌러보실 수 있습니다.`;
+        return;
+      }
+    }
+
+    box.style.display = 'none';
+  } catch (e) {
+    // 이 배너는 부가 정보라 실패해도 직원마스터 화면 자체엔 영향 없음
   }
 }
 
