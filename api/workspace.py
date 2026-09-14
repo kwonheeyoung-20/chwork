@@ -143,9 +143,10 @@ def _cors_headers():
 # ────────────────────────────────────────────────────────────
 # schedule 전용 유틸
 # ────────────────────────────────────────────────────────────
-def _ensure_occurrences_generated():
+def _ensure_occurrences_generated(min_horizon_date=None):
     try:
-        rpc("generate_schedule_occurrences", {})
+        params = {"p_horizon": min_horizon_date} if min_horizon_date else {}
+        rpc("generate_schedule_occurrences", params)
     except SupabaseError:
         pass
 
@@ -292,6 +293,20 @@ class handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True})
         if qs.get("skip_prepare", ["0"])[0] != "1":
             _ensure_occurrences_generated()
+        else:
+            # [수정] 개인일정관리와 동일한 문제 — 몇 년 뒤 먼 미래 달로 달력을 넘겨도
+            # skip_prepare=1이라 아무 재생성도 안 일어나서, 기본 생성범위(6개월)보다 먼
+            # 반복일정이 "누군가 다른 일정을 추가/수정하기 전까지" 영영 안 보이는 문제가 있었음.
+            # 조회하려는 달(to)이 기본범위를 넘어서면 그 달까지만 필요한 만큼 넓혀서 생성.
+            to_param = qs.get("to", [None])[0]
+            if to_param:
+                try:
+                    to_date_obj = datetime.date.fromisoformat(to_param)
+                    default_horizon = kst_today() + datetime.timedelta(days=183)
+                    if to_date_obj > default_horizon:
+                        _ensure_occurrences_generated(min_horizon_date=to_param)
+                except ValueError:
+                    pass
 
         if qs.get("tasks", ["0"])[0] == "1":
             tasks = rest_request(
