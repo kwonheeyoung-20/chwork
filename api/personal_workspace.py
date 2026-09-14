@@ -456,7 +456,7 @@ CRON_SECRET = os.environ.get("CRON_SECRET", "")  # Vercel Cron이 자동으로 A
 # 가족용 비밀번호는 "개인 일정관리(personal)", "가족 공유 메모(family_notes)", "학교 시간표(timetable)"만 열 수 있음
 # holidays(공휴일 조회)는 개인/업무 달력 양쪽에서 표시용으로 읽어야 해서 가족 계정도 조회(읽기)만 허용 —
 # 실제 동기화(쓰기)는 아래 _sync_holidays_action에서 role == "admin"인지 별도로 한 번 더 확인함.
-FAMILY_ALLOWED_RESOURCES = {"personal", "family_notes", "timetable", "personal_media", "holidays"}
+FAMILY_ALLOWED_RESOURCES = {"personal", "family_notes", "timetable", "personal_media", "holidays", "personal_stickers"}
 CONTRACT_BUCKET = "contracts"
 
 
@@ -780,6 +780,8 @@ class handler(BaseHTTPRequestHandler):
                 if action == "sync":
                     return self._sync_holidays_action(qs)
                 return self._get_holidays(qs)
+            if resource == "personal_stickers":
+                return self._get_personal_stickers(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -821,6 +823,40 @@ class handler(BaseHTTPRequestHandler):
             body=rows_to_upsert,
             prefer="resolution=merge-duplicates",
         )
+
+    def _get_personal_stickers(self, qs):
+        """다이어리 스티커 조회 — 가족 공유(누가 붙이든 전부에게 보임)."""
+        rows = rest_request("GET", "personal_stickers?select=*&order=created_at.asc") or []
+        return self._send(200, {"stickers": rows})
+
+    def _post_personal_stickers(self, payload):
+        emoji = payload.get("emoji")
+        pos_x = payload.get("pos_x")
+        pos_y = payload.get("pos_y")
+        if not emoji or pos_x is None or pos_y is None:
+            return self._send(400, {"error": "emoji, pos_x, pos_y는 필수입니다"})
+        row = {"emoji": emoji, "pos_x": pos_x, "pos_y": pos_y}
+        result = rest_request("POST", "personal_stickers", body=row, prefer="return=representation") or []
+        sticker = result[0] if isinstance(result, list) and result else None
+        return self._send(200, {"sticker": sticker})
+
+    def _patch_personal_stickers(self, sticker_id, payload):
+        update_fields = {}
+        if "pos_x" in payload:
+            update_fields["pos_x"] = payload["pos_x"]
+        if "pos_y" in payload:
+            update_fields["pos_y"] = payload["pos_y"]
+        if not update_fields:
+            return self._send(400, {"error": "수정할 값이 없습니다"})
+        rest_request("PATCH", f"personal_stickers?id=eq.{sticker_id}", body=update_fields)
+        return self._send(200, {"ok": True})
+
+    def _delete_personal_stickers(self, qs):
+        sticker_id = qs.get("id", [None])[0]
+        if not sticker_id:
+            return self._send(400, {"error": "id는 필수입니다"})
+        rest_request("DELETE", f"personal_stickers?id=eq.{sticker_id}")
+        return self._send(200, {"ok": True})
 
     def _get_holidays(self, qs):
         """공휴일 목록 조회 — 관리자·가족 계정 모두 조회 가능(달력 표시용)."""
@@ -1093,6 +1129,8 @@ class handler(BaseHTTPRequestHandler):
                 if payload.get("action") == "sign_upload":
                     return self._sign_upload_personal_media(payload)
                 return self._post_personal_media(payload)
+            if resource == "personal_stickers":
+                return self._post_personal_stickers(payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -1280,6 +1318,10 @@ class handler(BaseHTTPRequestHandler):
                 if not item_id:
                     return self._send(400, {"error": "id는 필수입니다"})
                 return self._patch_personal_media(item_id, payload)
+            if resource == "personal_stickers":
+                if not item_id:
+                    return self._send(400, {"error": "id는 필수입니다"})
+                return self._patch_personal_stickers(item_id, payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -1571,6 +1613,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._delete_timetable(qs)
             if resource == "personal_media":
                 return self._delete_personal_media(qs)
+            if resource == "personal_stickers":
+                return self._delete_personal_stickers(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
