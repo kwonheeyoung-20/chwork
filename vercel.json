@@ -104,7 +104,11 @@
     { "src": "/api/timetable", "dest": "api/personal_workspace.py?resource=timetable" },
     { "src": "/api/personal_media", "dest": "api/personal_workspace.py?resource=personal_media" },
     { "src": "/api/manuals", "dest": "api/workspace.py?resource=manuals" },
+    { "src": "/api/holidays", "dest": "api/personal_workspace.py?resource=holidays" },
     { "src": "/api/monthly_closing", "dest": "api/monthly_closing.py" },
     { "src": "/(.*)", "dest": "/$1" }
+  ],
+  "crons": [
+    { "path": "/api/holidays?action=cron_sync", "schedule": "0 15 30 12 *" }
   ]
 }
