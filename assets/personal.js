@@ -414,7 +414,8 @@ function renderPerCalendar(occurrences, monthStart, monthEnd) {
     const itemsHtml = dayItems.slice(0, maxShow).map(o => {
       const task = o.personal_schedule_tasks || {};
       const color = memberColor(task.member_name);
-      return `<div class="sch-cal-item ${o.status === 'done' ? 'done' : ''}" style="background:${color};">${categoryEmoji(task.category)} ${esc(task.title || '')}</div>`;
+      const birthdayClass = task.category === '생일' ? 'category-birthday' : '';
+      return `<div class="sch-cal-item ${o.status === 'done' ? 'done' : ''} ${birthdayClass}" style="background:${color};">${categoryEmoji(task.category)} ${esc(task.title || '')}</div>`;
     }).join('');
     const moreHtml = dayItems.length > maxShow ? `<div class="sch-cal-more">+${dayItems.length - maxShow}개 더</div>` : '';
     const holidayHtml = holidayName ? `<div class="sch-cal-holiday" title="${esc(holidayName)}">${esc(holidayName)}</div>` : '';
