@@ -80,6 +80,7 @@ async function showMain() {
   if (sessionStorage.getItem('chwork_hr_role') === 'family') {
     document.querySelectorAll('.admin-only-nav').forEach(el => el.style.display = 'none');
   }
+  loadStickers();
   initPerCalState();
   setInitialPersonalListRange();
   $('perOccTbody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:24px;">달력을 먼저 불러오고 있습니다…</td></tr>`;
@@ -197,6 +198,154 @@ const EMOJI_CATEGORIES = {
 };
 // 이 이모지들은 제목 맨 앞에 넣으면 달력·상세보기에서도 살짝 흔들리며 표시됩니다.
 const ANIMATED_TITLE_EMOJIS = ['🎉', '✨', '🎈', '🔥'];
+
+/* ── 다이어리 스티커 (화면 아무 곳에나 붙이는 장식용, 가족 공유) ── */
+const STICKER_EMOJIS = [
+  '💕','💖','⭐','🌟','✨','🌸','🌷','🌈','🎀','🧸',
+  '🍀','🦋','🐥','🐰','🐶','🐱','🍓','🍩','🎈','🎉',
+  '💌','📌','⏰','☀️','🌙','☁️','💧','🌻','🍂','❄️',
+];
+
+let stickersCache = [];
+let stickerPlacingEmoji = null;
+let draggingStickerId = null;
+
+async function loadStickers() {
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_stickers`, { headers: authHeaders() });
+    const data = await res.json();
+    stickersCache = data.stickers || [];
+    renderStickers();
+  } catch (e) {
+    // 순전히 꾸미기용 부가기능이라 실패해도 조용히 무시(달력 등 본 기능엔 영향 없음)
+  }
+}
+
+function renderStickers() {
+  const layer = $('stickerLayer');
+  if (!layer) return;
+  layer.innerHTML = stickersCache.map(s => `
+    <div class="sticker-item" data-id="${s.id}"
+      style="position:fixed; left:${s.pos_x}vw; top:${s.pos_y}vh; transform:translate(-50%,-50%); font-size:32px; cursor:grab; pointer-events:auto; user-select:none; touch-action:none; filter:drop-shadow(0 1px 2px rgba(0,0,0,0.25));"
+      onmousedown="startStickerDrag(event, '${s.id}')" ontouchstart="startStickerDrag(event, '${s.id}')"
+      ondblclick="deleteSticker('${s.id}')" title="더블클릭하면 뗄 수 있어요">${s.emoji}</div>
+  `).join('');
+}
+
+function toggleStickerPicker() {
+  const panel = $('stickerPickerPanel');
+  const isOpen = panel.style.display === 'grid';
+  if (isOpen) {
+    panel.style.display = 'none';
+    exitStickerPlacing();
+  } else {
+    if (panel.dataset.built !== '1') {
+      panel.innerHTML = STICKER_EMOJIS.map(e =>
+        `<button type="button" class="emoji-picker-btn" onclick="armStickerPlacing('${e}')">${e}</button>`
+      ).join('');
+      panel.dataset.built = '1';
+    }
+    panel.style.display = 'grid';
+  }
+}
+
+function armStickerPlacing(emoji) {
+  stickerPlacingEmoji = emoji;
+  const layer = $('stickerLayer');
+  layer.style.pointerEvents = 'auto';
+  layer.style.cursor = 'crosshair';
+}
+
+function exitStickerPlacing() {
+  stickerPlacingEmoji = null;
+  const layer = $('stickerLayer');
+  if (!layer) return;
+  layer.style.pointerEvents = 'none';
+  layer.style.cursor = '';
+}
+
+async function placeStickerAt(clientX, clientY) {
+  const pos_x = Number((clientX / window.innerWidth * 100).toFixed(2));
+  const pos_y = Number((clientY / window.innerHeight * 100).toFixed(2));
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_stickers`, {
+      method: 'POST', headers: authHeaders(true),
+      body: JSON.stringify({ emoji: stickerPlacingEmoji, pos_x, pos_y }),
+    });
+    const data = await res.json();
+    if (data.sticker) {
+      stickersCache.push(data.sticker);
+      renderStickers();
+    }
+  } catch (e) {
+    // 붙이기 실패해도 조용히 무시 — 다시 눌러보면 됨
+  }
+}
+
+function startStickerDrag(e, id) {
+  e.preventDefault();
+  e.stopPropagation();
+  draggingStickerId = id;
+  document.addEventListener('mousemove', onStickerDragMove);
+  document.addEventListener('mouseup', onStickerDragEnd);
+  document.addEventListener('touchmove', onStickerDragMove, { passive: false });
+  document.addEventListener('touchend', onStickerDragEnd);
+}
+
+function onStickerDragMove(e) {
+  if (!draggingStickerId) return;
+  const point = e.touches ? e.touches[0] : e;
+  const el = document.querySelector(`.sticker-item[data-id="${draggingStickerId}"]`);
+  if (!el) return;
+  el.style.left = (point.clientX / window.innerWidth * 100) + 'vw';
+  el.style.top = (point.clientY / window.innerHeight * 100) + 'vh';
+  if (e.cancelable) e.preventDefault();
+}
+
+async function onStickerDragEnd() {
+  document.removeEventListener('mousemove', onStickerDragMove);
+  document.removeEventListener('mouseup', onStickerDragEnd);
+  document.removeEventListener('touchmove', onStickerDragMove);
+  document.removeEventListener('touchend', onStickerDragEnd);
+  const id = draggingStickerId;
+  draggingStickerId = null;
+  if (!id) return;
+  const el = document.querySelector(`.sticker-item[data-id="${id}"]`);
+  if (!el) return;
+  const pos_x = parseFloat(el.style.left);
+  const pos_y = parseFloat(el.style.top);
+  try {
+    await fetch(`${apiBase()}/api/personal_stickers?id=${id}`, {
+      method: 'PATCH', headers: authHeaders(true),
+      body: JSON.stringify({ pos_x, pos_y }),
+    });
+    const cached = stickersCache.find(s => s.id === id);
+    if (cached) { cached.pos_x = pos_x; cached.pos_y = pos_y; }
+  } catch (e) {
+    // 실패해도 화면상 위치는 유지 — 다음 로딩 시 원래 위치로 되돌아갈 수 있음
+  }
+}
+
+async function deleteSticker(id) {
+  if (!confirm('이 스티커를 뗄까요?')) return;
+  try {
+    await fetch(`${apiBase()}/api/personal_stickers?id=${id}`, { method: 'DELETE', headers: authHeaders() });
+    stickersCache = stickersCache.filter(s => s.id !== id);
+    renderStickers();
+  } catch (e) {
+    alert('스티커를 떼는 중 오류가 발생했습니다.');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const layer = document.getElementById('stickerLayer');
+  if (layer) {
+    layer.addEventListener('click', (e) => {
+      if (!stickerPlacingEmoji) return;
+      placeStickerAt(e.clientX, e.clientY);
+    });
+  }
+});
 
 let emojiPickerActiveCategory = Object.keys(EMOJI_CATEGORIES)[0];
 
