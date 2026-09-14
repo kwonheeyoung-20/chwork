@@ -175,7 +175,7 @@ const CATEGORY_EMOJI = {
   '기념일': '💝',
   '결제일': '💳',
   '학교': '🏫',
-  '학원': '🏫',
+  '학원': '✏️',
   '회사': '🏢',
   '일정': '📌',
   '기타': '⭐',
@@ -268,7 +268,7 @@ document.addEventListener('click', (e) => {
 });
 
 function personalCategoryLabel(category) {
-  return category === '학원' ? '학교' : (category || '-');
+  return category || '-';
 }
 
 function memberColor(name) {
