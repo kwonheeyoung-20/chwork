@@ -768,9 +768,12 @@ async function loadCalendar() {
   const toStr = toISO(monthEnd);
 
   try {
-    const res = await fetch(`${apiBase()}/api/schedule?from=${fromStr}&to=${toStr}&status=all&skip_prepare=1`, {
-      headers: authHeaders(),
-    });
+    const [res] = await Promise.all([
+      fetch(`${apiBase()}/api/schedule?from=${fromStr}&to=${toStr}&status=all&skip_prepare=1`, {
+        headers: authHeaders(),
+      }),
+      ensureHolidaysLoaded(calYear),
+    ]);
     if (handle401(res)) return;
     const data = await res.json();
     renderCalendar(data.occurrences || [], monthStart, monthEnd);
@@ -779,36 +782,35 @@ async function loadCalendar() {
   }
 }
 
-// 대한민국 공휴일 (연도별). 음력 기반 명절(설날/추석/부처님오신날)은 매년 날짜가
-// 바뀌므로, 새해가 되면 그 해 목록을 추가해줘야 합니다 (정부 발표 월력요항 기준).
-const KOREAN_HOLIDAYS_BY_YEAR = {
-  2026: {
-    '2026-01-01': '신정',
-    '2026-02-16': '설날 전날',
-    '2026-02-17': '설날',
-    '2026-02-18': '설날 다음날',
-    '2026-03-01': '삼일절',
-    '2026-03-02': '삼일절 대체공휴일',
-    '2026-05-01': '근로자의 날',
-    '2026-05-05': '어린이날',
-    '2026-05-24': '부처님오신날',
-    '2026-05-25': '부처님오신날 대체공휴일',
-    '2026-06-03': '전국동시지방선거일',
-    '2026-06-06': '현충일',
-    '2026-07-17': '제헌절',
-    '2026-08-15': '광복절',
-    '2026-09-24': '추석 전날',
-    '2026-09-25': '추석',
-    '2026-09-26': '추석 다음날',
-    '2026-10-03': '개천절',
-    '2026-10-09': '한글날',
-    '2026-12-25': '크리스마스',
-  },
-};
+// 대한민국 공휴일 — 예전엔 연도별로 직접 하드코딩했지만, 이제 서버(holidays 테이블,
+// 공공데이터포털 특일 정보 API로 매년 자동 동기화됨)에서 읽어와 캐싱함.
+// 달력을 그리기 전에 반드시 ensureHolidaysLoaded(year)를 먼저 호출해서 캐시를 채워둬야 함.
+// (개인일정관리의 personal.js에도 동일한 구조가 있음 — 서버 쪽 holidays 테이블을 공유함)
+const holidayCache = {};
+const holidayFetchPromises = {};
+
+async function ensureHolidaysLoaded(year) {
+  if (holidayCache[year]) return holidayCache[year];
+  if (!holidayFetchPromises[year]) {
+    holidayFetchPromises[year] = fetch(`${apiBase()}/api/holidays?year=${year}`, { headers: authHeaders() })
+      .then(res => res.json())
+      .then(data => {
+        const table = {};
+        (data.holidays || []).forEach(h => { table[h.holiday_date] = h.name; });
+        holidayCache[year] = table;
+        return table;
+      })
+      .catch(() => {
+        holidayCache[year] = {};
+        return holidayCache[year];
+      });
+  }
+  return holidayFetchPromises[year];
+}
 
 function getHolidayName(dateStr) {
   const year = Number(dateStr.slice(0, 4));
-  const table = KOREAN_HOLIDAYS_BY_YEAR[year];
+  const table = holidayCache[year];
   return table ? (table[dateStr] || null) : null;
 }
 

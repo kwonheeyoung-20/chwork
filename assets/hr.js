@@ -24,6 +24,31 @@ function closeDataBackupModal() {
   $('dataBackupModal').style.display = 'none';
 }
 
+/* ── 공휴일 자동 동기화(수동 실행) ── */
+async function syncHolidaysNow() {
+  const btn = $('holidaySyncBtn');
+  const label = $('holidaySyncLabel');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '동기화 중…';
+  label.textContent = '';
+  try {
+    const res = await fetch(`${apiBase()}/api/holidays?action=sync`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || data.detail || `상태코드 ${res.status}`);
+    label.style.color = 'var(--green)';
+    label.textContent = `${data.synced_year}년 공휴일 ${data.count}건 동기화 완료`;
+  } catch (e) {
+    label.style.color = 'var(--red)';
+    label.textContent = '동기화 실패: ' + (e.message || '');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
 async function downloadFullBackup() {
   const btn = $('backupBtn');
   const original = btn.textContent;
