@@ -184,6 +184,64 @@ function categoryEmoji(category) {
   return CATEGORY_EMOJI[category] || '📌';
 }
 
+/* ── 제목 입력창 옆 이모지 선택기 ── */
+const EMOJI_PICKER_LIST = [
+  '🎂','💝','💳','🏫','🏢','📌','⭐','🎉','🎁','🎈',
+  '📅','⏰','✈️','🏖️','🍰','🍕','☕','🎵','⚽','🏥',
+  '💊','🚗','🐶','🐱','🌸','❤️','👶','🎓','📚','💰',
+  '🛒','🏠','✨','🔥','☀️','🌙','🎄','🥳','📷','🎮',
+];
+// 이 이모지들은 제목 맨 앞에 넣으면 달력·상세보기에서도 살짝 흔들리며 표시됩니다.
+const ANIMATED_TITLE_EMOJIS = ['🎉', '✨', '🎈', '🔥'];
+
+// 제목 맨 앞이 움직이는 이모지 중 하나로 시작하면, 그 이모지만 애니메이션 span으로 감싸서 반환.
+// 그 외에는 기존과 동일하게 그냥 이스케이프된 텍스트만 반환.
+function renderAnimatedTitle(title) {
+  const t = title || '';
+  for (const emoji of ANIMATED_TITLE_EMOJIS) {
+    if (t.startsWith(emoji)) {
+      return `<span class="title-emoji-animated">${emoji}</span>${esc(t.slice(emoji.length))}`;
+    }
+  }
+  return esc(t);
+}
+
+function toggleEmojiPicker(evt) {
+  evt.stopPropagation();
+  const panel = $('emojiPickerPanel');
+  const isOpen = panel.classList.contains('open');
+  if (isOpen) {
+    panel.classList.remove('open');
+    return;
+  }
+  if (panel.dataset.built !== '1') {
+    panel.innerHTML = EMOJI_PICKER_LIST.map(e => {
+      const animCls = ANIMATED_TITLE_EMOJIS.includes(e) ? ' animated-emoji' : '';
+      return `<button type="button" class="emoji-picker-btn${animCls}" onclick="insertEmojiIntoTitle('${e}')">${e}</button>`;
+    }).join('');
+    panel.dataset.built = '1';
+  }
+  panel.classList.add('open');
+}
+
+function insertEmojiIntoTitle(emoji) {
+  const input = $('pe_title');
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  input.value = input.value.slice(0, start) + emoji + ' ' + input.value.slice(end);
+  input.focus();
+  const newPos = start + emoji.length + 1;
+  input.setSelectionRange(newPos, newPos);
+  $('emojiPickerPanel').classList.remove('open');
+}
+
+document.addEventListener('click', (e) => {
+  const panel = $('emojiPickerPanel');
+  if (panel && panel.classList.contains('open') && !panel.contains(e.target) && e.target.id !== 'pe_title') {
+    panel.classList.remove('open');
+  }
+});
+
 function personalCategoryLabel(category) {
   return category === '학원' ? '학교' : (category || '-');
 }
@@ -415,7 +473,7 @@ function renderPerCalendar(occurrences, monthStart, monthEnd) {
       const task = o.personal_schedule_tasks || {};
       const color = memberColor(task.member_name);
       const birthdayClass = task.category === '생일' ? 'category-birthday' : '';
-      return `<div class="sch-cal-item ${o.status === 'done' ? 'done' : ''} ${birthdayClass}" style="background:${color};">${categoryEmoji(task.category)} ${esc(task.title || '')}</div>`;
+      return `<div class="sch-cal-item ${o.status === 'done' ? 'done' : ''} ${birthdayClass}" style="background:${color};">${categoryEmoji(task.category)} ${renderAnimatedTitle(task.title)}</div>`;
     }).join('');
     const moreHtml = dayItems.length > maxShow ? `<div class="sch-cal-more">+${dayItems.length - maxShow}개 더</div>` : '';
     const holidayHtml = holidayName ? `<div class="sch-cal-holiday" title="${esc(holidayName)}">${esc(holidayName)}</div>` : '';
@@ -453,7 +511,7 @@ function openPerDayDetail(dateStr) {
       <div style="display:flex; align-items:flex-start; gap:8px; padding:10px 0; border-bottom:0.5px solid var(--border);">
         <span class="member-chip" style="background:${color}; font-size:11px; flex-shrink:0;">${esc(task.member_name || '-')}</span>
         <div style="flex:1; min-width:0;">
-          <div style="font-weight:500;">${categoryEmoji(task.category)} ${esc(task.title || '-')}${task.is_private ? ' 🔒' : ''}</div>
+          <div style="font-weight:500;">${categoryEmoji(task.category)} ${task.title ? renderAnimatedTitle(task.title) : '-'}${task.is_private ? ' 🔒' : ''}</div>
           ${task.note ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">${esc(task.note)}</div>` : ''}
           ${statusLabel ? `<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${statusLabel}</div>` : ''}
         </div>
