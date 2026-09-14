@@ -256,6 +256,10 @@
   </style>
 </head>
 <body>
+<div id="stickerLayer" style="position:fixed; inset:0; pointer-events:none; z-index:400;"></div>
+<button id="stickerToggleBtn" onclick="toggleStickerPicker()" title="스티커 꾸미기"
+  style="position:fixed; bottom:20px; right:20px; z-index:410; width:48px; height:48px; border-radius:50%; border:none; background:var(--accent); color:#fff; font-size:22px; box-shadow:0 2px 10px rgba(0,0,0,0.25); cursor:pointer;">🎨</button>
+<div id="stickerPickerPanel" style="display:none; position:fixed; bottom:78px; right:20px; z-index:410; width:220px; max-height:260px; overflow-y:auto; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); box-shadow:0 4px 16px rgba(0,0,0,0.2); padding:10px; grid-template-columns:repeat(6,1fr); gap:6px;"></div>
 <div class="layout">
 
   <aside class="sidebar" id="mainSidebar" style="display:none;">
