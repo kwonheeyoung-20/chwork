@@ -14,6 +14,7 @@ import os
 import json
 import traceback
 import urllib.request
+import http.client
 import urllib.parse
 import urllib.error
 from concurrent.futures import ThreadPoolExecutor
@@ -42,20 +43,48 @@ def _sb_headers(prefer=None):
     return h
 
 
+_supabase_conn = None
+_supabase_host = None
+
+
+def _get_supabase_connection():
+    """[속도 개선 테스트] Supabase REST 호출마다 매번 새 TLS 연결을 맺는 대신, 같은
+    서버리스 인스턴스(warm start) 안에서는 연결을 재사용해서 왕복 지연을 줄임.
+    연결이 끊겨 있으면 rest_request 쪽에서 감지해 새로 연결하고 한 번 재시도함."""
+    global _supabase_conn, _supabase_host
+    if _supabase_host is None:
+        _supabase_host = urllib.parse.urlsplit(SUPABASE_URL).netloc
+    if _supabase_conn is None:
+        _supabase_conn = http.client.HTTPSConnection(_supabase_host, timeout=10)
+    return _supabase_conn
+
+
 def rest_request(method, path, body=None, prefer=None):
     if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
         raise SupabaseError(0, "SUPABASE_URL 또는 SUPABASE_SECRET_KEY 환경변수가 비어있습니다.")
-    url = f"{SUPABASE_URL}/rest/v1/{urllib.parse.quote(path, safe='?&=,.*:()!~%/')}"
+    full_path = f"/rest/v1/{urllib.parse.quote(path, safe='?&=,.*:()!~%/')}"
     data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method, headers=_sb_headers(prefer))
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+    headers = _sb_headers(prefer)
+    global _supabase_conn
+    last_error = None
+    for attempt in range(2):
+        try:
+            conn = _get_supabase_connection()
+            conn.request(method, full_path, body=data, headers=headers)
+            resp = conn.getresponse()
             raw = resp.read()
+            if resp.status >= 400:
+                raise SupabaseError(resp.status, raw.decode("utf-8", "ignore"))
             return json.loads(raw) if raw else None
-    except urllib.error.HTTPError as e:
-        raise SupabaseError(e.code, e.read().decode("utf-8", "ignore"))
-    except urllib.error.URLError as e:
-        raise SupabaseError(0, f"URL 연결 실패: {e.reason}")
+        except SupabaseError:
+            raise
+        except Exception as e:
+            # 연결이 끊겼거나(서버리스 함수가 쉬었다 깨어난 경우 등) 서버가 닫은 경우,
+            # 새 연결로 한 번만 재시도.
+            _supabase_conn = None
+            last_error = e
+            continue
+    raise SupabaseError(0, f"Supabase 연결 실패: {last_error}")
 
 
 def check_password(candidate: str) -> bool:

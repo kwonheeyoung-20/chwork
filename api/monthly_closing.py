@@ -10,6 +10,7 @@ import base64
 import sys
 import datetime
 import urllib.request
+import http.client
 import urllib.parse
 import urllib.error
 from urllib.parse import urlparse, parse_qs, quote
@@ -39,8 +40,23 @@ class SupabaseError(Exception):
         super().__init__(f"Supabase error {status}: {body}")
 
 
+_supabase_conn = None
+_supabase_host = None
+
+
+def _get_supabase_connection():
+    """[속도 개선 테스트] Supabase REST 호출마다 매번 새 TLS 연결을 맺는 대신, 같은
+    서버리스 인스턴스(warm start) 안에서는 연결을 재사용해서 왕복 지연을 줄임."""
+    global _supabase_conn, _supabase_host
+    if _supabase_host is None:
+        _supabase_host = urllib.parse.urlsplit(SUPABASE_URL).netloc
+    if _supabase_conn is None:
+        _supabase_conn = http.client.HTTPSConnection(_supabase_host, timeout=15)
+    return _supabase_conn
+
+
 def rest_request(method, path, body=None, prefer=None):
-    url = f"{SUPABASE_URL}/rest/v1/{urllib.parse.quote(path, safe='?&=,.*:()!~%/')}"
+    full_path = f"/rest/v1/{urllib.parse.quote(path, safe='?&=,.*:()!~%/')}"
     data = json.dumps(body).encode("utf-8") if body is not None else None
     headers = {
         "apikey": SUPABASE_SECRET_KEY,
@@ -49,15 +65,24 @@ def rest_request(method, path, body=None, prefer=None):
     }
     if prefer:
         headers["Prefer"] = prefer
-    req = urllib.request.Request(url, data=data, method=method, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
+    global _supabase_conn
+    last_error = None
+    for attempt in range(2):
+        try:
+            conn = _get_supabase_connection()
+            conn.request(method, full_path, body=data, headers=headers)
+            resp = conn.getresponse()
             raw = resp.read()
+            if resp.status >= 400:
+                raise SupabaseError(resp.status, raw.decode("utf-8", "ignore"))
             return json.loads(raw) if raw else None
-    except urllib.error.HTTPError as e:
-        raise SupabaseError(e.code, e.read().decode("utf-8", "ignore"))
-    except urllib.error.URLError as e:
-        raise SupabaseError(0, f"URL 연결 실패: {e.reason}")
+        except SupabaseError:
+            raise
+        except Exception as e:
+            _supabase_conn = None
+            last_error = e
+            continue
+    raise SupabaseError(0, f"Supabase 연결 실패: {last_error}")
 
 
 def storage_upload(path, data_bytes, content_type):
