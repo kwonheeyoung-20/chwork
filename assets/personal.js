@@ -221,14 +221,17 @@ async function loadStickers() {
   }
 }
 
+let selectedStickerId = null;
+
 function renderStickers() {
   const layer = $('stickerLayer');
   if (!layer) return;
   layer.innerHTML = stickersCache.map(s => `
     <div class="sticker-item" data-id="${s.id}"
       style="position:fixed; left:${s.pos_x}vw; top:${s.pos_y}vh; transform:translate(-50%,-50%); font-size:32px; cursor:grab; pointer-events:auto; user-select:none; touch-action:none; filter:drop-shadow(0 1px 2px rgba(0,0,0,0.25));"
-      onmousedown="startStickerDrag(event, '${s.id}')" ontouchstart="startStickerDrag(event, '${s.id}')"
-      ondblclick="deleteSticker('${s.id}')" title="더블클릭하면 뗄 수 있어요">${s.emoji}</div>
+      onmousedown="startStickerDrag(event, '${s.id}')" ontouchstart="startStickerDrag(event, '${s.id}')">${s.emoji}${selectedStickerId === s.id ? `
+      <button type="button" onclick="deleteSticker('${s.id}')"
+        style="position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; border:none; background:var(--red); color:#fff; font-size:13px; line-height:1; cursor:pointer; pointer-events:auto;">×</button>` : ''}</div>
   `).join('');
 }
 
@@ -282,10 +285,16 @@ async function placeStickerAt(clientX, clientY) {
   }
 }
 
+let stickerDragStart = null;
+let stickerDragLast = null;
+
 function startStickerDrag(e, id) {
   e.preventDefault();
   e.stopPropagation();
   draggingStickerId = id;
+  const point = e.touches ? e.touches[0] : e;
+  stickerDragStart = { x: point.clientX, y: point.clientY };
+  stickerDragLast = { x: point.clientX, y: point.clientY };
   document.addEventListener('mousemove', onStickerDragMove);
   document.addEventListener('mouseup', onStickerDragEnd);
   document.addEventListener('touchmove', onStickerDragMove, { passive: false });
@@ -295,6 +304,7 @@ function startStickerDrag(e, id) {
 function onStickerDragMove(e) {
   if (!draggingStickerId) return;
   const point = e.touches ? e.touches[0] : e;
+  stickerDragLast = { x: point.clientX, y: point.clientY };
   const el = document.querySelector(`.sticker-item[data-id="${draggingStickerId}"]`);
   if (!el) return;
   el.style.left = (point.clientX / window.innerWidth * 100) + 'vw';
@@ -310,6 +320,21 @@ async function onStickerDragEnd() {
   const id = draggingStickerId;
   draggingStickerId = null;
   if (!id) return;
+
+  // 손가락/마우스가 거의 안 움직였으면(터치기기의 더블클릭 대체) "탭"으로 보고
+  // × 삭제 버튼만 토글 — 실제로 옮겼을 때만 위치를 저장함.
+  const moved = stickerDragStart && stickerDragLast
+    ? Math.hypot(stickerDragLast.x - stickerDragStart.x, stickerDragLast.y - stickerDragStart.y)
+    : 999;
+  stickerDragStart = null;
+  stickerDragLast = null;
+
+  if (moved < 6) {
+    selectedStickerId = selectedStickerId === id ? null : id;
+    renderStickers();
+    return;
+  }
+
   const el = document.querySelector(`.sticker-item[data-id="${id}"]`);
   if (!el) return;
   const pos_x = parseFloat(el.style.left);
@@ -331,6 +356,7 @@ async function deleteSticker(id) {
   try {
     await fetch(`${apiBase()}/api/personal_stickers?id=${id}`, { method: 'DELETE', headers: authHeaders() });
     stickersCache = stickersCache.filter(s => s.id !== id);
+    if (selectedStickerId === id) selectedStickerId = null;
     renderStickers();
   } catch (e) {
     alert('스티커를 떼는 중 오류가 발생했습니다.');
