@@ -449,9 +449,13 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SECRET_KEY = os.environ.get("SUPABASE_SECRET_KEY", "")
 HR_PASSWORD = os.environ.get("HR_PASSWORD", "")
 FAMILY_PASSWORD = os.environ.get("FAMILY_PASSWORD", "")
+HOLIDAY_API_KEY = os.environ.get("HOLIDAY_API_KEY", "")  # 공공데이터포털(data.go.kr) 특일 정보 API 인증키(Decoding)
+CRON_SECRET = os.environ.get("CRON_SECRET", "")  # Vercel Cron이 자동으로 Authorization: Bearer <값>으로 붙여서 호출
 
 # 가족용 비밀번호는 "개인 일정관리(personal)", "가족 공유 메모(family_notes)", "학교 시간표(timetable)"만 열 수 있음
-FAMILY_ALLOWED_RESOURCES = {"personal", "family_notes", "timetable", "personal_media"}
+# holidays(공휴일 조회)는 개인/업무 달력 양쪽에서 표시용으로 읽어야 해서 가족 계정도 조회(읽기)만 허용 —
+# 실제 동기화(쓰기)는 아래 _sync_holidays_action에서 role == "admin"인지 별도로 한 번 더 확인함.
+FAMILY_ALLOWED_RESOURCES = {"personal", "family_notes", "timetable", "personal_media", "holidays"}
 CONTRACT_BUCKET = "contracts"
 
 
@@ -518,6 +522,67 @@ def _cors_headers():
         "Access-Control-Allow-Headers": "Content-Type, X-HR-Password",
         "Content-Type": "application/json",
     }
+
+
+# ────────────────────────────────────────────────────────────
+# holidays 전용 유틸 — 공공데이터포털(data.go.kr) 특일 정보 API 동기화
+# ────────────────────────────────────────────────────────────
+DATA_GO_KR_HOLIDAY_URL = "https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo"
+
+
+def _fetch_holidays_from_api(year):
+    """공공데이터포털 '한국천문연구원_특일 정보' getRestDeInfo(공휴일) 호출.
+    반환값: [{"holiday_date": "YYYY-MM-DD", "name": "..."}] 리스트."""
+    if not HOLIDAY_API_KEY:
+        raise RuntimeError("HOLIDAY_API_KEY 환경변수가 설정되어 있지 않습니다.")
+    params = {
+        "solYear": str(year),
+        "ServiceKey": HOLIDAY_API_KEY,
+        "_type": "json",
+        "numOfRows": "100",
+    }
+    url = DATA_GO_KR_HOLIDAY_URL + "?" + urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read().decode("utf-8", "ignore")
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"data.go.kr 호출 실패 (상태코드 {e.code}): {e.read().decode('utf-8', 'ignore')}")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"data.go.kr 연결 실패: {e.reason}")
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        # 인증키 오류 등으로 XML 에러 메시지가 내려오는 경우가 많음 (JSON 파싱 실패로 알 수 있음)
+        raise RuntimeError(f"data.go.kr 응답을 해석할 수 없습니다 (인증키를 확인해주세요). 응답 앞부분: {raw[:200]}")
+
+    header = (data.get("response") or {}).get("header") or {}
+    if header.get("resultCode") not in (None, "00"):
+        raise RuntimeError(f"data.go.kr 오류: {header.get('resultCode')} {header.get('resultMsg')}")
+
+    body = (data.get("response") or {}).get("body") or {}
+    items = ((body.get("items") or {}).get("item")) or []
+    if isinstance(items, dict):
+        items = [items]
+
+    rows = []
+    for it in items:
+        locdate = str(it.get("locdate", ""))
+        if len(locdate) != 8:
+            continue
+        date_str = f"{locdate[0:4]}-{locdate[4:6]}-{locdate[6:8]}"
+        rows.append({"holiday_date": date_str, "name": it.get("dateName", "")})
+    return rows
+
+
+def _sync_holidays_for_year(year):
+    """해당 연도 공휴일을 API로 받아 holidays 테이블에 upsert. 반환값: 반영 건수."""
+    rows = _fetch_holidays_from_api(year)
+    if not rows:
+        return 0
+    rest_request("POST", "holidays", body=rows, prefer="resolution=merge-duplicates,return=minimal")
+    return len(rows)
 
 
 # ────────────────────────────────────────────────────────────
@@ -664,9 +729,16 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             qs = parse_qs(urlparse(self.path).query)
+            resource = self._resource(qs)
+            action = (qs.get("action", [None])[0] or "").strip()
+
+            # Vercel Cron이 매년 자동 호출하는 경로 — X-HR-Password가 아니라
+            # Authorization: Bearer <CRON_SECRET> 헤더로 인증하므로 일반 인증보다 먼저 분기함.
+            if resource == "holidays" and action == "cron_sync":
+                return self._cron_sync_holidays(qs)
+
             if not self._authorized(qs):
                 return self._send(401, {"error": "unauthorized"})
-            resource = self._resource(qs)
             if resource == "personal":
                 return self._get_personal(qs)
             if resource == "family_notes":
@@ -675,6 +747,10 @@ class handler(BaseHTTPRequestHandler):
                 return self._get_timetable(qs)
             if resource == "personal_media":
                 return self._get_personal_media(qs)
+            if resource == "holidays":
+                if action == "sync":
+                    return self._sync_holidays_action(qs)
+                return self._get_holidays(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -712,6 +788,43 @@ class handler(BaseHTTPRequestHandler):
             body=rows_to_upsert,
             prefer="resolution=merge-duplicates",
         )
+
+    def _get_holidays(self, qs):
+        """공휴일 목록 조회 — 관리자·가족 계정 모두 조회 가능(달력 표시용)."""
+        year = (qs.get("year", [None])[0] or "").strip()
+        if year:
+            path = (
+                f"holidays?holiday_date=gte.{year}-01-01"
+                f"&holiday_date=lte.{year}-12-31&select=*&order=holiday_date"
+            )
+        else:
+            path = "holidays?select=*&order=holiday_date"
+        rows = rest_request("GET", path) or []
+        return self._send(200, {"holidays": rows})
+
+    def _sync_holidays_action(self, qs):
+        """관리화면의 '지금 동기화' 버튼 — 관리자만 실행 가능."""
+        if self._role() != "admin":
+            return self._send(403, {"error": "관리자만 실행할 수 있습니다."})
+        year_param = (qs.get("year", [None])[0] or "").strip()
+        target_year = int(year_param) if year_param else (kst_today().year + 1)
+        try:
+            count = _sync_holidays_for_year(target_year)
+        except Exception as e:
+            return self._send(502, {"error": "sync_failed", "detail": str(e)})
+        return self._send(200, {"synced_year": target_year, "count": count})
+
+    def _cron_sync_holidays(self, qs):
+        """Vercel Cron 자동 호출 — 매년 다음 해 공휴일을 미리 동기화."""
+        auth_header = self.headers.get("Authorization", "")
+        if not CRON_SECRET or auth_header != f"Bearer {CRON_SECRET}":
+            return self._send(401, {"error": "unauthorized"})
+        target_year = kst_today().year + 1
+        try:
+            count = _sync_holidays_for_year(target_year)
+        except Exception as e:
+            return self._send(502, {"error": "sync_failed", "detail": str(e)})
+        return self._send(200, {"synced_year": target_year, "count": count})
 
     def _get_personal(self, qs):
         role = self._role()
