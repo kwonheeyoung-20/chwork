@@ -757,10 +757,12 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             return self._send(500, {"error": "server_error", "detail": str(e), "trace": traceback.format_exc()})
 
-    def _generate_lunar_occurrences(self):
+    def _generate_lunar_occurrences(self, min_horizon_year=None):
         """date_type='lunar'인 매년 반복 일정을, 매년 실제 양력 날짜로 환산해서 발생일자를 채워넣음.
         예전에는 (음력 일정 수 × 연도 수)만큼 건마다 개별 POST를 보내서 왕복이 여러 번 발생했는데,
-        전부 모았다가 배열 하나로 한 번에 upsert하도록 바꿔서 왕복을 1번으로 줄임."""
+        전부 모았다가 배열 하나로 한 번에 upsert하도록 바꿔서 왕복을 1번으로 줄임.
+        min_horizon_year: 달력에서 먼 미래 달을 조회할 때, 기본 범위(약 13개월)보다
+        더 뒤까지 생성해야 하면 그 연도를 넘겨받아 범위를 넓힘."""
         tasks = rest_request(
             "GET", "personal_schedule_tasks?date_type=eq.lunar&active=eq.true&select=*"
         ) or []
@@ -768,6 +770,8 @@ class handler(BaseHTTPRequestHandler):
             return
         today = kst_today()
         horizon_year = (today + datetime.timedelta(days=400)).year
+        if min_horizon_year and min_horizon_year > horizon_year:
+            horizon_year = min_horizon_year
         rows_to_upsert = []
         for t in tasks:
             if t.get("lunar_month") is None or t.get("lunar_day") is None:
@@ -842,6 +846,22 @@ class handler(BaseHTTPRequestHandler):
         if qs.get("skip_prepare", ["0"])[0] != "1":
             rpc("generate_personal_schedule_occurrences", {})
             self._generate_lunar_occurrences()
+        else:
+            # [수정] 달력에서 몇 년 뒤 먼 미래 달로 이동한 경우 — 예전에는 skip_prepare=1이라
+            # 여기서 아무것도 안 하고 넘어가서, 기본 생성범위(6개월)보다 먼 반복일정(매년
+            # 생일 등)이 "누군가 다른 일정을 추가/수정하기 전까지" 영영 안 보이는 문제가 있었음.
+            # 조회하려는 달(to)이 기본범위를 넘어서면, 그 달까지만 딱 필요한 만큼 생성 범위를 넓힘
+            # (기본범위 안이면 매번 호출할 필요 없으니 그대로 생략 — 성능 그대로 유지).
+            to_param = qs.get("to", [None])[0]
+            if to_param:
+                try:
+                    to_date_obj = datetime.date.fromisoformat(to_param)
+                    default_horizon = kst_today() + datetime.timedelta(days=183)
+                    if to_date_obj > default_horizon:
+                        rpc("generate_personal_schedule_occurrences", {"p_horizon": to_param})
+                        self._generate_lunar_occurrences(min_horizon_year=to_date_obj.year)
+                except ValueError:
+                    pass
 
         if qs.get("tasks", ["0"])[0] == "1":
             rows = rest_request(
