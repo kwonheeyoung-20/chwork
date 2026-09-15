@@ -482,9 +482,8 @@
             <label>직원
               <select id="s_employee_id" class="hr-input" onchange="onSettlementEmployeeChange()"></select>
             </label>
-            <label>퇴사일
+            <label>퇴사일 <span title="직원마스터에 등록된 퇴사일이 있으면 자동으로 채워집니다. 최종근무일 그대로(다음날 아님)." style="cursor:help; color:var(--text-muted); font-size:12px;">ⓘ</span>
               <input id="s_retire_date" type="date" class="hr-input" onchange="calcSettlement()">
-              <div style="font-size:11px; color:var(--text-muted); font-weight:400; margin-top:2px;">💡 직원마스터에 등록된 퇴사일이 있으면 자동으로 채워집니다. 최종근무일 그대로(다음날 아님).</div>
             </label>
           </div>
 
@@ -1444,8 +1443,8 @@
           <option value="퇴사">퇴사</option>
         </select>
       </label>
-      <label>퇴사일 <input id="f_retire_date" type="date" class="hr-input">
-        <div style="font-size:11px; color:var(--text-muted); font-weight:400; margin-top:2px;">💡 마지막으로 근무하고 급여를 받는 날(최종근무일) 그대로 입력 — 다음날(+1일) 아님</div>
+      <label>퇴사일 <span title="마지막으로 근무하고 급여를 받는 날(최종근무일) 그대로 입력 — 다음날(+1일) 아님" style="cursor:help; color:var(--text-muted); font-size:12px;">ⓘ</span>
+        <input id="f_retire_date" type="date" class="hr-input">
       </label>
       <label>고용형태
         <select id="f_employment_type" class="hr-input" onchange="toggleWorkTypeFields()">
