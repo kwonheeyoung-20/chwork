@@ -231,6 +231,7 @@ function renderStickers() {
       style="position:fixed; left:${s.pos_x}vw; top:${s.pos_y}vh; transform:translate(-50%,-50%); font-size:32px; cursor:grab; pointer-events:auto; user-select:none; touch-action:none; filter:drop-shadow(0 1px 2px rgba(0,0,0,0.25));"
       onmousedown="startStickerDrag(event, '${s.id}')" ontouchstart="startStickerDrag(event, '${s.id}')">${s.emoji}${selectedStickerId === s.id ? `
       <button type="button" onclick="deleteSticker('${s.id}')"
+        onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"
         style="position:absolute; top:-8px; right:-8px; width:20px; height:20px; border-radius:50%; border:none; background:var(--red); color:#fff; font-size:13px; line-height:1; cursor:pointer; pointer-events:auto;">×</button>` : ''}</div>
   `).join('');
 }
