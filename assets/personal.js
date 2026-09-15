@@ -2083,6 +2083,66 @@ async function imageBlobToThumbnailDataURL(blob, maxEdge) {
   return { dataUrl: canvas.toDataURL('image/jpeg', 0.75), width, height };
 }
 
+/* jsPDF 기본 폰트는 한글을 지원하지 않아 doc.text()로 한글을 쓰면 깨지고, 글자폭
+   계산도 틀려서 줄바꿈도 엉망이 됨. 그래서 텍스트를 jsPDF에 직접 안 넣고, 브라우저
+   캔버스로 한글을 정확히 그린 뒤 그 결과를 "이미지"로 PDF에 붙여넣는 방식으로 우회함
+   (캔버스는 시스템 한글 폰트를 그대로 쓰므로 깨질 일이 없고, 글자폭도 정확히 재서
+   글자 단위로 직접 줄바꿈함). */
+function buildCaptionImage(dateText, noteText, pixelWidth) {
+  const fontFamily = '"Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+  const dateFontSize = 15, noteFontSize = 13;
+  const dateLineHeight = 19, noteLineHeight = 16;
+  const maxNoteLines = 3;
+
+  const measureCanvas = document.createElement('canvas');
+  const mctx = measureCanvas.getContext('2d');
+
+  function wrapByWidth(text, font, maxWidth) {
+    mctx.font = font;
+    const lines = [];
+    let current = '';
+    for (const ch of text) {
+      const test = current + ch;
+      if (current && mctx.measureText(test).width > maxWidth) {
+        lines.push(current);
+        current = ch;
+      } else {
+        current = test;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
+
+  const dateLines = dateText ? wrapByWidth(dateText, `${dateFontSize}px ${fontFamily}`, pixelWidth) : [];
+  let noteLines = noteText ? wrapByWidth(noteText, `${noteFontSize}px ${fontFamily}`, pixelWidth) : [];
+  const truncated = noteLines.length > maxNoteLines;
+  noteLines = noteLines.slice(0, maxNoteLines);
+  if (truncated && noteLines.length > 0) {
+    noteLines[noteLines.length - 1] = noteLines[noteLines.length - 1].slice(0, -1) + '…';
+  }
+
+  const totalHeight = 6 + dateLines.length * dateLineHeight + noteLines.length * noteLineHeight + 4;
+  const canvas = document.createElement('canvas');
+  canvas.width = pixelWidth;
+  canvas.height = Math.max(totalHeight, 10);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.textBaseline = 'top';
+
+  let y = 4;
+  ctx.fillStyle = '#333333';
+  ctx.font = `${dateFontSize}px ${fontFamily}`;
+  dateLines.forEach(line => { ctx.fillText(line, 0, y); y += dateLineHeight; });
+
+  ctx.fillStyle = '#707070';
+  ctx.font = `${noteFontSize}px ${fontFamily}`;
+  noteLines.forEach(line => { ctx.fillText(line, 0, y); y += noteLineHeight; });
+
+  return { dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height };
+}
+
 async function downloadYearlyAlbumPDF() {
   const yearInput = prompt('몇 년도 사진을 PDF 앨범으로 만들까요? (예: 2026)', String(new Date().getFullYear()));
   if (!yearInput) return;
@@ -2150,20 +2210,17 @@ async function downloadYearlyAlbumPDF() {
 
         doc.addImage(dataUrl, 'JPEG', imgX, imgY, drawWidth, drawHeight);
       } catch (e) {
-        doc.setFontSize(7);
-        doc.setTextColor(150);
-        doc.text('(사진을 불러오지 못함)', x + 2, y + imgBoxHeight / 2);
+        const errorCaption = buildCaptionImage('(사진을 불러오지 못함)', '', 480);
+        const errorMmHeight = cellWidth * (errorCaption.height / errorCaption.width);
+        doc.addImage(errorCaption.dataUrl, 'PNG', x, y + imgBoxHeight / 2, cellWidth, errorMmHeight);
       }
 
       doc.setFontSize(7);
       doc.setTextColor(60);
-      doc.text(it.display_date || '', x, y + imgBoxHeight + 4);
-      if (it.note) {
-        doc.setFontSize(6.5);
-        doc.setTextColor(100);
-        const noteLines = doc.splitTextToSize(it.note, cellWidth).slice(0, 2);
-        doc.text(noteLines, x, y + imgBoxHeight + 8);
-      }
+      const captionPixelWidth = 480; // 고해상도로 그려서 PDF에서 흐릿하지 않게
+      const caption = buildCaptionImage(it.display_date || '', it.note || '', captionPixelWidth);
+      const captionMmHeight = cellWidth * (caption.height / caption.width);
+      doc.addImage(caption.dataUrl, 'PNG', x, y + imgBoxHeight + 1, cellWidth, captionMmHeight);
 
       col += 1;
       if (col >= cols) { col = 0; row += 1; }
