@@ -2049,6 +2049,113 @@ async function compressImageIfPossible(file) {
   }
 }
 
+/* ── 연간 앨범 다운로드(사진+메모를 한 번에) ──
+   폴더별(월별)로 사진을 담고, 사진 밑에 날짜·메모가 보이는 index.html을 같이 넣은
+   ZIP으로 내려받음. 이 HTML을 브라우저로 열면 앨범처럼 쭉 훑어볼 수 있고, 폴더 안
+   원본 사진들은 그대로 포토북 인쇄 업체 사이트에 올릴 수 있음. */
+let jszipLoadPromise = null;
+function ensureJSZipLoaded() {
+  if (window.JSZip) return Promise.resolve();
+  if (jszipLoadPromise) return jszipLoadPromise;
+  jszipLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('압축 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.'));
+    document.head.appendChild(script);
+  });
+  return jszipLoadPromise;
+}
+
+async function downloadYearlyAlbum() {
+  const yearInput = prompt('몇 년도 사진을 앨범으로 만들까요? (예: 2026)', String(new Date().getFullYear()));
+  if (!yearInput) return;
+  const year = yearInput.trim();
+  if (!/^\d{4}$/.test(year)) {
+    alert('연도를 4자리 숫자로 입력해주세요 (예: 2026).');
+    return;
+  }
+
+  const btn = $('yearlyAlbumDownloadBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+
+  try {
+    btn.textContent = '준비 중…';
+    await ensureJSZipLoaded();
+
+    const res = await fetch(`${apiBase()}/api/personal_media?category=album&from=${year}-01-01&to=${year}-12-31`, { headers: authHeaders() });
+    const data = await res.json();
+    const items = (data.items || [])
+      .filter(it => (it.content_type || '').startsWith('image/') && it.view_url)
+      .sort((a, b) => (a.display_date || '').localeCompare(b.display_date || ''));
+
+    if (items.length === 0) {
+      alert(`${year}년에 등록된 사진이 없습니다.`);
+      return;
+    }
+
+    const zip = new JSZip();
+    const htmlSections = {};
+
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      btn.textContent = `사진 담는 중… (${i + 1}/${items.length})`;
+      const month = (it.display_date || '').slice(0, 7);
+      const folderName = month ? `${month.slice(5, 7)}월` : '날짜미상';
+      try {
+        const fileRes = await fetch(it.view_url);
+        const blob = await fileRes.blob();
+        const ext = (it.file_name && it.file_name.includes('.')) ? it.file_name.split('.').pop() : 'jpg';
+        const safeName = `${it.display_date || 'unknown'}_${i + 1}.${ext}`;
+        zip.file(`${folderName}/${safeName}`, blob);
+
+        if (!htmlSections[folderName]) htmlSections[folderName] = [];
+        htmlSections[folderName].push(`
+          <div style="margin-bottom:28px;">
+            <img src="${folderName}/${safeName}" style="max-width:520px; width:100%; border-radius:8px; display:block;">
+            <div style="margin-top:6px; font-size:14px; color:#333;">${esc(it.display_date || '')}</div>
+            ${it.note ? `<div style="margin-top:2px; font-size:14px; color:#666;">${esc(it.note)}</div>` : ''}
+          </div>
+        `);
+      } catch (e) {
+        // 이 사진 하나만 건너뛰고 나머지는 계속 진행
+      }
+    }
+
+    const monthKeys = Object.keys(htmlSections).sort();
+    const bodyHtml = monthKeys.map(m => `
+      <h2 style="margin-top:40px; border-bottom:2px solid #ddd; padding-bottom:8px;">${esc(m)}</h2>
+      ${htmlSections[m].join('')}
+    `).join('');
+
+    const fullHtml = `<!DOCTYPE html>
+<html lang="ko"><head><meta charset="UTF-8"><title>${esc(year)}년 사진 앨범</title></head>
+<body style="font-family:sans-serif; max-width:640px; margin:0 auto; padding:24px;">
+  <h1>${esc(year)}년 사진 앨범</h1>
+  ${bodyHtml}
+</body></html>`;
+
+    zip.file('index.html', fullHtml);
+
+    btn.textContent = '압축 파일 만드는 중…';
+    const content = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(content);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${year}년_사진앨범.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  } catch (e) {
+    alert('앨범 만들기 중 오류가 발생했습니다: ' + (e.message || ''));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
 /* ── 예전에 올린 큰 사진들 한 번에 압축(1회성) ──
    새 압축 파일을 다른 경로에 올리고 → 그 항목의 storage_path/file_size를 그걸로
    바꾸고 → 마지막에 원본 파일을 지우는 순서. 중간에 실패해도(예: 네트워크 끊김)
