@@ -1347,11 +1347,23 @@ async function populateSettlementEmployeeSelect() {
     const data = await res.json();
     const list = (data.employees || []).filter(e => e.pension_enrolled);
     sel.innerHTML = '<option value="">-- 직원 선택 --</option>' +
-      list.map(e => `<option value="${e.id}">${esc(e.name)} (${esc(e.status)})</option>`).join('');
+      list.map(e => `<option value="${e.id}" data-retire="${e.retire_date || ''}">${esc(e.name)} (${esc(e.status)})</option>`).join('');
     sel.dataset.loaded = '1';
   } catch (e) {
     sel.innerHTML = '<option value="">불러오기 실패</option>';
   }
+}
+
+/* 직원 선택 시, 이미 직원마스터에 등록된 퇴사일이 있으면 자동으로 채워줌
+   (수기로 다시 입력할 필요 없게 — 필요하면 채워진 값도 직접 수정 가능) */
+function onSettlementEmployeeChange() {
+  const sel = $('s_employee_id');
+  const opt = sel.selectedOptions[0];
+  const retireDate = opt ? opt.dataset.retire : '';
+  if (retireDate) {
+    $('s_retire_date').value = retireDate;
+  }
+  calcSettlement();
 }
 
 async function calcSettlement() {
