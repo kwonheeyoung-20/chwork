@@ -79,6 +79,9 @@ async function showMain() {
   $('perMain').style.display = 'flex';
   if (sessionStorage.getItem('chwork_hr_role') === 'family') {
     document.querySelectorAll('.admin-only-nav').forEach(el => el.style.display = 'none');
+  } else {
+    const recompressBtn = $('recompressOldPhotosBtn');
+    if (recompressBtn) recompressBtn.style.display = '';
   }
   loadStickers();
   initPerCalState();
@@ -2044,6 +2047,102 @@ async function compressImageIfPossible(file) {
   } catch (e) {
     return file; // 압축 실패해도 업로드는 원본으로 계속 진행
   }
+}
+
+/* ── 예전에 올린 큰 사진들 한 번에 압축(1회성) ──
+   새 압축 파일을 다른 경로에 올리고 → 그 항목의 storage_path/file_size를 그걸로
+   바꾸고 → 마지막에 원본 파일을 지우는 순서. 중간에 실패해도(예: 네트워크 끊김)
+   그 사진 하나만 원본 그대로 남고 나머지는 계속 진행됨(부분 실패에 안전). */
+async function recompressOldPhotos() {
+  const btn = $('recompressOldPhotosBtn');
+  const SIZE_THRESHOLD = 1.5 * 1024 * 1024; // 1.5MB 넘는 것만 대상(최근 압축된 건 건너뜀)
+  if (!confirm(
+    '앨범·알림장에 있는 예전 큰 사진들을 전부 압축합니다. 사진 수에 따라 몇 분 정도 걸릴 수 있고, 이 창을 닫지 말고 기다려주세요. 진행할까요?'
+  )) return;
+
+  btn.disabled = true;
+  const originalText = btn.textContent;
+
+  let targets = [];
+  try {
+    for (const category of ['album', 'notice']) {
+      const res = await fetch(`${apiBase()}/api/personal_media?category=${category}`, { headers: authHeaders() });
+      const data = await res.json();
+      (data.items || [])
+        .filter(it => (it.content_type || '').startsWith('image/') && (it.file_size || 0) > SIZE_THRESHOLD && it.view_url)
+        .forEach(it => targets.push(it));
+    }
+  } catch (e) {
+    btn.disabled = false;
+    alert('사진 목록을 불러오는 중 오류가 발생했습니다.');
+    return;
+  }
+
+  if (targets.length === 0) {
+    btn.disabled = false;
+    alert('압축이 필요한 큰 사진이 없습니다. 이미 다 작은 상태예요.');
+    return;
+  }
+
+  let doneCount = 0, skipCount = 0, beforeTotal = 0, afterTotal = 0;
+  for (let i = 0; i < targets.length; i++) {
+    const it = targets[i];
+    btn.textContent = `압축 중… (${i + 1}/${targets.length})`;
+    try {
+      const originalRes = await fetch(it.view_url);
+      const originalBlob = await originalRes.blob();
+      const originalFile = new File([originalBlob], it.file_name || 'photo.jpg', { type: it.content_type });
+      const compressed = await compressImageIfPossible(originalFile);
+
+      if (compressed.size >= originalFile.size) {
+        skipCount += 1;
+        continue; // 압축해도 안 줄어들면 원본 그대로 둠
+      }
+
+      const category = it.category || 'album';
+      const signRes = await fetch(`${apiBase()}/api/personal_media`, {
+        method: 'POST', headers: authHeaders(true),
+        body: JSON.stringify({ action: 'sign_upload', category, file_name: compressed.name }),
+      });
+      const signData = await signRes.json();
+      if (!signRes.ok) throw new Error(signData.detail || '업로드 준비 실패');
+
+      const putRes = await fetch(signData.upload_url, {
+        method: 'PUT', headers: { 'Content-Type': compressed.type }, body: compressed,
+      });
+      if (!putRes.ok) throw new Error('파일 전송 실패');
+
+      const oldStoragePath = it.storage_path;
+      await fetch(`${apiBase()}/api/personal_media?id=${it.id}`, {
+        method: 'PATCH', headers: authHeaders(true),
+        body: JSON.stringify({
+          storage_path: signData.storage_path,
+          file_size: compressed.size,
+          content_type: compressed.type,
+        }),
+      });
+
+      // 새 파일로 교체 완료된 뒤에만 원본 삭제(교체 실패 시 원본을 잃지 않도록 순서 보장)
+      if (oldStoragePath && oldStoragePath !== signData.storage_path) {
+        await fetch(`${apiBase()}/api/personal_media?storage_path=${encodeURIComponent(oldStoragePath)}`, {
+          method: 'DELETE', headers: authHeaders(),
+        }).catch(() => {});
+      }
+
+      beforeTotal += originalFile.size;
+      afterTotal += compressed.size;
+      doneCount += 1;
+    } catch (e) {
+      skipCount += 1;
+      // 이 사진 하나만 건너뛰고 나머지는 계속 진행
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = originalText;
+  const savedMb = ((beforeTotal - afterTotal) / (1024 * 1024)).toFixed(1);
+  alert(`완료되었습니다.\n\n압축됨: ${doneCount}장 (용량 약 ${savedMb}MB 절감)\n건너뜀: ${skipCount}장`);
+  loadPersonalMedia('album');
 }
 
 async function saveMediaUpload() {
