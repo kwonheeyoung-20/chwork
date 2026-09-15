@@ -2049,6 +2049,137 @@ async function compressImageIfPossible(file) {
   }
 }
 
+/* ── 연간 앨범 PDF (A4 세로, 4x4 격자로 사진+날짜+메모) ──
+   ZIP 방식과 달리 원본 화질이 필요 없어서(작은 칸에 들어가는 썸네일이라) 사진마다
+   가벼운 미리보기로 다시 축소해서 넣음 — PDF 파일이 너무 커지는 것도 막아줌. */
+let jspdfLoadPromise = null;
+function ensureJSPDFLoaded() {
+  if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+  if (jspdfLoadPromise) return jspdfLoadPromise;
+  jspdfLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('PDF 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해주세요.'));
+    document.head.appendChild(script);
+  });
+  return jspdfLoadPromise;
+}
+
+async function imageBlobToThumbnailDataURL(blob, maxEdge) {
+  const bitmap = await createImageBitmap(blob);
+  let width = bitmap.width;
+  let height = bitmap.height;
+  if (width > maxEdge || height > maxEdge) {
+    const scale = maxEdge / Math.max(width, height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  return { dataUrl: canvas.toDataURL('image/jpeg', 0.75), width, height };
+}
+
+async function downloadYearlyAlbumPDF() {
+  const yearInput = prompt('몇 년도 사진을 PDF 앨범으로 만들까요? (예: 2026)', String(new Date().getFullYear()));
+  if (!yearInput) return;
+  const year = yearInput.trim();
+  if (!/^\d{4}$/.test(year)) {
+    alert('연도를 4자리 숫자로 입력해주세요 (예: 2026).');
+    return;
+  }
+
+  const btn = $('yearlyAlbumPdfBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+
+  try {
+    btn.textContent = '준비 중…';
+    await ensureJSPDFLoaded();
+
+    const res = await fetch(`${apiBase()}/api/personal_media?category=album&from=${year}-01-01&to=${year}-12-31`, { headers: authHeaders() });
+    const data = await res.json();
+    const items = (data.items || [])
+      .filter(it => (it.content_type || '').startsWith('image/') && it.view_url)
+      .sort((a, b) => (a.display_date || '').localeCompare(b.display_date || ''));
+
+    if (items.length === 0) {
+      alert(`${year}년에 등록된 사진이 없습니다.`);
+      return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const pageWidth = 210, pageHeight = 297;
+    const margin = 10;
+    const cols = 4, rows = 4;
+    const gap = 4;
+    const cellWidth = (pageWidth - margin * 2 - gap * (cols - 1)) / cols;
+    const cellHeight = (pageHeight - margin * 2 - gap * (rows - 1)) / rows;
+    const imgBoxHeight = cellHeight - 12; // 사진 아래 날짜·메모 표시할 공간
+
+    let col = 0, row = 0, firstPage = true;
+
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      btn.textContent = `PDF에 담는 중… (${i + 1}/${items.length})`;
+
+      if (col === 0 && row === 0 && !firstPage) {
+        doc.addPage();
+      }
+      firstPage = false;
+
+      const x = margin + col * (cellWidth + gap);
+      const y = margin + row * (cellHeight + gap);
+
+      try {
+        const fileRes = await fetch(it.view_url);
+        const blob = await fileRes.blob();
+        const { dataUrl, width, height } = await imageBlobToThumbnailDataURL(blob, 400);
+
+        // 칸 안에서 비율 유지한 채 최대한 크게(letterbox), 가운데 정렬
+        const scale = Math.min(cellWidth / width, imgBoxHeight / height);
+        const drawWidth = width * scale;
+        const drawHeight = height * scale;
+        const imgX = x + (cellWidth - drawWidth) / 2;
+        const imgY = y + (imgBoxHeight - drawHeight) / 2;
+
+        doc.addImage(dataUrl, 'JPEG', imgX, imgY, drawWidth, drawHeight);
+      } catch (e) {
+        doc.setFontSize(7);
+        doc.setTextColor(150);
+        doc.text('(사진을 불러오지 못함)', x + 2, y + imgBoxHeight / 2);
+      }
+
+      doc.setFontSize(7);
+      doc.setTextColor(60);
+      doc.text(it.display_date || '', x, y + imgBoxHeight + 4);
+      if (it.note) {
+        doc.setFontSize(6.5);
+        doc.setTextColor(100);
+        const noteLines = doc.splitTextToSize(it.note, cellWidth).slice(0, 2);
+        doc.text(noteLines, x, y + imgBoxHeight + 8);
+      }
+
+      col += 1;
+      if (col >= cols) { col = 0; row += 1; }
+      if (row >= rows) { row = 0; }
+    }
+
+    btn.textContent = 'PDF 저장 중…';
+    doc.save(`${year}년_사진앨범.pdf`);
+  } catch (e) {
+    alert('PDF 앨범 만들기 중 오류가 발생했습니다: ' + (e.message || ''));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
 /* ── 연간 앨범 다운로드(사진+메모를 한 번에) ──
    폴더별(월별)로 사진을 담고, 사진 밑에 날짜·메모가 보이는 index.html을 같이 넣은
    ZIP으로 내려받음. 이 HTML을 브라우저로 열면 앨범처럼 쭉 훑어볼 수 있고, 폴더 안
