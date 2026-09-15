@@ -1444,12 +1444,28 @@ class handler(BaseHTTPRequestHandler):
             update_fields["note"] = payload["note"]
         if payload.get("display_date"):
             update_fields["display_date"] = payload["display_date"]
+        # [신규] 예전 대용량 사진 재압축 기능용 — 압축한 새 파일로 교체할 때만 씀
+        if payload.get("storage_path"):
+            update_fields["storage_path"] = payload["storage_path"]
+        if payload.get("file_size") is not None:
+            update_fields["file_size"] = payload["file_size"]
+        if payload.get("content_type"):
+            update_fields["content_type"] = payload["content_type"]
         if not update_fields:
             return self._send(400, {"error": "수정할 항목이 없습니다"})
         rest_request("PATCH", f"personal_media?id=eq.{item_id}", body=update_fields)
         return self._send(200, {"ok": True})
 
     def _delete_personal_media(self, qs):
+        # [신규] 예전 사진 재압축 시, 이미 새 파일로 교체된 뒤 원본 파일만 별도로
+        # 정리할 때 씀 (DB 행은 이미 새 storage_path를 가리키므로 행은 안 건드림)
+        raw_path = qs.get("storage_path", [None])[0]
+        if raw_path:
+            if self._role() != "admin":
+                return self._send(403, {"error": "관리자만 실행할 수 있습니다."})
+            storage_delete(raw_path)
+            return self._send(200, {"ok": True})
+
         item_id = qs.get("id", [None])[0]
         if not item_id:
             return self._send(400, {"error": "id는 필수입니다"})
