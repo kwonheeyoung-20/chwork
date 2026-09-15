@@ -314,10 +314,10 @@
       <div id="perMain" style="display:none; flex-direction:column; gap:20px;">
 
         <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-          <button class="tab-btn active" data-persub="family" onclick="switchPerTab('family')">가족 일정</button>
-          <button class="tab-btn" data-persub="timetable" onclick="switchPerTab('timetable')">학교 시간표</button>
-          <button class="tab-btn" data-persub="notice" onclick="switchPerTab('notice')">하진이 알림장</button>
-          <button class="tab-btn" data-persub="album" onclick="switchPerTab('album')">사진 앨범</button>
+          <button class="tab-btn active" data-persub="family" onclick="switchPerTab('family')">📅 가족 일정</button>
+          <button class="tab-btn" data-persub="timetable" onclick="switchPerTab('timetable')">🏫 학교 시간표</button>
+          <button class="tab-btn" data-persub="notice" onclick="switchPerTab('notice')">📋 하진이 알림장</button>
+          <button class="tab-btn" data-persub="album" onclick="switchPerTab('album')">📷 사진 앨범</button>
         </div>
 
         <!-- ── 가족 일정 ── -->
@@ -327,7 +327,7 @@
           <section class="panel">
             <div class="panel-header">
               <h2>가족 구성원</h2>
-              <button class="secondary" onclick="openMemberModal()">+ 구성원 추가</button>
+              <button class="secondary" onclick="openMemberModal()">👨‍👩‍👧‍👦 구성원 추가</button>
             </div>
             <div class="member-legend" id="memberLegend"></div>
           </section>
@@ -337,8 +337,8 @@
               <button class="sch-cal-nav-btn" onclick="perCalPrevMonth()">◀</button>
               <input id="perCalMonthPicker" type="month" class="hr-input" style="width:150px; font-weight:600;" onchange="perCalPickMonth()">
               <button class="sch-cal-nav-btn" onclick="perCalNextMonth()">▶</button>
-              <button class="secondary" onclick="perCalToday()" style="margin-left:6px;">오늘</button>
-              <button class="primary" onclick="openPersonalEventModal()" style="margin-left:auto;">+ 일정 추가</button>
+              <button class="secondary" onclick="perCalToday()" style="margin-left:6px;">📍 오늘</button>
+              <button class="primary" onclick="openPersonalEventModal()" style="margin-left:auto;">📌 일정 추가</button>
             </div>
             <div class="sch-cal-grid" id="perCalWeekdayRow">
               <div class="sch-cal-weekday sun">일</div>
@@ -363,8 +363,8 @@
                 <span style="color:var(--text-muted);">~</span>
                 <input id="perRangeTo" type="date" class="hr-input">
               </div>
-              <button class="secondary" onclick="setPerRangePreset('month')">이번달</button>
-              <button class="secondary" onclick="setPerRangePreset('3m')">앞으로 3개월</button>
+              <button class="secondary" onclick="setPerRangePreset('month')">📅 이번달</button>
+              <button class="secondary" onclick="setPerRangePreset('3m')">🗓️ 앞으로 3개월</button>
               <div class="field-group">
                 <label>구성원</label>
                 <select id="perMemberFilter" class="hr-input">
@@ -379,7 +379,7 @@
                   <option value="done">완료</option>
                 </select>
               </div>
-              <button class="primary" onclick="loadPersonalOccurrences()">조회</button>
+              <button class="primary" onclick="loadPersonalOccurrences()">🔍 조회</button>
             </div>
             <div class="table-wrap">
               <table class="table" id="perOccTable" style="white-space:nowrap;">
@@ -401,7 +401,7 @@
           <section class="panel">
             <div class="panel-header">
               <h2>👨‍👩‍👧 가족 공유 메모 <span id="familyNoteCount" class="hr-count"></span></h2>
-              <button class="primary" onclick="openFamilyNoteModal()">+ 메모 남기기</button>
+              <button class="primary" onclick="openFamilyNoteModal()">💌 메모 남기기</button>
             </div>
             <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
               가족에게 요청할 일이나 서로 공유할 내용을 남겨두세요. 확인/처리 여부는 누구나 표시할 수 있지만, 내용 수정·삭제는 작성한 사람만 가능해요.
@@ -449,8 +449,8 @@
             <div class="panel-header">
               <h2>학교 시간표</h2>
               <div style="display:flex; gap:8px;">
-                <button class="secondary" onclick="printTimetable()">인쇄</button>
-                <button class="secondary" onclick="openPeriodModal()">+ 교시 시간 설정</button>
+                <button class="secondary" onclick="printTimetable()">🖨️ 인쇄</button>
+                <button class="secondary" onclick="openPeriodModal()">⏰ 교시 시간 설정</button>
               </div>
             </div>
             <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
@@ -474,7 +474,7 @@
           <section class="panel">
             <div class="panel-header">
               <h2>선생님 연락처</h2>
-              <button class="primary" onclick="openTeacherModal()">+ 선생님 등록</button>
+              <button class="primary" onclick="openTeacherModal()">🍎 선생님 등록</button>
             </div>
             <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
               여기 등록해두면, 위 시간표 어느 칸에 그 과목명을 넣든 자동으로 선생님 정보가 붙어요.
@@ -507,7 +507,7 @@
           <section class="panel">
             <div class="panel-header">
               <h2>하진이 알림장 <span id="noticeCount" class="hr-count"></span></h2>
-              <button class="primary" onclick="openMediaUploadModal('notice')">+ 자료 추가</button>
+              <button class="primary" onclick="openMediaUploadModal('notice')">📎 자료 추가</button>
             </div>
             <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
               이미지·PDF·문서파일을 올릴 수 있어요. 이미지·PDF는 바로 미리볼 수 있고, 그 외 문서는 파일명과 다운로드 버튼으로 제공돼요.
@@ -527,7 +527,7 @@
                 <button class="secondary" id="yearlyAlbumPdfBtn" onclick="downloadYearlyAlbumPDF()" title="한 해 사진을 A4 4x4 격자(한 페이지 16장)로 배치한 PDF로 받습니다 (사진 밑에 날짜·메모 표시)">📄 PDF 앨범 다운로드</button>
                 <button class="secondary" id="yearlyAlbumDownloadBtn" onclick="downloadYearlyAlbum()" title="한 해 사진을 월별로 정리하고, 사진+메모가 보이는 페이지와 함께 ZIP으로 받습니다">📦 연간 앨범 ZIP</button>
                 <button class="secondary" id="recompressOldPhotosBtn" onclick="recompressOldPhotos()" style="display:none;" title="예전에 올린 큰 용량 사진들을 한 번에 압축합니다">🗜️ 예전 사진 압축</button>
-                <button class="primary" onclick="openMediaUploadModal('album')">+ 사진 추가</button>
+                <button class="primary" onclick="openMediaUploadModal('album')">📸 사진 추가</button>
               </div>
             </div>
             <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
@@ -537,7 +537,7 @@
               <button class="secondary" onclick="albumPrevMonth()">◀</button>
               <b id="albumMonthLabel" style="min-width:110px; text-align:center;"></b>
               <button class="secondary" onclick="albumNextMonth()">▶</button>
-              <button class="secondary" onclick="albumThisMonth()" style="margin-left:8px;">이번달</button>
+              <button class="secondary" onclick="albumThisMonth()" style="margin-left:8px;">📅 이번달</button>
             </div>
             <div id="albumGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:10px;">
               <div class="dash-empty">불러오는 중…</div>
