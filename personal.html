@@ -524,6 +524,7 @@
             <div class="panel-header">
               <h2>사진 앨범 <span id="albumCount" class="hr-count"></span></h2>
               <div style="display:flex; gap:8px;">
+                <button class="secondary" id="yearlyAlbumDownloadBtn" onclick="downloadYearlyAlbum()" title="한 해 사진을 월별로 정리하고, 사진+메모가 보이는 페이지와 함께 ZIP으로 받습니다">📦 연간 앨범 다운로드</button>
                 <button class="secondary" id="recompressOldPhotosBtn" onclick="recompressOldPhotos()" style="display:none;" title="예전에 올린 큰 용량 사진들을 한 번에 압축합니다">🗜️ 예전 사진 압축</button>
                 <button class="primary" onclick="openMediaUploadModal('album')">+ 사진 추가</button>
               </div>
