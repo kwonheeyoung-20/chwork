@@ -1444,7 +1444,7 @@
         </select>
       </label>
       <label>퇴사일 <span title="마지막으로 근무하고 급여를 받는 날(최종근무일) 그대로 입력 — 다음날(+1일) 아님" style="cursor:help; color:var(--text-muted); font-size:12px;">ⓘ</span>
-        <input id="f_retire_date" type="date" class="hr-input">
+        <input id="f_retire_date" type="date" class="hr-input" onchange="syncStatusWithRetireDate()">
       </label>
       <label>고용형태
         <select id="f_employment_type" class="hr-input" onchange="toggleWorkTypeFields()">
