@@ -523,7 +523,10 @@
           <section class="panel">
             <div class="panel-header">
               <h2>사진 앨범 <span id="albumCount" class="hr-count"></span></h2>
-              <button class="primary" onclick="openMediaUploadModal('album')">+ 사진 추가</button>
+              <div style="display:flex; gap:8px;">
+                <button class="secondary" id="recompressOldPhotosBtn" onclick="recompressOldPhotos()" style="display:none;" title="예전에 올린 큰 용량 사진들을 한 번에 압축합니다">🗜️ 예전 사진 압축</button>
+                <button class="primary" onclick="openMediaUploadModal('album')">+ 사진 추가</button>
+              </div>
             </div>
             <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
               여러 장을 한 번에 올릴 수 있어요. 사진을 누르면 크게 볼 수 있어요. 사진이 많아져도 느려지지 않도록 한 달씩 나눠서 보여줘요.
