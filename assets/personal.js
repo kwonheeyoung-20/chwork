@@ -2088,11 +2088,21 @@ async function imageBlobToThumbnailDataURL(blob, maxEdge) {
    캔버스로 한글을 정확히 그린 뒤 그 결과를 "이미지"로 PDF에 붙여넣는 방식으로 우회함
    (캔버스는 시스템 한글 폰트를 그대로 쓰므로 깨질 일이 없고, 글자폭도 정확히 재서
    글자 단위로 직접 줄바꿈함). */
+/* jsPDF 기본 폰트는 한글을 지원하지 않아 doc.text()로 한글을 쓰면 깨지고, 글자폭
+   계산도 틀려서 줄바꿈도 엉망이 됨. 그래서 텍스트를 jsPDF에 직접 안 넣고, 브라우저
+   캔버스로 한글을 정확히 그린 뒤 그 결과를 "이미지"로 PDF에 붙여넣는 방식으로 우회함
+   (캔버스는 시스템 한글 폰트를 그대로 쓰므로 깨질 일이 없고, 글자폭도 정확히 재서
+   글자 단위로 직접 줄바꿈함).
+   PX_PER_MM: 이 캔버스를 몇 mm 폭으로 그릴지와 무관하게 항상 같은 실제 인쇄
+   크기(글자 크기)가 나오도록, "1mm = 몇 px로 그렸는지"를 고정해둔 값. 사진마다
+   가로폭이 달라도(세로사진/가로사진) 캡션 글자 크기가 늘 똑같이 보이게 해줌. */
+const CAPTION_PX_PER_MM = 10;
+
 function buildCaptionImage(dateText, noteText, pixelWidth) {
   const fontFamily = '"Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
-  const dateFontSize = 15, noteFontSize = 13;
-  const dateLineHeight = 19, noteLineHeight = 16;
-  const maxNoteLines = 3;
+  const dateFontSize = 30, noteFontSize = 30; // 날짜/메모 같은 크기로
+  const dateLineHeight = 36, noteLineHeight = 34;
+  const maxNoteLines = 2;
 
   const measureCanvas = document.createElement('canvas');
   const mctx = measureCanvas.getContext('2d');
@@ -2114,7 +2124,7 @@ function buildCaptionImage(dateText, noteText, pixelWidth) {
     return lines;
   }
 
-  const dateLines = dateText ? wrapByWidth(dateText, `${dateFontSize}px ${fontFamily}`, pixelWidth) : [];
+  const dateLines = dateText ? wrapByWidth(dateText, `bold ${dateFontSize}px ${fontFamily}`, pixelWidth) : [];
   let noteLines = noteText ? wrapByWidth(noteText, `${noteFontSize}px ${fontFamily}`, pixelWidth) : [];
   const truncated = noteLines.length > maxNoteLines;
   noteLines = noteLines.slice(0, maxNoteLines);
@@ -2132,11 +2142,11 @@ function buildCaptionImage(dateText, noteText, pixelWidth) {
   ctx.textBaseline = 'top';
 
   let y = 4;
-  ctx.fillStyle = '#333333';
-  ctx.font = `${dateFontSize}px ${fontFamily}`;
+  ctx.fillStyle = '#222222';
+  ctx.font = `bold ${dateFontSize}px ${fontFamily}`;
   dateLines.forEach(line => { ctx.fillText(line, 0, y); y += dateLineHeight; });
 
-  ctx.fillStyle = '#707070';
+  ctx.fillStyle = '#666666';
   ctx.font = `${noteFontSize}px ${fontFamily}`;
   noteLines.forEach(line => { ctx.fillText(line, 0, y); y += noteLineHeight; });
 
@@ -2180,7 +2190,7 @@ async function downloadYearlyAlbumPDF() {
     const gap = 4;
     const cellWidth = (pageWidth - margin * 2 - gap * (cols - 1)) / cols;
     const cellHeight = (pageHeight - margin * 2 - gap * (rows - 1)) / rows;
-    const imgBoxHeight = cellHeight - 12; // 사진 아래 날짜·메모 표시할 공간
+    const imgBoxHeight = cellHeight - 13; // 사진 아래 날짜·메모 표시할 공간(글자 커진 만큼 여유 확보)
 
     let col = 0, row = 0, firstPage = true;
 
@@ -2195,6 +2205,8 @@ async function downloadYearlyAlbumPDF() {
 
       const x = margin + col * (cellWidth + gap);
       const y = margin + row * (cellHeight + gap);
+      let photoLeftX = x;       // 사진의 실제 왼쪽 끝(letterbox로 안쪽에 들어간 만큼 반영) — 캡션을 여기에 맞춤
+      let photoDrawWidth = cellWidth; // 사진의 실제 폭 — 캡션도 이 폭에 맞춰 그림
 
       try {
         const fileRes = await fetch(it.view_url);
@@ -2207,6 +2219,8 @@ async function downloadYearlyAlbumPDF() {
         const drawHeight = height * scale;
         const imgX = x + (cellWidth - drawWidth) / 2;
         const imgY = y + (imgBoxHeight - drawHeight) / 2;
+        photoLeftX = imgX;
+        photoDrawWidth = drawWidth;
 
         doc.addImage(dataUrl, 'JPEG', imgX, imgY, drawWidth, drawHeight);
       } catch (e) {
@@ -2215,12 +2229,18 @@ async function downloadYearlyAlbumPDF() {
         doc.addImage(errorCaption.dataUrl, 'PNG', x, y + imgBoxHeight / 2, cellWidth, errorMmHeight);
       }
 
-      doc.setFontSize(7);
-      doc.setTextColor(60);
-      const captionPixelWidth = 480; // 고해상도로 그려서 PDF에서 흐릿하지 않게
-      const caption = buildCaptionImage(it.display_date || '', it.note || '', captionPixelWidth);
-      const captionMmHeight = cellWidth * (caption.height / caption.width);
-      doc.addImage(caption.dataUrl, 'PNG', x, y + imgBoxHeight + 1, cellWidth, captionMmHeight);
+      // [수정] 캡션을 사진의 실제 왼쪽 끝·폭에 맞춰서 배치(사진과 줄이 맞게).
+      // CAPTION_PX_PER_MM로 캔버스를 그려서, 사진 폭이 저마다 달라도(세로/가로 사진)
+      // 캡션 글자 크기는 항상 일정하게 유지됨. 날짜는 [ ]로 감싸서 표시.
+      const captionPixelWidth = Math.max(120, Math.round(photoDrawWidth * CAPTION_PX_PER_MM));
+      const caption = buildCaptionImage(
+        it.display_date ? `[${it.display_date}]` : '',
+        it.note || '',
+        captionPixelWidth
+      );
+      const captionMmWidth = caption.width / CAPTION_PX_PER_MM;
+      const captionMmHeight = caption.height / CAPTION_PX_PER_MM;
+      doc.addImage(caption.dataUrl, 'PNG', photoLeftX, y + imgBoxHeight + 1, captionMmWidth, captionMmHeight);
 
       col += 1;
       if (col >= cols) { col = 0; row += 1; }
