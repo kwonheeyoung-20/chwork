@@ -877,6 +877,13 @@ function renderSettingsOverview() {
   `).join('');
 }
 
+/* 퇴사일을 입력/삭제하면 재직상태를 자동으로 맞춰줌(퇴사일 있으면 "퇴사", 지우면 "재직") —
+   따로 재직상태를 손대지 않아도 되고, 재직상태만 바꾸고 퇴사일을 깜빡하는 실수도 줄여줌 */
+function syncStatusWithRetireDate() {
+  const retireDate = $('f_retire_date').value;
+  $('f_status').value = retireDate ? '퇴사' : '재직';
+}
+
 function toggleWorkTypeFields() {
   if (editingId !== null) return; // 수정 모드에서는 신규입사 전용 조건 섹션 숨김 유지
   const type = $('f_employment_type').value;
@@ -1001,6 +1008,13 @@ async function saveEmployee() {
 
   if (!payload.name) {
     $('modalMsg').textContent = '이름은 필수입니다.';
+    $('modalMsg').className = 'hr-msg';
+    btn.disabled = false;
+    return;
+  }
+
+  if (payload.status === '퇴사' && !payload.retire_date) {
+    $('modalMsg').textContent = '재직상태가 "퇴사"인데 퇴사일이 비어있습니다. 퇴사일을 입력해주세요.';
     $('modalMsg').className = 'hr-msg';
     btn.disabled = false;
     return;
