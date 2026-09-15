@@ -2016,6 +2016,36 @@ function fileToBase64(file) {
   });
 }
 
+/* 사진을 원본 그대로 올리면(요즘 스마트폰 사진은 보통 10~20MB) 모바일 네트워크에서
+   업로드가 한참 걸림 — 올리기 전에 브라우저에서 긴 변 1920px로 축소 + JPEG 압축해서
+   보내면 보통 500KB~1MB 정도로 줄어들어 훨씬 빨라짐. 압축 실패(지원 안 되는 형식 등)
+   시엔 안전하게 원본 그대로 올림. 이미지가 아닌 파일(동영상 등)은 건드리지 않음. */
+async function compressImageIfPossible(file) {
+  if (!file.type || !file.type.startsWith('image/')) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxEdge = 1920;
+    let width = bitmap.width;
+    let height = bitmap.height;
+    if (width > maxEdge || height > maxEdge) {
+      const scale = maxEdge / Math.max(width, height);
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+    if (!blob || blob.size >= file.size) return file; // 압축이 오히려 더 크면 원본 사용
+    const newName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+    return new File([blob], newName, { type: 'image/jpeg' });
+  } catch (e) {
+    return file; // 압축 실패해도 업로드는 원본으로 계속 진행
+  }
+}
+
 async function saveMediaUpload() {
   const files = Array.from($('mu_file').files || []);
   if (files.length === 0) {
@@ -2025,9 +2055,13 @@ async function saveMediaUpload() {
   const note = $('mu_note').value.trim() || null;
   const displayDate = $('mu_date').value || toISO(new Date());
   const btn = $('mediaUploadSaveBtn');
+  const originalBtnText = btn.textContent;
   btn.disabled = true;
   let okCount = 0;
-  for (const file of files) {
+  let fileIndex = 0;
+  for (let file of files) {
+    fileIndex += 1;
+    const fileLabel = files.length > 1 ? ` (${fileIndex}/${files.length})` : '';
     // 예전에는 파일을 base64로 감싸서 우리 서버(Vercel 함수)에 보냈는데, 그러면
     // 인코딩하면서 용량이 33% 커지는데다 Vercel 함수 자체의 요청 크기 제한(약 4.5MB)
     // 까지 겹쳐서 3MB만 넘어도 실패했음. 그래서 이제는:
@@ -2035,6 +2069,8 @@ async function saveMediaUpload() {
     //   2) 브라우저가 그 주소로 원본 파일을 Supabase Storage에 직접 전송(서버 안 거침)
     //   3) 업로드 끝나면 서버에는 "이 경로에 이런 파일 올렸다"는 정보만 등록
     // 이렇게 하면 우리 서버는 파일 바이트를 아예 안 거치니, 용량 제한이 사실상 사라짐.
+    btn.textContent = `압축 중…${fileLabel}`;
+    file = await compressImageIfPossible(file);
     if (file.size > 30 * 1024 * 1024) {
       $('mediaUploadModalMsg').textContent = `"${file.name}" 파일이 너무 큽니다(30MB 이하로 올려주세요).`;
       continue;
@@ -2054,6 +2090,7 @@ async function saveMediaUpload() {
       if (!signRes.ok) throw new Error(signData.detail || signData.error || '업로드 준비 실패');
 
       // 2) 그 주소로 원본 파일을 직접 전송 (우리 서버를 거치지 않음)
+      btn.textContent = `업로드 중…${fileLabel}`;
       const putRes = await fetch(signData.upload_url, {
         method: 'PUT',
         headers: { 'Content-Type': file.type || 'application/octet-stream' },
@@ -2083,6 +2120,7 @@ async function saveMediaUpload() {
     }
   }
   btn.disabled = false;
+  btn.textContent = originalBtnText;
   if (okCount > 0) {
     closeMediaUploadModal();
     loadPersonalMedia(pendingMediaUploadCategory);
