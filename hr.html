@@ -861,6 +861,9 @@
               <label style="font-size:13px; color:var(--text-secondary);">연도:</label>
               <select id="annualAllYear" class="hr-input" style="width:100px;"></select>
               <button class="secondary" onclick="loadAnnualSummaryAll()">조회</button>
+              <label style="font-size:13px; color:var(--text-secondary); display:flex; align-items:center; gap:4px;">
+                <input type="checkbox" id="annualAllExcludeRetired" onchange="renderAnnualSummaryAll()" style="width:auto;"> 퇴사자 제외
+              </label>
               <button class="secondary" onclick="downloadAnnualSummaryAllExcel()">엑셀 다운로드</button>
             </div>
             <div class="table-wrap">
