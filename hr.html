@@ -752,6 +752,32 @@
           <div id="otherPayBulkMsg" class="hr-msg"></div>
 
           <div style="display:flex; align-items:center; gap:8px; margin:20px 0 14px; padding-top:16px; border-top:0.5px solid var(--border);">
+            <h3 style="font-size:13px; margin:0;">🚪 퇴사자 연차수당 정산(중도)</h3>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
+            연말이 아니라 중도에 퇴사하는 직원의 잔여연차를 정산할 때 씁니다. 계산 기준일만 그 직원의 퇴사일(또는 원하시는 날짜)로 지정하고, 귀속월·지급일자는 다른 지급 항목처럼 자유롭게 정하시면 됩니다.
+          </p>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">직원:</label>
+            <select id="rl_employee_id" class="hr-input" style="width:140px;" onchange="onRetireeLeaveEmployeeChange()"></select>
+            <label style="font-size:13px; color:var(--text-secondary);">계산 기준일:</label>
+            <input id="rl_asof" type="date" class="hr-input" style="width:150px;" onchange="calcRetireeLeaveWage()">
+            <span id="rl_wage_result" style="font-size:12px; color:var(--text-secondary);"></span>
+          </div>
+          <div id="rl_inputWrap" style="display:none; align-items:center; gap:8px; margin-bottom:12px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary);">잔여일수:</label>
+            <input id="rl_days" type="number" step="0.5" class="hr-input" style="width:90px;" oninput="recalcRetireeLeaveAmount()">
+            <label style="font-size:13px; color:var(--text-secondary);">금액(자동계산, 직접 수정 가능):</label>
+            <input id="rl_amount" type="number" class="hr-input" style="width:130px; text-align:right;">
+            <label style="font-size:13px; color:var(--text-secondary);">귀속월:</label>
+            <input id="rl_belongs_month" type="month" class="hr-input" style="width:130px;">
+            <label style="font-size:13px; color:var(--text-secondary);">지급일자:</label>
+            <input id="rl_pay_date" type="date" class="hr-input" style="width:150px;">
+            <button class="primary" onclick="saveRetireeLeavePay()">저장</button>
+          </div>
+          <div id="retireeLeaveMsg" class="hr-msg"></div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin:20px 0 14px; padding-top:16px; border-top:0.5px solid var(--border);">
             <h3 style="font-size:13px; margin:0;">지급 내역 조회</h3>
           </div>
           <div style="padding:12px; background:var(--bg); border-radius:var(--radius-sm); margin-bottom:14px; display:flex; flex-direction:column; gap:10px;">
