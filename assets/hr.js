@@ -2413,7 +2413,7 @@ function recalcRetireeLeaveAmount() {
   const dailyWage = Number($('rl_inputWrap').dataset.dailyWage) || 0;
   const days = Number($('rl_days').value) || 0;
   const raw = days * dailyWage;
-  const rounded = Math.ceil(raw / 1000) * 1000; // 백원단위 올림 → 끝자리 ,000 (기존 일괄입력과 동일 방식)
+  const rounded = Math.ceil(raw / 100) * 100; // 백원단위 올림 → 끝자리 두 자리가 00 (기존 일괄입력과 동일 방식)
   $('rl_amount').value = rounded || '';
 }
 
@@ -2726,7 +2726,7 @@ function recalcLeavePayAmount(inputEl) {
   const dailyWage = Number(tr.dataset.dailyWage) || 0;
   const days = Number(inputEl.value) || 0;
   const raw = days * dailyWage;
-  const rounded = Math.ceil(raw / 1000) * 1000; // 백원단위 올림 → 끝자리 ,000
+  const rounded = Math.ceil(raw / 100) * 100; // 백원단위 올림 → 끝자리 두 자리가 00
   const amountInput = tr.querySelector('.bulk-op-amount');
   amountInput.value = rounded || '';
 }
