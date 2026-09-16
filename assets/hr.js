@@ -459,6 +459,7 @@ function switchHrTab(name) {
   if (name === 'otherpay') {
     populateYearSelect('otherpayYear');
     populateOtherPayEmployeeSelect();
+    populateRetireeLeaveEmployeeSelect();
     loadOtherPayments();
   }
   if (name === 'annual') {
@@ -955,6 +956,7 @@ function openEditModal(id) {
   $('f_hire_date').value = emp.hire_date || '';
   $('f_status').value = emp.status || '재직';
   $('f_retire_date').value = emp.retire_date || '';
+  syncStatusWithRetireDate(); // 예전에 저장된, 퇴사일은 있는데 재직상태가 안 맞는 데이터도 열자마자 바로 정정해서 보여줌
   $('f_employment_type').value = emp.employment_type || '정규직';
   $('probationFields').style.display = 'none';
   $('contractFields').style.display = 'none';
@@ -2346,6 +2348,117 @@ async function refreshOtherPayLockStatus() {
 }
 
 /* ── 성과급/기타지급 ── */
+/* ── 퇴사자 연차수당 정산(중도) ── */
+let retireeLeaveEmployeesCache = [];
+
+async function populateRetireeLeaveEmployeeSelect() {
+  const sel = $('rl_employee_id');
+  if (sel.dataset.loaded === '1') return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_employees?all=1`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    retireeLeaveEmployeesCache = data.employees || [];
+    sel.innerHTML = '<option value="">-- 직원 선택 --</option>' +
+      retireeLeaveEmployeesCache.map(e => `<option value="${e.id}">${esc(e.name)} (${esc(e.status)})</option>`).join('');
+    sel.dataset.loaded = '1';
+  } catch (e) {
+    sel.innerHTML = '<option value="">불러오기 실패</option>';
+  }
+}
+
+function onRetireeLeaveEmployeeChange() {
+  const empId = $('rl_employee_id').value;
+  const emp = retireeLeaveEmployeesCache.find(e => e.id === empId);
+  $('rl_inputWrap').style.display = 'none';
+  $('rl_wage_result').textContent = '';
+  if (!emp) return;
+  // 퇴사일이 있으면 기본값으로 채워줌(재직자면 오늘 날짜로) — 필요하면 직접 고칠 수 있음
+  $('rl_asof').value = emp.retire_date || new Date().toISOString().slice(0, 10);
+  if (!$('rl_belongs_month').value) {
+    $('rl_belongs_month').value = ($('rl_asof').value || '').slice(0, 7);
+  }
+  calcRetireeLeaveWage();
+}
+
+async function calcRetireeLeaveWage() {
+  const empId = $('rl_employee_id').value;
+  const asOf = $('rl_asof').value;
+  if (!empId || !asOf) return;
+  $('rl_wage_result').textContent = '계산 중…';
+  try {
+    const res = await fetch(`${apiBase()}/api/annual_leave_calc?all=1&asof=${asOf}`, {
+      headers: { 'X-HR-Password': hrPassword() },
+    });
+    const data = await res.json();
+    const row = (data.employees || []).find(e => e.employee_id === empId);
+    if (!row) {
+      $('rl_wage_result').textContent = '⚠ 이 시점까지 저장된 급여명세가 없어 계산할 수 없습니다.';
+      $('rl_inputWrap').style.display = 'none';
+      return;
+    }
+    $('rl_wage_result').innerHTML = `${asOf} 기준 · 통상시급 ${fmt(row.hourly_wage)}원 · 1일 ${fmt(row.daily_wage)}원`
+      + `<span style="color:var(--text-muted);"> (${esc(row.source_month || '')} 급여명세 기준${row.adjusted_month ? ', 조정 전 정상금액 사용' : ''})</span>`;
+    $('rl_inputWrap').dataset.dailyWage = row.daily_wage;
+    $('rl_inputWrap').style.display = 'flex';
+    if (!$('rl_pay_date').value) $('rl_pay_date').value = asOf;
+    recalcRetireeLeaveAmount();
+  } catch (e) {
+    $('rl_wage_result').textContent = '계산 중 오류가 발생했습니다.';
+  }
+}
+
+function recalcRetireeLeaveAmount() {
+  const dailyWage = Number($('rl_inputWrap').dataset.dailyWage) || 0;
+  const days = Number($('rl_days').value) || 0;
+  const raw = days * dailyWage;
+  const rounded = Math.ceil(raw / 1000) * 1000; // 백원단위 올림 → 끝자리 ,000 (기존 일괄입력과 동일 방식)
+  $('rl_amount').value = rounded || '';
+}
+
+async function saveRetireeLeavePay() {
+  const empId = $('rl_employee_id').value;
+  const amount = Number($('rl_amount').value);
+  const belongsMonth = $('rl_belongs_month').value;
+  const payDate = $('rl_pay_date').value;
+  if (!empId || !amount || !belongsMonth || !payDate) {
+    $('retireeLeaveMsg').textContent = '직원, 금액, 귀속월, 지급일자는 모두 필수입니다.';
+    $('retireeLeaveMsg').className = 'hr-msg';
+    return;
+  }
+  const empName = retireeLeaveEmployeesCache.find(e => e.id === empId)?.name || '';
+  if (!confirm(`${empName} 님에게 연차수당 ${fmt(amount)}원을 귀속월 ${belongsMonth}, 지급일 ${payDate}로 저장하시겠습니까?`)) return;
+
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({
+        employee_id: empId,
+        payment_type: '연차수당',
+        belongs_month: `${belongsMonth}-01`,
+        payment_date: payDate,
+        amount,
+        note: '중도퇴사 연차수당 정산',
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'save failed');
+    $('retireeLeaveMsg').className = 'hr-msg success';
+    $('retireeLeaveMsg').textContent = '저장되었습니다.';
+    $('rl_days').value = '';
+    $('rl_amount').value = '';
+    $('rl_inputWrap').style.display = 'none';
+    $('rl_wage_result').textContent = '';
+    $('rl_employee_id').value = '';
+    loadOtherPayments();
+  } catch (e) {
+    $('retireeLeaveMsg').className = 'hr-msg';
+    $('retireeLeaveMsg').textContent = e.message && e.message.includes('마감') ? e.message : '저장 중 오류가 발생했습니다.';
+  }
+}
+
 async function populateOtherPayEmployeeSelect() {
   const sel = $('op_employee_id');
   if (sel.dataset.loaded === '1') return;
