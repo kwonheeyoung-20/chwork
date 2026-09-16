@@ -4022,22 +4022,29 @@ async function loadAnnualSummaryAll() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '조회 실패');
     annualSummaryAllCache = data;
-    renderAnnualSummaryAll(data);
+    renderAnnualSummaryAll();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
-function renderAnnualSummaryAll(data) {
-  const tbody = $('annualAllTbody');
-  const list = data.employees || [];
-  if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">데이터가 없습니다.</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = list.map(e => `
+const ANNUAL_ALL_PAYMENT_TYPES = ['성과급1차', '성과급2차', '상여금', '기타수당', '연차수당'];
+
+function sumAnnualAllTotals(list) {
+  const t = { monthly_total: 0, grand_total: 0 };
+  ANNUAL_ALL_PAYMENT_TYPES.forEach(k => { t[k] = 0; });
+  list.forEach(e => {
+    t.monthly_total += e.monthly_total || 0;
+    t.grand_total += e.grand_total || 0;
+    ANNUAL_ALL_PAYMENT_TYPES.forEach(k => { t[k] += e[k] || 0; });
+  });
+  return t;
+}
+
+function annualAllRowHtml(e, showRetiredBadge) {
+  return `
     <tr>
-      <td>${esc(e.name)}</td>
+      <td>${esc(e.name)}${showRetiredBadge ? ' <span style="color:var(--red); font-size:11px; font-weight:600;">(퇴사)</span>' : ''}</td>
       <td>${esc(e.branch || '-')}</td>
       <td>${esc(e.department || '-')}</td>
       <td>${esc(e.position || '-')}</td>
@@ -4049,12 +4056,14 @@ function renderAnnualSummaryAll(data) {
       <td class="num">${e['연차수당'] ? fmt(e['연차수당']) : ''}</td>
       <td class="num" style="font-weight:500;">${fmt(e.grand_total)}</td>
     </tr>
-  `).join('');
+  `;
+}
 
-  const t = data.totals;
-  tbody.innerHTML += `
-    <tr class="hr-total-row">
-      <td colspan="4">합계 (${list.length}명)</td>
+function annualAllSubtotalRowHtml(label, list) {
+  const t = sumAnnualAllTotals(list);
+  return `
+    <tr class="hr-total-row" style="background:var(--surface);">
+      <td colspan="4">${esc(label)} (${list.length}명)</td>
       <td class="num">${fmt(t.monthly_total)}</td>
       <td class="num">${fmt(t['성과급1차'])}</td>
       <td class="num">${fmt(t['성과급2차'])}</td>
@@ -4066,22 +4075,69 @@ function renderAnnualSummaryAll(data) {
   `;
 }
 
+function renderAnnualSummaryAll() {
+  const data = annualSummaryAllCache;
+  const tbody = $('annualAllTbody');
+  if (!data) return;
+  const excludeRetired = $('annualAllExcludeRetired').checked;
+  const all = data.employees || [];
+  if (all.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">데이터가 없습니다.</td></tr>`;
+    return;
+  }
+
+  const active = all.filter(e => e.status !== '퇴사');
+  const retired = all.filter(e => e.status === '퇴사');
+  const shownList = excludeRetired ? active : all;
+
+  if (shownList.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">표시할 직원이 없습니다.</td></tr>`;
+    return;
+  }
+
+  let html = active.map(e => annualAllRowHtml(e, false)).join('');
+
+  if (!excludeRetired && retired.length > 0) {
+    html += `
+      <tr><td colspan="11" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500; border-top:1px solid var(--border);">퇴사자</td></tr>
+    `;
+    html += retired.map(e => annualAllRowHtml(e, true)).join('');
+  }
+
+  html += annualAllSubtotalRowHtml('합계', shownList);
+  tbody.innerHTML = html;
+}
+
 function downloadAnnualSummaryAllExcel() {
   if (!annualSummaryAllCache) { alert('먼저 조회해주세요.'); return; }
   const data = annualSummaryAllCache;
+  const excludeRetired = $('annualAllExcludeRetired').checked;
+  const active = data.employees.filter(e => e.status !== '퇴사');
+  const retired = data.employees.filter(e => e.status === '퇴사');
+  const shownList = excludeRetired ? active : data.employees;
+
   const rows = [[
     '이름', '지사', '부서', '직급', '월급여 합계(연간)',
     '성과급1차', '성과급2차', '상여금', '기타수당', '연차수당', '연간 총계',
   ]];
-  data.employees.forEach(e => {
+  active.forEach(e => {
     rows.push([
       e.name, e.branch || '', e.department || '', e.position || '', e.monthly_total,
       e['성과급1차'], e['성과급2차'], e['상여금'], e['기타수당'], e['연차수당'], e.grand_total,
     ]);
   });
-  const t = data.totals;
+  if (!excludeRetired && retired.length > 0) {
+    rows.push(['퇴사자']);
+    retired.forEach(e => {
+      rows.push([
+        `${e.name}(퇴사)`, e.branch || '', e.department || '', e.position || '', e.monthly_total,
+        e['성과급1차'], e['성과급2차'], e['상여금'], e['기타수당'], e['연차수당'], e.grand_total,
+      ]);
+    });
+  }
+  const t = sumAnnualAllTotals(shownList);
   rows.push([
-    `합계(${data.employees.length}명)`, '', '', '', t.monthly_total,
+    `합계(${shownList.length}명)`, '', '', '', t.monthly_total,
     t['성과급1차'], t['성과급2차'], t['상여금'], t['기타수당'], t['연차수당'], t.grand_total,
   ]);
   const ws = XLSX.utils.aoa_to_sheet(rows);
