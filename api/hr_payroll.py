@@ -384,7 +384,7 @@ class handler(BaseHTTPRequestHandler):
                 employees = rest_request(
                     "GET",
                     f"employees?hire_date=lte.{year}-12-31&or=(retire_date.is.null,retire_date.gte.{year}-01-01)"
-                    f"&select=id,name,branch,department,position&order=hire_date.asc,name.asc",
+                    f"&select=id,name,branch,department,position,status,retire_date&order=hire_date.asc,name.asc",
                 ) or []
 
                 payroll_rows = rest_request(
