@@ -830,7 +830,11 @@
               <label style="font-size:13px; color:var(--text-secondary);">연도:</label>
               <select id="annualYear" class="hr-input" style="width:100px;"></select>
               <button class="secondary" onclick="loadAnnualSummary()">조회</button>
-              <button class="secondary" onclick="downloadAnnualSummaryExcel()">엑셀 다운로드</button>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+              <button class="secondary" onclick="printAnnualSummary()">🖨 인쇄</button>
+              <button class="secondary" onclick="downloadAnnualSummaryExcel()">📊 엑셀 다운로드</button>
             </div>
 
             <div id="annualResult" style="display:none;">
@@ -864,7 +868,11 @@
               <label style="font-size:13px; color:var(--text-secondary); display:flex; align-items:center; gap:4px;">
                 <input type="checkbox" id="annualAllExcludeRetired" onchange="renderAnnualSummaryAll()" style="width:auto;"> 퇴사자 제외
               </label>
-              <button class="secondary" onclick="downloadAnnualSummaryAllExcel()">엑셀 다운로드</button>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+              <button class="secondary" onclick="printAnnualSummaryAll()">🖨 인쇄</button>
+              <button class="secondary" onclick="downloadAnnualSummaryAllExcel()">📊 엑셀 다운로드</button>
             </div>
             <div class="table-wrap">
               <table class="table" id="annualAllTable">
@@ -1673,6 +1681,16 @@
 <div id="promoMatrixPrintArea" style="display:none;">
   <h2 id="promoMatrixPrintTitle" style="margin-bottom:16px;"></h2>
   <div id="promoMatrixPrintBody"></div>
+</div>
+
+<div id="annualPersonalPrintArea" style="display:none;">
+  <h2 id="annualPersonalPrintTitle" style="margin-bottom:16px;"></h2>
+  <div id="annualPersonalPrintBody"></div>
+</div>
+
+<div id="annualAllPrintArea" style="display:none;">
+  <h2 id="annualAllPrintTitle" style="margin-bottom:16px;"></h2>
+  <div id="annualAllPrintBody"></div>
 </div>
 
 <div id="registerPrintArea" style="display:none;">
