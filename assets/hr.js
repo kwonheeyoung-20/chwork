@@ -3982,6 +3982,55 @@ function renderAnnualSummary(data) {
   $('annualResult').style.display = 'block';
 }
 
+function printAnnualSummary() {
+  if (!annualSummaryCache || !$('annualResult') || $('annualResult').style.display === 'none') {
+    alert('먼저 조회해주세요.');
+    return;
+  }
+  const data = annualSummaryCache;
+  $('annualPersonalPrintTitle').textContent = `${data.year}년 ${data.employee.name} 연간 급여 종합`;
+  $('annualPersonalPrintBody').innerHTML = `
+    <p style="font-size:12px; color:#555; margin-bottom:10px;">${esc(data.employee.branch || '-')} / ${esc(data.employee.department || '-')} / ${esc(data.employee.position || '-')}</p>
+    ${$('annualTable').outerHTML}
+  `;
+  _printFixedAreaLandscape('annualPersonalPrintArea', 'annualPersonalPrintStyle');
+}
+
+function printAnnualSummaryAll() {
+  if (!annualSummaryAllCache) {
+    alert('먼저 조회해주세요.');
+    return;
+  }
+  $('annualAllPrintTitle').textContent = `${annualSummaryAllCache.year}년 전 직원 연간 급여 종합`;
+  $('annualAllPrintBody').innerHTML = $('annualAllTable').outerHTML;
+  _printFixedAreaLandscape('annualAllPrintArea', 'annualAllPrintStyle');
+}
+
+/* 인쇄용 임시 영역만 보이게 하고 나머지는 숨기는 공통 인쇄 방식(가로/landscape).
+   printPromotionMatrix 등 다른 화면 인쇄와 동일한 방식 — 화면 그대로를 별도 복제
+   없이, 이미 채워둔 인쇄 영역(id로 넘겨받음)만 보이게 해서 인쇄함. */
+function _printFixedAreaLandscape(areaId, styleId) {
+  $(areaId).style.display = 'block';
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = `
+    @media print {
+      body * { visibility: hidden; }
+      .layout { display: none !important; }
+      #${areaId}, #${areaId} * { visibility: visible; }
+      #${areaId} { position: static; width: 100%; }
+      @page { size: landscape; margin: 8mm; }
+      #${areaId} h2 { font-size: 14px; margin-bottom: 6px; }
+      #${areaId} table { font-size: 9px; border-collapse: collapse; width: 100%; }
+      #${areaId} th, #${areaId} td { padding: 2px 4px; line-height: 1.25; }
+    }
+  `;
+  document.head.appendChild(style);
+  window.print();
+  document.head.removeChild(style);
+  $(areaId).style.display = 'none';
+}
+
 function downloadAnnualSummaryExcel() {
   if (!annualSummaryCache) { alert('먼저 조회해주세요.'); return; }
   const data = annualSummaryCache;
