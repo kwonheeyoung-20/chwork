@@ -82,6 +82,8 @@ async function showMain() {
   } else {
     const recompressBtn = $('recompressOldPhotosBtn');
     if (recompressBtn) recompressBtn.style.display = '';
+    const addQuoteBtn = $('addQuoteBtn');
+    if (addQuoteBtn) addQuoteBtn.style.display = '';
   }
   loadStickers();
   initPerCalState();
@@ -140,6 +142,7 @@ function switchPerTab(name) {
   $('perTimetableView').style.display = name === 'timetable' ? 'block' : 'none';
   $('perNoticeView').style.display = name === 'notice' ? 'block' : 'none';
   $('perAlbumView').style.display = name === 'album' ? 'block' : 'none';
+  $('perQuotesView').style.display = name === 'quotes' ? 'block' : 'none';
   if (name === 'timetable' && $('perTimetableView').dataset.loaded !== '1') {
     $('perTimetableView').dataset.loaded = '1';
     loadTimetable();
@@ -152,6 +155,10 @@ function switchPerTab(name) {
     $('perAlbumView').dataset.loaded = '1';
     initAlbumMonthState();
     loadPersonalMedia('album');
+  }
+  if (name === 'quotes' && $('perQuotesView').dataset.loaded !== '1') {
+    $('perQuotesView').dataset.loaded = '1';
+    loadQuotes();
   }
 }
 
@@ -2595,5 +2602,138 @@ async function saveMediaEdit() {
     loadPersonalMedia(pendingMediaEditCategory);
   } catch (e) {
     $('mediaEditModalMsg').textContent = '수정 중 오류가 발생했습니다: ' + (e.message || '');
+  }
+}
+
+/* ── 글귀 메모장(포스트잇) ── */
+const QUOTE_COLORS = {
+  yellow: '#fff59d',
+  pink: '#f8bbd0',
+  blue: '#bbdefb',
+  green: '#c8e6c9',
+  purple: '#e1bee7',
+};
+
+let quotesCache = [];
+let expandedQuoteIds = new Set();
+let editingQuoteId = null;
+let selectedQuoteColor = 'yellow';
+
+async function loadQuotes() {
+  const grid = $('quotesGrid');
+  grid.innerHTML = `<div class="dash-empty">불러오는 중…</div>`;
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_quotes`, { headers: authHeaders() });
+    if (handle401(res)) return;
+    const data = await res.json();
+    quotesCache = data.quotes || [];
+    renderQuotes();
+  } catch (e) {
+    grid.innerHTML = `<div class="dash-empty" style="color:var(--red);">불러오기 실패</div>`;
+  }
+}
+
+function renderQuotes() {
+  $('quotesCount').textContent = quotesCache.length ? `총 ${quotesCache.length}개` : '';
+  const grid = $('quotesGrid');
+  const isAdmin = sessionStorage.getItem('chwork_hr_role') === 'admin';
+  if (quotesCache.length === 0) {
+    grid.innerHTML = `<div class="dash-empty">아직 적어둔 글귀가 없어요.${isAdmin ? ' "메모 추가"로 처음 남겨보세요.' : ''}</div>`;
+    return;
+  }
+  grid.innerHTML = quotesCache.map((q, idx) => {
+    const bg = QUOTE_COLORS[q.color] || QUOTE_COLORS.yellow;
+    const tilt = (idx % 2 === 0 ? -1 : 1) * (1 + (idx % 3));
+    const expanded = expandedQuoteIds.has(q.id);
+    const actions = isAdmin ? `
+      <div class="quote-actions">
+        <button onclick="event.stopPropagation(); openQuoteModal('${q.id}')">✏️</button>
+        <button onclick="event.stopPropagation(); deleteQuote('${q.id}')">🗑️</button>
+      </div>
+    ` : '';
+    const sharedBadge = q.is_shared ? `<span class="quote-shared-badge" title="가족과 공유됨">👨‍👩‍👧</span>` : '';
+    return `
+      <div class="quote-card" style="background:${bg}; --tilt:${tilt}deg;" onclick="toggleQuoteExpand('${q.id}')">
+        ${sharedBadge}
+        ${actions}
+        <div class="quote-content ${expanded ? '' : 'collapsed'}">${esc(q.content)}</div>
+        ${q.source ? `<div class="quote-source">— ${esc(q.source)}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleQuoteExpand(id) {
+  if (expandedQuoteIds.has(id)) expandedQuoteIds.delete(id);
+  else expandedQuoteIds.add(id);
+  renderQuotes();
+}
+
+function renderQuoteColorPicker(selected) {
+  selectedQuoteColor = selected;
+  const wrap = $('quoteColorPicker');
+  wrap.innerHTML = Object.entries(QUOTE_COLORS).map(([key, hex]) => `
+    <div class="quote-color-swatch ${key === selected ? 'selected' : ''}" style="background:${hex};" onclick="selectQuoteColor('${key}')"></div>
+  `).join('');
+}
+
+function selectQuoteColor(key) {
+  selectedQuoteColor = key;
+  renderQuoteColorPicker(key);
+}
+
+function openQuoteModal(id) {
+  editingQuoteId = id || null;
+  const existing = id ? quotesCache.find(q => q.id === id) : null;
+  $('quoteModalTitle').textContent = existing ? '메모 수정' : '메모 추가';
+  $('q_content').value = existing ? existing.content : '';
+  $('q_source').value = existing ? (existing.source || '') : '';
+  $('q_shared').checked = existing ? !!existing.is_shared : false;
+  renderQuoteColorPicker(existing ? (existing.color || 'yellow') : 'yellow');
+  $('quoteModalMsg').textContent = '';
+  $('quoteModal').style.display = 'flex';
+}
+
+function closeQuoteModal() {
+  $('quoteModal').style.display = 'none';
+}
+
+async function saveQuote() {
+  const content = $('q_content').value.trim();
+  if (!content) {
+    $('quoteModalMsg').textContent = '내용을 입력해주세요.';
+    return;
+  }
+  const payload = {
+    content,
+    source: $('q_source').value.trim() || null,
+    color: selectedQuoteColor,
+    is_shared: $('q_shared').checked,
+  };
+  try {
+    const url = editingQuoteId ? `${apiBase()}/api/personal_quotes?id=${editingQuoteId}` : `${apiBase()}/api/personal_quotes`;
+    const res = await fetch(url, {
+      method: editingQuoteId ? 'PATCH' : 'POST',
+      headers: authHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || data.detail || '저장 실패');
+    closeQuoteModal();
+    loadQuotes();
+  } catch (e) {
+    $('quoteModalMsg').textContent = '저장 중 오류가 발생했습니다: ' + (e.message || '');
+  }
+}
+
+async function deleteQuote(id) {
+  if (!confirm('이 메모를 삭제하시겠습니까?')) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/personal_quotes?id=${id}`, { method: 'DELETE', headers: authHeaders() });
+    if (!res.ok) throw new Error('삭제 실패');
+    expandedQuoteIds.delete(id);
+    loadQuotes();
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다.');
   }
 }
