@@ -456,7 +456,7 @@ CRON_SECRET = os.environ.get("CRON_SECRET", "")  # Vercel Cron이 자동으로 A
 # 가족용 비밀번호는 "개인 일정관리(personal)", "가족 공유 메모(family_notes)", "학교 시간표(timetable)"만 열 수 있음
 # holidays(공휴일 조회)는 개인/업무 달력 양쪽에서 표시용으로 읽어야 해서 가족 계정도 조회(읽기)만 허용 —
 # 실제 동기화(쓰기)는 아래 _sync_holidays_action에서 role == "admin"인지 별도로 한 번 더 확인함.
-FAMILY_ALLOWED_RESOURCES = {"personal", "family_notes", "timetable", "personal_media", "holidays", "personal_stickers"}
+FAMILY_ALLOWED_RESOURCES = {"personal", "family_notes", "timetable", "personal_media", "holidays", "personal_stickers", "personal_quotes"}
 CONTRACT_BUCKET = "contracts"
 
 
@@ -782,6 +782,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._get_holidays(qs)
             if resource == "personal_stickers":
                 return self._get_personal_stickers(qs)
+            if resource == "personal_quotes":
+                return self._get_personal_quotes(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -823,6 +825,59 @@ class handler(BaseHTTPRequestHandler):
             body=rows_to_upsert,
             prefer="resolution=merge-duplicates",
         )
+
+    def _get_personal_quotes(self, qs):
+        """글귀 메모장 — 관리자는 전부 다 보이고, 가족 계정은 is_shared=true(공유 체크한 것)만 보임."""
+        if self._role() == "admin":
+            path = "personal_quotes?select=*&order=created_at.desc"
+        else:
+            path = "personal_quotes?select=*&is_shared=eq.true&order=created_at.desc"
+        rows = rest_request("GET", path) or []
+        return self._send(200, {"quotes": rows})
+
+    def _post_personal_quotes(self, payload):
+        if self._role() != "admin":
+            return self._send(403, {"error": "관리자만 추가할 수 있습니다."})
+        content = (payload.get("content") or "").strip()
+        if not content:
+            return self._send(400, {"error": "content는 필수입니다"})
+        row = {
+            "content": content,
+            "source": (payload.get("source") or "").strip() or None,
+            "color": payload.get("color") or "yellow",
+            "is_shared": bool(payload.get("is_shared")),
+        }
+        result = rest_request("POST", "personal_quotes", body=row, prefer="return=representation") or []
+        quote = result[0] if isinstance(result, list) and result else None
+        return self._send(200, {"quote": quote})
+
+    def _patch_personal_quotes(self, quote_id, payload):
+        # 이 메모장은 관리자 개인 것이므로(가족은 공유 체크된 것만 "읽기"만 가능),
+        # 수정·공유설정 변경은 관리자만.
+        if self._role() != "admin":
+            return self._send(403, {"error": "관리자만 수정할 수 있습니다."})
+        update_fields = {}
+        if "content" in payload:
+            update_fields["content"] = (payload["content"] or "").strip()
+        if "source" in payload:
+            update_fields["source"] = (payload["source"] or "").strip() or None
+        if "color" in payload:
+            update_fields["color"] = payload["color"]
+        if "is_shared" in payload:
+            update_fields["is_shared"] = bool(payload["is_shared"])
+        if not update_fields:
+            return self._send(400, {"error": "수정할 항목이 없습니다"})
+        rest_request("PATCH", f"personal_quotes?id=eq.{quote_id}", body=update_fields)
+        return self._send(200, {"ok": True})
+
+    def _delete_personal_quotes(self, qs):
+        if self._role() != "admin":
+            return self._send(403, {"error": "관리자만 삭제할 수 있습니다."})
+        quote_id = qs.get("id", [None])[0]
+        if not quote_id:
+            return self._send(400, {"error": "id는 필수입니다"})
+        rest_request("DELETE", f"personal_quotes?id=eq.{quote_id}")
+        return self._send(200, {"ok": True})
 
     def _get_personal_stickers(self, qs):
         """다이어리 스티커 조회 — 가족 공유(누가 붙이든 전부에게 보임)."""
@@ -1131,6 +1186,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._post_personal_media(payload)
             if resource == "personal_stickers":
                 return self._post_personal_stickers(payload)
+            if resource == "personal_quotes":
+                return self._post_personal_quotes(payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -1322,6 +1379,10 @@ class handler(BaseHTTPRequestHandler):
                 if not item_id:
                     return self._send(400, {"error": "id는 필수입니다"})
                 return self._patch_personal_stickers(item_id, payload)
+            if resource == "personal_quotes":
+                if not item_id:
+                    return self._send(400, {"error": "id는 필수입니다"})
+                return self._patch_personal_quotes(item_id, payload)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
@@ -1631,6 +1692,8 @@ class handler(BaseHTTPRequestHandler):
                 return self._delete_personal_media(qs)
             if resource == "personal_stickers":
                 return self._delete_personal_stickers(qs)
+            if resource == "personal_quotes":
+                return self._delete_personal_quotes(qs)
             return self._send(400, {"error": "알 수 없는 resource입니다"})
         except SupabaseError as e:
             return self._send(502, {"error": "supabase_error", "status": e.status, "detail": e.body})
