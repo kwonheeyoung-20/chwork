@@ -76,6 +76,26 @@
       25%      { transform: rotate(-14deg) scale(1.1); }
       75%      { transform: rotate(14deg) scale(1.1); }
     }
+    .quote-card {
+      position: relative;
+      padding: 18px 16px 14px;
+      border-radius: 3px;
+      box-shadow: 2px 4px 10px rgba(0,0,0,0.18);
+      cursor: pointer;
+      min-height: 110px;
+      font-family: inherit;
+      transition: transform 0.15s ease;
+      transform: rotate(var(--tilt, -1.2deg));
+    }
+    .quote-card:hover { transform: rotate(0deg) scale(1.03); box-shadow: 3px 6px 14px rgba(0,0,0,0.24); }
+    .quote-card .quote-content { font-size: 13px; line-height: 1.5; color: #3a3a3a; white-space: pre-wrap; word-break: break-word; }
+    .quote-card .quote-content.collapsed { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+    .quote-card .quote-source { margin-top: 8px; font-size: 11px; color: #666; font-style: italic; }
+    .quote-card .quote-actions { position: absolute; top: 6px; right: 8px; display: flex; gap: 4px; }
+    .quote-card .quote-actions button { font-size: 11px; padding: 2px 6px; border-radius: 4px; border: none; background: rgba(255,255,255,0.6); cursor: pointer; }
+    .quote-card .quote-shared-badge { position: absolute; top: 6px; left: 8px; font-size: 11px; }
+    .quote-color-swatch { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+    .quote-color-swatch.selected { border-color: var(--accent); }
     .sch-cal-more { font-size:10px; color:var(--text-muted); padding-left:5px; }
 
     .member-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 10px 3px 6px; border-radius:20px; font-size:12px; font-weight:600; color:#fff; }
@@ -318,6 +338,7 @@
           <button class="tab-btn" data-persub="timetable" onclick="switchPerTab('timetable')">🏫 학교 시간표</button>
           <button class="tab-btn" data-persub="notice" onclick="switchPerTab('notice')">📋 하진이 알림장</button>
           <button class="tab-btn" data-persub="album" onclick="switchPerTab('album')">📷 사진 앨범</button>
+          <button class="tab-btn" data-persub="quotes" onclick="switchPerTab('quotes')">💭 글귀 메모</button>
         </div>
 
         <!-- ── 가족 일정 ── -->
@@ -545,9 +566,52 @@
           </section>
         </div>
 
+        <!-- ── 글귀 메모장 ── -->
+        <div id="perQuotesView" style="display:none;">
+          <section class="panel">
+            <div class="panel-header">
+              <h2>글귀 메모장 <span id="quotesCount" class="hr-count"></span></h2>
+              <button class="primary" id="addQuoteBtn" style="display:none;" onclick="openQuoteModal()">💭 메모 추가</button>
+            </div>
+            <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 14px;">
+              책에서 본 문구나 적어두고 싶은 말을 포스트잇처럼 모아둘 수 있어요. 카드를 누르면 전체 내용이 펼쳐져요. "가족과 공유"를 체크한 것만 가족 화면에도 보여요.
+            </p>
+            <div id="quotesGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:16px;">
+              <div class="dash-empty">불러오는 중…</div>
+            </div>
+          </section>
+        </div>
+
       </div>
     </div>
   </main>
+</div>
+
+<!-- 글귀 메모 추가/수정 모달 -->
+<div id="quoteModal" class="hr-modal-backdrop" style="display:none;">
+  <div class="hr-modal" style="width:420px;">
+    <h2 id="quoteModalTitle">메모 추가</h2>
+    <div class="hr-form-grid" style="grid-template-columns:1fr;">
+      <label>내용
+        <textarea id="q_content" class="hr-input" rows="4" placeholder="적어두고 싶은 문구나 말을 써주세요"></textarea>
+      </label>
+      <label>출처(선택)
+        <input id="q_source" class="hr-input" placeholder="예: 책 제목, 작가 이름 등">
+      </label>
+      <label>포스트잇 색
+        <div id="quoteColorPicker" style="display:flex; gap:8px; margin-top:4px;"></div>
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; flex-direction:row;">
+        <input type="checkbox" id="q_shared" style="width:auto;">
+        <span>가족과 공유(체크 해제하면 나만 보임)</span>
+      </label>
+    </div>
+    <p id="quoteModalMsg" class="hr-msg"></p>
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px;">
+      <button class="secondary" onclick="closeQuoteModal()">취소</button>
+      <button class="primary" id="quoteSaveBtn" onclick="saveQuote()">저장</button>
+    </div>
+  </div>
 </div>
 
 <!-- 알림장/앨범 자료 업로드 모달 -->

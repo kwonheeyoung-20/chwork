@@ -106,6 +106,7 @@
     { "src": "/api/manuals", "dest": "api/workspace.py?resource=manuals" },
     { "src": "/api/holidays", "dest": "api/personal_workspace.py?resource=holidays" },
     { "src": "/api/personal_stickers", "dest": "api/personal_workspace.py?resource=personal_stickers" },
+    { "src": "/api/personal_quotes", "dest": "api/personal_workspace.py?resource=personal_quotes" },
     { "src": "/api/monthly_closing", "dest": "api/monthly_closing.py" },
     { "src": "/(.*)", "dest": "/$1" }
   ],
