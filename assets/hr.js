@@ -5582,7 +5582,13 @@ function _cloneScreenTableForPrint() {
 
   clone.querySelectorAll('input').forEach(input => {
     const span = document.createElement('span');
-    span.textContent = input.value || '';
+    if (input.classList.contains('bonus-decided-input') && input.value !== '') {
+      span.textContent = fmt(Number(input.value));
+      span.style.display = 'block';
+      span.style.textAlign = 'right';
+    } else {
+      span.textContent = input.value || '';
+    }
     input.replaceWith(span);
   });
   return clone;
@@ -6140,7 +6146,13 @@ function _cloneSiTableForPrint() {
   clone.querySelectorAll('.si-exclude-col').forEach(el => el.remove());
   clone.querySelectorAll('input').forEach(input => {
     const span = document.createElement('span');
-    span.textContent = input.value || '';
+    if (input.classList.contains('si-decided-input') && input.value !== '') {
+      span.textContent = fmt(Number(input.value));
+      span.style.display = 'block';
+      span.style.textAlign = 'right';
+    } else {
+      span.textContent = input.value || '';
+    }
     input.replaceWith(span);
   });
   return clone;
