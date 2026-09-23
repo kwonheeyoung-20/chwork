@@ -5325,6 +5325,7 @@ function updateBonusRowCalc(tr) {
   if (!tr) return;
   const bonusY1 = Number(tr.dataset.bonusY1 || 0);
   const decidedInput = tr.querySelector('.bonus-decided-input');
+  if (!decidedInput) return;  // 화면이 예상 상태가 아니면(마감 직후 재렌더 도중 등) 조용히 건너뜀
   const decided = parseAmountInput(decidedInput.value);
   const diffCell = tr.querySelector('.bonus-diff-cell');
   const pctCell = tr.querySelector('.bonus-pct-cell');
@@ -5351,7 +5352,8 @@ function renderBonusReportTotals() {
   document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => {
     const y2 = Number(tr.dataset.bonusY2 || 0);
     const y1 = Number(tr.dataset.bonusY1 || 0);
-    const decided = parseAmountInput(tr.querySelector('.bonus-decided-input').value) || 0;
+    const decidedInput = tr.querySelector('.bonus-decided-input');
+    const decided = decidedInput ? (parseAmountInput(decidedInput.value) || 0) : 0;
     sumY2 += y2; sumY1Bonus += y1; sumDecided += decided;
   });
 
@@ -5382,6 +5384,7 @@ function collectBonusReportInputs() {
     const amountInput = tr.querySelector('.bonus-decided-input');
     const noteInput = tr.querySelector('.bonus-note-input');
     const criteriaInput = tr.querySelector('.bonus-criteria-input');
+    if (!amountInput || !noteInput || !criteriaInput) return;  // 화면이 예상 상태가 아니면 그 행은 건너뜀
     items.push({
       employee_id: empId,
       criteria: criteriaInput.value.trim() || null,
