@@ -5479,11 +5479,12 @@ function _bonusPrintLandscape() {
   document.head.appendChild(style);
   $('bonus_print_asof').textContent = `기준일자: ${new Date().toISOString().slice(0, 10)}`;
 
+  const includeCriteria = $('bonusPrintIncludeCriteria') ? $('bonusPrintIncludeCriteria').checked : true;
   const criteriaNote = $('bonusCriteriaNote').value.trim();
   const criteriaRowsForPrint = (bonusCriteriaRows || []).filter(r => (r.position || '').trim() || (r.criteria || '').trim() || (r.note || '').trim());
   const existingBlock = document.getElementById('bonus_print_criteria_block');
   if (existingBlock) existingBlock.remove();
-  if (criteriaNote || criteriaRowsForPrint.length > 0) {
+  if (includeCriteria && (criteriaNote || criteriaRowsForPrint.length > 0)) {
     const block = document.createElement('div');
     block.id = 'bonus_print_criteria_block';
     block.style.cssText = 'margin-top:16px; padding:10px; border:1px solid #ccc; font-size:11px;';
@@ -5516,8 +5517,22 @@ function _bonusPrintLandscape() {
   }
 
   $('bonusReportPrintArea').style.display = 'block';
+
+  // [신규] 컬럼이 많아 폭을 넘으면(특히 "비고"가 오른쪽 끝에서 잘리는 문제) 그
+  // 비율만큼 표 전체를 자동으로 축소함 — 연봉인상보고서 인쇄와 동일한 방식.
+  const table = $('bonusReportPrintArea').querySelector('table');
+  const availablePx = 1050; // landscape A4(297mm) - 여백 10mm×2 ≈ 277mm 기준
+  if (table) {
+    table.style.zoom = '';
+    const naturalWidth = table.scrollWidth;
+    if (naturalWidth > availablePx) {
+      table.style.zoom = String(availablePx / naturalWidth);
+    }
+  }
+
   window.print();
   $('bonusReportPrintArea').style.display = 'none';
+  if (table) { table.style.zoom = ''; }
   document.head.removeChild(style);
 }
 
