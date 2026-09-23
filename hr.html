@@ -1095,6 +1095,9 @@
           <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:14px; flex-wrap:wrap;">
             <button class="secondary" onclick="printBonusReportDecision()">🖨 인쇄(의사결정용)</button>
             <button class="secondary" onclick="printBonusReportFinal()">🖨 인쇄(확정 결정내용)</button>
+            <label style="font-size:13px; color:var(--text-secondary); display:flex; align-items:center; gap:4px;">
+              <input type="checkbox" id="bonusPrintIncludeCriteria" checked style="width:auto;"> 지급기준표 포함해서 인쇄
+            </label>
             <button class="secondary" onclick="downloadBonusReportExcel()">📊 엑셀 다운로드(전체 데이터)</button>
           </div>
 
@@ -1295,7 +1298,7 @@
               <label>상태</label>
               <select id="finStatusFilter" class="hr-input" onchange="renderFinancialDocs()">
                 <option value="">전체</option>
-                <option value="active" selected>만기전(유지중)</option>
+                <option value="active">만기전(유지중)</option>
                 <option value="expired">만기경과</option>
                 <option value="terminated">중도해지</option>
               </select>
@@ -1325,7 +1328,7 @@
               <label>계약상태</label>
               <select id="cdStatusFilter" class="hr-input" onchange="renderContractDocs()">
                 <option value="">전체</option>
-                <option value="active" selected>계약유지중</option>
+                <option value="active">계약유지중</option>
                 <option value="expired">계약만료</option>
                 <option value="terminated">계약종료(해지)</option>
               </select>
