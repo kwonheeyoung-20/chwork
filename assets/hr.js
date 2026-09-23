@@ -3,6 +3,17 @@
 const $ = id => document.getElementById(id);
 const fmt = n => (n == null || isNaN(n)) ? '-' : Math.round(n).toLocaleString('ko-KR');
 
+/* 콤마 표시되는 금액 입력칸(결정성과급, 결정연봉 등) 공용 헬퍼 —
+   입력할 때마다 숫자만 남기고 콤마를 다시 붙여서, 입력 중에도 천단위 콤마가 보이게 함. */
+function formatAmountInputLive(input) {
+  const digits = input.value.replace(/[^\d]/g, '');
+  input.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+}
+function parseAmountInput(str) {
+  const digits = (str || '').replace(/[^\d]/g, '');
+  return digits ? Number(digits) : null;
+}
+
 function apiBase() { return window.location.origin; }
 function hrPassword() { return sessionStorage.getItem('chwork_hr_pw') || ''; }
 
@@ -5264,7 +5275,10 @@ async function loadBonusReport() {
     tbody.innerHTML = html;
 
     document.querySelectorAll('.bonus-decided-input, .bonus-note-input, .bonus-criteria-input').forEach(el => {
-      el.addEventListener('input', () => { updateBonusRowCalc(el.closest('tr')); renderBonusReportTotals(); });
+      el.addEventListener('input', () => {
+        if (el.classList.contains('bonus-decided-input')) formatAmountInputLive(el);
+        updateBonusRowCalc(el.closest('tr')); renderBonusReportTotals();
+      });
     });
     document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => updateBonusRowCalc(tr));
     renderBonusReportTotals();
@@ -5292,10 +5306,10 @@ function renderBonusRow(e, locked) {
       <td class="num" style="background:#f7f9fc;">${fmt(e.bonus_y1)}</td>
       <td class="num">${fmtManwon(e.salary_now)}</td>
       <td class="num">${fmt(e.monthly_now)}</td>
-      <td style="background:#fff9ec;"><input type="text" class="hr-input bonus-criteria-input" style="width:110px;" value="${esc(e.criteria || '')}" ${locked ? 'disabled' : ''}></td>
+      <td style="background:#fff9ec;"><input type="text" inputmode="numeric" class="hr-input bonus-criteria-input" style="width:110px; text-align:center;" value="${esc(e.criteria || '')}" ${locked ? 'disabled' : ''}></td>
       <td style="background:#fff9ec;">
-        <input type="number" class="hr-input bonus-decided-input" style="width:120px; text-align:right;"
-          value="${e.decided_amount != null ? e.decided_amount : ''}" ${locked ? 'disabled' : ''}>
+        <input type="text" inputmode="numeric" class="hr-input bonus-decided-input" style="width:120px; text-align:right;"
+          value="${e.decided_amount != null ? Number(e.decided_amount).toLocaleString('ko-KR') : ''}" ${locked ? 'disabled' : ''}>
       </td>
       <td class="num bonus-diff-cell" style="background:#fff9ec;">-</td>
       <td class="num bonus-pct-cell" style="background:#fff9ec;">-</td>
@@ -5311,7 +5325,7 @@ function updateBonusRowCalc(tr) {
   if (!tr) return;
   const bonusY1 = Number(tr.dataset.bonusY1 || 0);
   const decidedInput = tr.querySelector('.bonus-decided-input');
-  const decided = decidedInput.value.trim() === '' ? null : Number(decidedInput.value);
+  const decided = parseAmountInput(decidedInput.value);
   const diffCell = tr.querySelector('.bonus-diff-cell');
   const pctCell = tr.querySelector('.bonus-pct-cell');
   if (decided == null) {
@@ -5337,8 +5351,7 @@ function renderBonusReportTotals() {
   document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => {
     const y2 = Number(tr.dataset.bonusY2 || 0);
     const y1 = Number(tr.dataset.bonusY1 || 0);
-    const v = tr.querySelector('.bonus-decided-input').value.trim();
-    const decided = v === '' ? 0 : Number(v);
+    const decided = parseAmountInput(tr.querySelector('.bonus-decided-input').value) || 0;
     sumY2 += y2; sumY1Bonus += y1; sumDecided += decided;
   });
 
@@ -5369,11 +5382,10 @@ function collectBonusReportInputs() {
     const amountInput = tr.querySelector('.bonus-decided-input');
     const noteInput = tr.querySelector('.bonus-note-input');
     const criteriaInput = tr.querySelector('.bonus-criteria-input');
-    const val = amountInput.value.trim();
     items.push({
       employee_id: empId,
       criteria: criteriaInput.value.trim() || null,
-      decided_amount: val === '' ? null : Number(val),
+      decided_amount: parseAmountInput(amountInput.value),
       note: noteInput.value.trim() || null,
     });
   });
@@ -5566,7 +5578,7 @@ function _cloneScreenTableForPrint() {
       sumY2 += Number(tr.dataset.bonusY2 || 0);
       sumY1 += Number(tr.dataset.bonusY1 || 0);
       const decidedInput = tr.querySelector('.bonus-decided-input');
-      sumDecided += decidedInput && decidedInput.value.trim() !== '' ? Number(decidedInput.value) : 0;
+      sumDecided += decidedInput ? (parseAmountInput(decidedInput.value) || 0) : 0;
     });
     const totalRow = clone.querySelector('.bonus-grand-total-row');
     if (totalRow) {
@@ -5583,7 +5595,7 @@ function _cloneScreenTableForPrint() {
   clone.querySelectorAll('input').forEach(input => {
     const span = document.createElement('span');
     if (input.classList.contains('bonus-decided-input') && input.value !== '') {
-      span.textContent = fmt(Number(input.value));
+      span.textContent = fmt(parseAmountInput(input.value));
       span.style.display = 'block';
       span.style.textAlign = 'right';
     } else {
@@ -5749,7 +5761,10 @@ async function loadSalaryIncreaseReport() {
     tbody.innerHTML = sorted.map((e, idx) => renderSiRow({ ...e, seq: idx + 1 }, locked)).join('');
 
     document.querySelectorAll('.si-decided-input, .si-note-input').forEach(el => {
-      el.addEventListener('input', () => { updateSiRowCalc(el.closest('tr')); renderSiTotals(); });
+      el.addEventListener('input', () => {
+        if (el.classList.contains('si-decided-input')) formatAmountInputLive(el);
+        updateSiRowCalc(el.closest('tr')); renderSiTotals();
+      });
     });
     document.querySelectorAll('#siTbody tr[data-emp-id]').forEach(tr => updateSiRowCalc(tr));
     renderSiTotals();
@@ -5783,8 +5798,8 @@ function renderSiRow(e, locked) {
       <td class="num">${fmtManwon(e.salary_now)}</td>
       <td class="num">${fmt(e.monthly_now)}</td>
       <td style="background:#fff9ec;">
-        <input type="number" class="hr-input si-decided-input" style="width:110px; text-align:right;"
-          value="${e.decided_salary != null ? e.decided_salary : ''}" ${locked ? 'disabled' : ''}>
+        <input type="text" inputmode="numeric" class="hr-input si-decided-input" style="width:110px; text-align:right;"
+          value="${e.decided_salary != null ? Number(e.decided_salary).toLocaleString('ko-KR') : ''}" ${locked ? 'disabled' : ''}>
       </td>
       <td style="background:#fff9ec;">
         <input type="month" class="hr-input si-applied-input" style="width:120px;"
@@ -5805,7 +5820,7 @@ function updateSiRowCalc(tr) {
   const salaryNow = Number(tr.dataset.salaryNow || 0);
   const decidedInput = tr.querySelector('.si-decided-input');
   if (!decidedInput) return;  // 화면 전환 도중 등으로 요소가 이미 없어졌으면 조용히 건너뜀
-  const decided = decidedInput.value.trim() === '' ? null : Number(decidedInput.value);
+  const decided = parseAmountInput(decidedInput.value);
   const diffCell = tr.querySelector('.si-diff-cell');
   const pctCell = tr.querySelector('.si-pct-cell');
   if (!diffCell || !pctCell) return;
@@ -5838,8 +5853,7 @@ function renderSiTotals() {
     if (e.y1_increase_amount != null) sums.y1inc += Number(e.y1_increase_amount);
     sums.nows += Number(e.salary_now || 0); sums.nowm += Number(e.monthly_now || 0);
     const decidedEl = tr.querySelector('.si-decided-input');
-    const v = decidedEl ? decidedEl.value.trim() : '';
-    const decided = v === '' ? null : Number(v);
+    const decided = decidedEl ? parseAmountInput(decidedEl.value) : null;
     if (decided != null) {
       sums.decided += decided;
       sums.incAmt += decided - Number(tr.dataset.salaryNow || 0);
@@ -5883,10 +5897,9 @@ function collectSiReportInputs() {
     const appliedInput = tr.querySelector('.si-applied-input');
     const noteInput = tr.querySelector('.si-note-input');
     if (!amountInput || !appliedInput || !noteInput) return;  // 화면이 예상 상태가 아니면 그 행은 건너뜀
-    const val = amountInput.value.trim();
     items.push({
       employee_id: empId,
-      decided_salary: val === '' ? null : Number(val),
+      decided_salary: parseAmountInput(amountInput.value),
       applied_month: appliedInput.value ? `${appliedInput.value}-01` : null,
       note: noteInput.value.trim() || null,
     });
@@ -6125,7 +6138,7 @@ function _cloneSiTableForPrint() {
       if (e.y1_increase_amount != null) sums.y1inc += Number(e.y1_increase_amount);
       sums.nows += Number(e.salary_now || 0); sums.nowm += Number(e.monthly_now || 0);
       const decidedInput = tr.querySelector('.si-decided-input');
-      const decided = decidedInput && decidedInput.value.trim() !== '' ? Number(decidedInput.value) : null;
+      const decided = decidedInput ? parseAmountInput(decidedInput.value) : null;
       if (decided != null) { sums.decided += decided; sums.incAmt += decided - Number(tr.dataset.salaryNow || 0); }
     });
     const totalRow = clone.querySelector('.si-grand-total-row');
@@ -6147,7 +6160,7 @@ function _cloneSiTableForPrint() {
   clone.querySelectorAll('input').forEach(input => {
     const span = document.createElement('span');
     if (input.classList.contains('si-decided-input') && input.value !== '') {
-      span.textContent = fmt(Number(input.value));
+      span.textContent = fmt(parseAmountInput(input.value));
       span.style.display = 'block';
       span.style.textAlign = 'right';
     } else {
