@@ -318,6 +318,23 @@
   #promoMatrixPrintArea .table th, #promoMatrixPrintArea .hr-total-row td {
     background: transparent;
   }
+  /* [수정] 표 헤더(th) 기본 글자색이 옅은 회색(var(--text-muted))이라 인쇄에서 흐리게
+     나오는 문제 — 위와 같은 모든 인쇄 영역에서 검정색으로 강제. 지금 있는 인쇄 화면들과
+     앞으로 새로 추가되는 인쇄 화면(annualPersonalPrintArea, annualAllPrintArea 등)도
+     같은 문제가 생기지 않도록 함께 포함해둠. */
+  #printArea .table th,
+  #payslipPrintArea .table th,
+  #registerPrintArea .table th,
+  #pensionPrintArea .table th,
+  #pensionInstallPrintArea .table th,
+  #mcPrintArea .table th,
+  #bonusReportPrintArea .table th,
+  #siPrintArea .table th,
+  #promoMatrixPrintArea .table th,
+  #annualPersonalPrintArea .table th,
+  #annualAllPrintArea .table th {
+    color: #000 !important;
+  }
   /* 화면에서만 쓰는 "인쇄제외" 체크박스 칼럼은 JS(_cloneScreenTableForPrint)에서
      이미 인쇄용 표 복제본에서 제거하지만, 혹시 모를 경우를 대비한 안전장치 */
   .bonus-exclude-col { display: none !important; }
