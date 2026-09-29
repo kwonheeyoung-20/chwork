@@ -5855,6 +5855,8 @@ function printBonusReportDecision() {
 
   // 데이터 행(개별 직원): 결정기준율/증감/% 칸은 항상 제거.
   // 요율모드면 결정성과급 칸을 요율별 계산값들로 바꾸고, 비고는 맨 뒤로 유지.
+  // (합계행에 실제 요율별 합계를 넣어야 하므로 여기서 같이 누적)
+  const rateSums = rates.map(() => 0);
   Array.from(clone.querySelectorAll('tbody tr[data-emp-id]')).forEach(tr => {
     const cells = Array.from(tr.children);
     if (cells.length < 21) return;
@@ -5864,10 +5866,12 @@ function printBonusReportDecision() {
     if (rates.length > 0) {
       const emp = byId[tr.dataset.empId];
       const monthly = emp ? emp.monthly_now : null;
-      rates.forEach(r => {
+      rates.forEach((r, i) => {
+        const val = monthly ? Math.round(monthly * r / 100 / 100) * 100 : null;
+        if (val) rateSums[i] += val;
         const td = document.createElement('td');
         td.className = 'num';
-        td.textContent = monthly ? fmt(Math.round(monthly * r / 100 / 100) * 100) : '-';
+        td.textContent = val ? fmt(val) : '-';
         decidedTd.parentNode.insertBefore(td, decidedTd);
       });
       decidedTd.remove();
@@ -5887,10 +5891,10 @@ function printBonusReportDecision() {
     cells[5].remove(); // 결정기준율 빈칸 제거
     cells[7].remove(); // 증감,% 자리(colspan=2) 제거
     if (rates.length > 0) {
-      rates.forEach(r => {
+      rates.forEach((r, i) => {
         const td = document.createElement('td');
         td.className = 'num';
-        td.textContent = '-'; // 요율별 합계는 의미가 크지 않아 빈칸으로 둠(개별 비교가 목적)
+        td.textContent = fmt(rateSums[i]); // 요율별 실제 합계(대표 의사결정용)
         decidedSumTd.parentNode.insertBefore(td, decidedSumTd);
       });
       decidedSumTd.remove();
