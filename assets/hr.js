@@ -5435,6 +5435,7 @@ function renderBonusRow(e, locked) {
       <td style="background:#fff9ec;">
         <input type="text" inputmode="numeric" class="hr-input bonus-decided-input" style="width:120px; text-align:right;"
           value="${e.decided_amount != null ? Number(e.decided_amount).toLocaleString('ko-KR') : ''}" ${locked ? 'disabled' : ''}>
+        <div class="bonus-rate-refs" style="font-size:10px; color:var(--text-muted); margin-top:3px; line-height:1.5;"></div>
       </td>
       <td class="num bonus-diff-cell" style="background:#fff9ec;">-</td>
       <td class="num bonus-pct-cell" style="background:#fff9ec;">-</td>
@@ -5542,6 +5543,40 @@ function applyBonusCriteriaBulk(emptyOnly) {
     count += 1;
   });
   alert(`${count}명에게 적용했습니다. 저장하시려면 "입력내용 저장(초안)"을 눌러주세요.`);
+}
+
+/* 요율 비교(기타기준2) — 직급별 고정기준(기타기준1)과 별도로, 당해년도 월급여에
+   2~3개 요율(%)을 곱한 참고금액을 각 행에 보여주고, 클릭하면 "결정 성과급"에
+   바로 채워 넣을 수 있게 함(엑셀 참고자료의 "급여의 30%/40%" 비교표와 동일한 역할). */
+function showBonusRateRefs() {
+  const rates = [$('bonusRate1').value, $('bonusRate2').value, $('bonusRate3').value]
+    .map(v => parseFloat(v))
+    .filter(v => !isNaN(v) && v > 0);
+  if (rates.length === 0) {
+    alert('비교할 요율을 하나 이상 입력해주세요 (예: 30, 40).');
+    return;
+  }
+  const byId = {};
+  bonusReportCache.forEach(e => { byId[e.employee_id] = e; });
+  document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => {
+    const refDiv = tr.querySelector('.bonus-rate-refs');
+    if (!refDiv) return;
+    const emp = byId[tr.dataset.empId];
+    const monthly = emp ? emp.monthly_now : null;
+    if (!monthly) { refDiv.innerHTML = ''; return; }
+    refDiv.innerHTML = rates.map(r => {
+      const val = Math.round(monthly * r / 100 / 100) * 100; // 백원단위 반올림
+      return `<a class="hr-edit-link" style="margin-right:6px;" onclick="applyBonusRateRef(this, ${val})">${r}%: ${fmt(val)}</a>`;
+    }).join('');
+  });
+}
+
+function applyBonusRateRef(el, value) {
+  const tr = el.closest('tr');
+  const input = tr.querySelector('.bonus-decided-input');
+  if (!input) return;
+  input.value = Number(value).toLocaleString('ko-KR');
+  input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 async function saveBonusReportDraft() {
@@ -6608,29 +6643,148 @@ function downloadPromotionsExcel() {
   XLSX.writeFile(wb, `인사기록보고서_${$('promoAsOf').value || 'now'}.xlsx`);
 }
 
-function downloadBonusReportExcel() {
+/* 화면(성과급보고서)과 똑같은 2단 병합헤더+그룹색상 구조로 엑셀을 만들어서,
+   바로 출력하거나 일부 수치만 손으로 고쳐서 그대로 보고자료로 쓸 수 있게 함.
+   화면에서 아직 저장 안 한 입력값(결정기준/율·결정성과급·비고, 인쇄제외 체크)도
+   현재 입력된 그대로 반영함(_cloneScreenTableForPrint와 동일한 방식). */
+async function downloadBonusReportExcel() {
   if (!bonusReportCache || bonusReportCache.length === 0) { alert('먼저 조회해주세요.'); return; }
   const { year, round, y1, y2 } = bonusReportMetaCache;
-  const rows = [
-    ['순번', '이름', '지사', '부서', '직급', '입사일',
-     `${y2}년 연봉(천원)`, `${y2}년 월급여`, `${y2}년 기준/율`, `${y2}년 성과급`,
-     `${y1}년 연봉(천원)`, `${y1}년 월급여`, `${y1}년 기준/율`, `${y1}년 성과급`,
-     '당해년도 현재 연봉(천원)', '당해년도 현재 월급여',
-     '결정기준/율', '결정성과급', '비고'],
-  ];
-  bonusReportCache.forEach(e => {
-    rows.push([
-      e.seq, e.name, e.branch || '', e.department || '', e.position || '', e.hire_date || '',
-      e.salary_y2 ?? '', e.monthly_y2 ?? '', e.criteria_y2 || '', e.bonus_y2 ?? '',
-      e.salary_y1 ?? '', e.monthly_y1 ?? '', e.criteria_y1 || '', e.bonus_y1 ?? '',
-      e.salary_now ?? '', e.monthly_now ?? '',
-      e.criteria || '', e.decided_amount ?? '', e.note || '',
-    ]);
+  const sorted = [...bonusReportCache].sort((a, b) => (a.hire_date || '').localeCompare(b.hire_date || ''));
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(`${year}년 ${round}차`);
+  const thin = { style: 'thin', color: { argb: 'FFBBBBBB' } };
+  const allBorder = { top: thin, left: thin, bottom: thin, right: thin };
+
+  const singleCols = ['순번', '이름', '지사', '부서', '직급', '입사일'];
+  singleCols.forEach((label, i) => {
+    const col = i + 1;
+    sheet.mergeCells(1, col, 2, col);
+    sheet.getCell(1, col).value = label;
   });
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, `${year}년 ${round}차`);
-  XLSX.writeFile(wb, `성과급보고서_${year}_${round}차.xlsx`);
+
+  let col = singleCols.length + 1;
+  const y2ColStart = col;
+  sheet.mergeCells(1, col, 1, col + 3);
+  sheet.getCell(1, col).value = `${y2}년 이력 (전전년도)`;
+  ['연봉(천원)', '월급여', '기준/율', '성과급'].forEach((h, i) => { sheet.getCell(2, col + i).value = h; });
+  col += 4;
+
+  const y1ColStart = col;
+  sheet.mergeCells(1, col, 1, col + 3);
+  sheet.getCell(1, col).value = `${y1}년 이력 (직전년도)`;
+  ['연봉(천원)', '월급여', '기준/율', '성과급'].forEach((h, i) => { sheet.getCell(2, col + i).value = h; });
+  col += 4;
+
+  const nowColStart = col;
+  sheet.mergeCells(1, col, 1, col + 1);
+  sheet.getCell(1, col).value = '당해년도 현재 급여';
+  ['연봉(천원)', '월급여'].forEach((h, i) => { sheet.getCell(2, col + i).value = h; });
+  col += 2;
+
+  const decColStart = col;
+  sheet.mergeCells(1, col, 1, col + 4);
+  sheet.getCell(1, col).value = '당해년도 성과급 결정';
+  ['결정기준/율(입력)', '결정 성과급(입력)', '전년대비 증감', '전년대비(%)', '비고'].forEach((h, i) => { sheet.getCell(2, col + i).value = h; });
+  col += 5;
+  const totalCols = col - 1;
+
+  for (let r = 1; r <= 2; r++) {
+    for (let c = 1; c <= totalCols; c++) {
+      const cell = sheet.getCell(r, c);
+      cell.font = { bold: true };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      cell.border = allBorder;
+    }
+  }
+  const fillRange = (startCol, span, argb) => {
+    for (let c = startCol; c < startCol + span; c++) {
+      sheet.getCell(1, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+      sheet.getCell(2, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+    }
+  };
+  fillRange(y2ColStart, 4, 'FFEEF3FA');
+  fillRange(y1ColStart, 4, 'FFEAFAF0');
+  fillRange(nowColStart, 2, 'FFF2F2F2');
+  fillRange(decColStart, 5, 'FFFFF3D6');
+
+  let rowIdx = 3;
+  let seq = 0, sumY2 = 0, sumY1 = 0, sumDecided = 0;
+  sorted.forEach(e => {
+    const tr = document.querySelector(`#bonusReportTbody tr[data-emp-id="${e.employee_id}"]`);
+    const excludeChk = tr ? tr.querySelector('.bonus-exclude-checkbox') : null;
+    if (excludeChk && excludeChk.checked) return; // 인쇄 제외 체크된 사람은 엑셀에서도 제외(인쇄본과 일치)
+    seq += 1;
+    const criteriaInput = tr ? tr.querySelector('.bonus-criteria-input') : null;
+    const decidedInput = tr ? tr.querySelector('.bonus-decided-input') : null;
+    const noteInput = tr ? tr.querySelector('.bonus-note-input') : null;
+    const criteria = criteriaInput ? criteriaInput.value : (e.criteria || '');
+    const decided = decidedInput ? parseAmountInput(decidedInput.value) : e.decided_amount;
+    const note = noteInput ? noteInput.value : (e.note || '');
+    const diff = (decided != null) ? decided - (e.bonus_y1 || 0) : null;
+    const pct = (diff != null && e.bonus_y1) ? diff / e.bonus_y1 : null;
+
+    const row = sheet.getRow(rowIdx);
+    row.getCell(1).value = seq;
+    row.getCell(2).value = e.name;
+    row.getCell(3).value = e.branch || '';
+    row.getCell(4).value = e.department || '';
+    row.getCell(5).value = e.position || '';
+    row.getCell(6).value = e.hire_date || '';
+    row.getCell(y2ColStart).value = e.salary_y2 ?? null;
+    row.getCell(y2ColStart + 1).value = e.monthly_y2 ?? null;
+    row.getCell(y2ColStart + 2).value = e.criteria_y2 || '';
+    row.getCell(y2ColStart + 3).value = e.bonus_y2 ?? null;
+    row.getCell(y1ColStart).value = e.salary_y1 ?? null;
+    row.getCell(y1ColStart + 1).value = e.monthly_y1 ?? null;
+    row.getCell(y1ColStart + 2).value = e.criteria_y1 || '';
+    row.getCell(y1ColStart + 3).value = e.bonus_y1 ?? null;
+    row.getCell(nowColStart).value = e.salary_now ?? null;
+    row.getCell(nowColStart + 1).value = e.monthly_now ?? null;
+    row.getCell(decColStart).value = criteria;
+    row.getCell(decColStart + 1).value = decided ?? null;
+    row.getCell(decColStart + 2).value = diff;
+    row.getCell(decColStart + 3).value = pct;
+    row.getCell(decColStart + 4).value = note;
+
+    [y2ColStart, y2ColStart + 1, y2ColStart + 3, y1ColStart, y1ColStart + 1, y1ColStart + 3,
+     nowColStart, nowColStart + 1, decColStart + 1, decColStart + 2].forEach(c => { row.getCell(c).numFmt = '#,##0'; });
+    row.getCell(decColStart + 3).numFmt = '0.0%';
+    for (let c = 1; c <= totalCols; c++) row.getCell(c).border = allBorder;
+
+    sumY2 += e.bonus_y2 || 0; sumY1 += e.bonus_y1 || 0; sumDecided += decided || 0;
+    rowIdx += 1;
+  });
+
+  sheet.mergeCells(rowIdx, 1, rowIdx, y2ColStart + 2);
+  const totalRow = sheet.getRow(rowIdx);
+  totalRow.getCell(1).value = `합계 (${seq}명)`;
+  totalRow.getCell(1).alignment = { horizontal: 'center' };
+  totalRow.getCell(y2ColStart + 3).value = sumY2;
+  totalRow.getCell(y1ColStart + 3).value = sumY1;
+  totalRow.getCell(decColStart + 1).value = sumDecided;
+  [y2ColStart + 3, y1ColStart + 3, decColStart + 1].forEach(c => { totalRow.getCell(c).numFmt = '#,##0'; });
+  totalRow.font = { bold: true };
+  totalRow.eachCell({ includeEmpty: true }, cell => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+    cell.border = allBorder;
+  });
+
+  const widths = [6, 10, 10, 10, 8, 12, 12, 10, 12, 12, 12, 10, 12, 12, 12, 10, 14, 14, 12, 10, 18];
+  widths.forEach((w, i) => { sheet.getColumn(i + 1).width = w; });
+  sheet.views = [{ state: 'frozen', ySplit: 2 }];
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `성과급보고서_${year}_${round}차.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function downloadSalaryIncreaseExcel() {
