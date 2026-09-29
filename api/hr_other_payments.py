@@ -320,9 +320,18 @@ class handler(BaseHTTPRequestHandler):
         def finalize_one(r):
             if r.get("other_payment_id"):
                 return False  # 이미 반영된 건 중복 생성 방지
-            note_text = r.get("note") or f"{year}년 {round_no}차 성과급보고서 확정 반영"
-            if r.get("criteria"):
-                note_text = f"[{r['criteria']}] {note_text}"
+            # "기준/율" 컬럼(성과급보고서의 과거 이력 표시)에 이 note 값이 그대로 노출되므로,
+            # 결정기준/율만 입력하고 별도 비고를 안 남긴 일반적인 경우엔 기준값만 간결하게
+            # 보여주고(예: "기타기준"), "n년 n차 성과급보고서 확정 반영" 같은 부연 문구는
+            # 기준/비고를 둘 다 안 남긴 경우에만 기본값으로 채움.
+            if r.get("criteria") and r.get("note"):
+                note_text = f"[{r['criteria']}] {r['note']}"
+            elif r.get("criteria"):
+                note_text = r["criteria"]
+            elif r.get("note"):
+                note_text = r["note"]
+            else:
+                note_text = f"{year}년 {round_no}차 성과급보고서 확정 반영"
             op = rest_request("POST", "other_payments", body={
                 "employee_id": r["employee_id"],
                 "payment_type": f"성과급{round_no}차",
