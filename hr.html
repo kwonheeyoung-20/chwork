@@ -1117,6 +1117,15 @@
           </div>
 
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:10px 12px; background:#fff9ec; border-radius:var(--radius-sm); flex-wrap:wrap;">
+            <label style="font-size:13px; color:var(--text-secondary); white-space:nowrap;">요율 비교(월급여 기준, 기타기준2):</label>
+            <input id="bonusRate1" class="hr-input" type="number" step="0.1" style="width:70px; text-align:right;" placeholder="30"><span style="font-size:12px;">%</span>
+            <input id="bonusRate2" class="hr-input" type="number" step="0.1" style="width:70px; text-align:right;" placeholder="40"><span style="font-size:12px;">%</span>
+            <input id="bonusRate3" class="hr-input" type="number" step="0.1" style="width:70px; text-align:right;" placeholder="(선택)"><span style="font-size:12px;">%</span>
+            <button class="secondary" onclick="showBonusRateRefs()">표 아래에 참고금액 표시</button>
+            <span style="font-size:11px; color:var(--text-muted);">직급별 기준(기타기준1)과 별도로, 당해년도 월급여 × 요율로 계산한 참고금액을 각 행 아래 보여줍니다. 클릭하면 "결정 성과급"에 바로 채워집니다.</span>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:10px 12px; background:#fff9ec; border-radius:var(--radius-sm); flex-wrap:wrap;">
             <button class="primary" onclick="saveBonusReportDraft()">💾 입력내용 저장(초안)</button>
             <span style="width:1px; align-self:stretch; background:var(--border-strong); margin:0 4px;"></span>
             <label style="font-size:13px; color:var(--text-secondary);">귀속월:</label>
