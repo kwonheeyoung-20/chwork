@@ -794,18 +794,51 @@
             </div>
           </div>
 
-          <div class="table-wrap">
-            <table class="table" id="otherpayTable">
-              <thead>
-                <tr>
-                  <th>순번</th><th>이름</th><th>지사</th><th>부서</th><th>직급</th><th>지급유형</th>
-                  <th>귀속월</th><th>지급일자</th><th class="num">금액</th><th>비고</th><th></th>
-                </tr>
-              </thead>
-              <tbody id="otherpayTbody">
-                <tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
-              </tbody>
-            </table>
+          <!-- 묶음(같은 지급유형+귀속월+지급일자) 목록 화면 -->
+          <div id="otherpayBatchListWrap">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+              <button class="secondary" onclick="toggleAllOtherPayBatchCheck()" style="font-size:12px;">전체 선택/해제</button>
+              <button class="secondary" onclick="bulkLockOtherPayBatches(true)" style="font-size:12px;">🔒 선택 묶음 마감</button>
+              <button class="secondary" onclick="bulkLockOtherPayBatches(false)" style="font-size:12px;">🔓 선택 묶음 마감해제</button>
+              <span style="font-size:11px; color:var(--text-muted);">묶음을 마감하면 그 묶음에 속한 개별 건은 수정/삭제할 수 없습니다. 목록의 각 줄을 클릭하면 상세 내역을 볼 수 있어요.</span>
+            </div>
+            <div class="table-wrap">
+              <table class="table" id="otherpayBatchTable">
+                <thead>
+                  <tr>
+                    <th style="width:36px;"><input type="checkbox" id="otherpayBatchCheckAll" onchange="toggleAllOtherPayBatchCheck(this.checked)"></th>
+                    <th>지급유형</th><th>귀속월</th><th>지급일자</th><th class="num">인원</th><th class="num">합계금액</th><th>상태</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="otherpayBatchTbody">
+                  <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 묶음 상세(인별) 화면 -->
+          <div id="otherpayBatchDetailWrap" style="display:none;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+              <button class="secondary" onclick="showOtherPayBatchList()">← 목록으로</button>
+              <span id="otherpayBatchDetailTitle" style="font-size:13px; font-weight:600;"></span>
+              <span id="otherpayBatchDetailLockStatus"></span>
+              <button id="otherpayBatchDetailLockBtn" class="secondary" style="font-size:12px; display:none;" onclick="lockCurrentOtherPayBatch(true)">🔒 이 묶음 마감</button>
+              <button id="otherpayBatchDetailUnlockBtn" class="secondary" style="font-size:12px; display:none;" onclick="lockCurrentOtherPayBatch(false)">🔓 이 묶음 마감해제</button>
+            </div>
+            <div class="table-wrap">
+              <table class="table" id="otherpayTable">
+                <thead>
+                  <tr>
+                    <th>순번</th><th>이름</th><th>지사</th><th>부서</th><th>직급</th><th>지급유형</th>
+                    <th>귀속월</th><th>지급일자</th><th class="num">금액</th><th>비고</th><th></th>
+                  </tr>
+                </thead>
+                <tbody id="otherpayTbody">
+                  <tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
 
@@ -1072,7 +1105,8 @@
               <option value="2">2차(12월 귀속, 익년 2~3월 지급)</option>
             </select>
             <button class="secondary" onclick="loadBonusReport()">조회</button>
-            <span id="bonusLockStatus" style="font-size:12px; color:var(--text-muted); margin-left:8px;"></span>
+            <span id="bonusLockStatus" style="margin-left:8px;"></span>
+            <button id="bonusCancelFinalizeBtn" class="secondary" onclick="cancelFinalizeBonusReport()" style="display:none; font-size:12px; padding:4px 10px; color:#c82828;">↩ 확정취소(재입력 가능하게)</button>
           </div>
 
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:10px 12px; background:#fff9ec; border-radius:var(--radius-sm); flex-wrap:wrap;">
@@ -1089,7 +1123,7 @@
             <input id="bonusBelongsMonth" type="month" class="hr-input" style="width:130px;">
             <label style="font-size:13px; color:var(--text-secondary);">지급일자:</label>
             <input id="bonusPayDate" type="date" class="hr-input" style="width:150px;">
-            <button class="primary" onclick="finalizeBonusReport()" style="background:var(--red,#c82828);">✅ 확정(마감) — 성과급/기타지급에 반영</button>
+            <button id="bonusFinalizeBtn" class="primary" onclick="finalizeBonusReport()" style="background:var(--red,#c82828);">✅ 확정(마감) — 성과급/기타지급에 반영</button>
           </div>
 
           <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:14px; flex-wrap:wrap;">
