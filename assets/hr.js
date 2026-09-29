@@ -2485,85 +2485,185 @@ async function populateOtherPayEmployeeSelect() {
   }
 }
 
+let otherPaymentsCache = [];
+let otherPayLocksCache = [];
+let currentOtherPayBatchKey = null;
+let editingOtherPayId = null;
+
+/* 개별 레코드를 "지급유형+귀속월+지급일자"로 묶어 하나의 작업 단위(묶음)로 봄 —
+   백엔드 batch_key()와 반드시 같은 규칙으로 키를 만들어야 마감 상태가 서로 맞음. */
+function otherPayBatchKey(p) {
+  const bm = (p.belongs_month || p.payment_date || '').slice(0, 10);
+  const pd = (p.payment_date || '').slice(0, 10);
+  return `otherpay-batch::${p.payment_type || ''}::${bm}::${pd}`;
+}
+
+function isOtherPayBatchLocked(key) {
+  const row = otherPayLocksCache.find(l => l.period_key === key);
+  return !!(row && row.locked);
+}
+
 async function loadOtherPayments() {
   const year = $('otherpayYear').value;
-  const tbody = $('otherpayTbody');
-  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">불러오는 중…</td></tr>`;
   try {
-    const res = await fetch(`${apiBase()}/api/hr_other_payments?year=${year}`, {
-      headers: { 'X-HR-Password': hrPassword() },
-    });
+    const [res, locks] = await Promise.all([
+      fetch(`${apiBase()}/api/hr_other_payments?year=${year}`, { headers: { 'X-HR-Password': hrPassword() } }),
+      fetchLocks('/api/hr_other_payments'),
+    ]);
     const data = await res.json();
     const list = data.payments || [];
     otherPaymentsCache = list;
+    otherPayLocksCache = locks;
     $('otherpayCount').textContent = `총 ${list.length}건`;
-    if (list.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:24px;">${year}년 지급 내역이 없습니다.</td></tr>`;
-    } else {
-      tbody.innerHTML = list.map((p, idx) => {
-        const belongsMonth = (p.belongs_month || p.payment_date || '').slice(0, 7);
-        const payDate = p.payment_date || '-';
-        const fy = p.fiscal_year || belongsMonth.slice(0, 4);
-        const fyDiffers = String(fy) !== belongsMonth.slice(0, 4);
-        return `
-        <tr>
-          <td>${idx + 1}</td>
-          <td>${esc(p.employees?.name || '-')}</td>
-          <td>${esc(p.employees?.branch || '-')}</td>
-          <td>${esc(p.employees?.department || '-')}</td>
-          <td>${esc(p.employees?.position || '-')}</td>
-          <td>${esc(p.payment_type)}</td>
-          <td${fyDiffers ? ' style="color:var(--red); font-weight:600;"' : ''}>${esc(belongsMonth)}${fyDiffers ? ' ⚠' : ''}</td>
-          <td>${esc(payDate)}</td>
-          <td class="num">${fmt(p.amount)}</td>
-          <td>${esc(p.note || '-')}</td>
-          <td>
-            <a class="hr-edit-link" onclick="openOtherPayModal('${p.id}')">수정</a>
-            <a class="hr-edit-link" style="margin-left:6px;" onclick="deleteOtherPayment('${p.id}')">삭제</a>
-          </td>
-        </tr>
-      `;
-      }).join('');
-      const total = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-      tbody.innerHTML += `
-        <tr class="hr-total-row">
-          <td colspan="8">합계 (${list.length}건)</td>
-          <td class="num">${fmt(total)}</td>
-          <td colspan="2"></td>
-        </tr>
-      `;
-
-      // 지사별 합계 (전체 합계 아래에 별도 섹션으로)
-      const byBranch = {};
-      const branchOrder = [];
-      list.forEach(p => {
-        const b = p.employees?.branch || '(미지정)';
-        if (!byBranch[b]) { byBranch[b] = []; branchOrder.push(b); }
-        byBranch[b].push(p);
-      });
-      tbody.innerHTML += `
-        <tr><td colspan="11" style="padding:14px 4px 6px; font-size:12px; color:var(--text-muted); font-weight:500;">지사별 합계</td></tr>
-      `;
-      branchOrder.forEach(b => {
-        const arr = byBranch[b];
-        const branchTotal = arr.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-        tbody.innerHTML += `
-          <tr class="hr-total-row">
-            <td colspan="8">${esc(b)} (${arr.length}건)</td>
-            <td class="num">${fmt(branchTotal)}</td>
-            <td colspan="2"></td>
-          </tr>
-        `;
-      });
-    }
+    currentOtherPayBatchKey = null;
+    renderOtherPayBatchList();
+    showOtherPayBatchList();
     refreshOtherPayLockStatus();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
+    $('otherpayBatchTbody').innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패</td></tr>`;
   }
 }
 
-let otherPaymentsCache = [];
-let editingOtherPayId = null;
+/* ── 묶음 목록 화면 ── */
+function renderOtherPayBatchList() {
+  const tbody = $('otherpayBatchTbody');
+  const list = otherPaymentsCache;
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:24px;">${$('otherpayYear').value}년 지급 내역이 없습니다.</td></tr>`;
+    return;
+  }
+  const groups = {};
+  const order = [];
+  list.forEach(p => {
+    const key = otherPayBatchKey(p);
+    if (!groups[key]) {
+      groups[key] = { key, payment_type: p.payment_type, belongs_month: (p.belongs_month || p.payment_date || '').slice(0, 7), payment_date: p.payment_date, items: [] };
+      order.push(key);
+    }
+    groups[key].items.push(p);
+  });
+  order.sort((a, b) => {
+    const ga = groups[a], gb = groups[b];
+    return (gb.belongs_month + gb.payment_date).localeCompare(ga.belongs_month + ga.payment_date);
+  });
+  tbody.innerHTML = order.map(key => {
+    const g = groups[key];
+    const total = g.items.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const locked = isOtherPayBatchLocked(key);
+    const statusHtml = locked
+      ? `<span style="color:#c82828; font-weight:600;">🔒 마감됨</span>`
+      : `<span style="color:var(--text-muted);">마감 전</span>`;
+    return `
+      <tr>
+        <td><input type="checkbox" class="otherpay-batch-check" data-key="${esc(key)}"></td>
+        <td style="cursor:pointer;" onclick="showOtherPayBatchDetail('${esc(key)}')">${esc(g.payment_type)}</td>
+        <td style="cursor:pointer;" onclick="showOtherPayBatchDetail('${esc(key)}')">${esc(g.belongs_month)}</td>
+        <td style="cursor:pointer;" onclick="showOtherPayBatchDetail('${esc(key)}')">${esc(g.payment_date || '-')}</td>
+        <td class="num" style="cursor:pointer;" onclick="showOtherPayBatchDetail('${esc(key)}')">${g.items.length}명</td>
+        <td class="num" style="cursor:pointer;" onclick="showOtherPayBatchDetail('${esc(key)}')">${fmt(total)}</td>
+        <td>${statusHtml}</td>
+        <td><a class="hr-edit-link" onclick="showOtherPayBatchDetail('${esc(key)}')">상세보기</a></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function toggleAllOtherPayBatchCheck(checked) {
+  const all = document.querySelectorAll('.otherpay-batch-check');
+  const willCheck = checked !== undefined ? checked : !Array.from(all).every(c => c.checked);
+  all.forEach(c => { c.checked = willCheck; });
+  $('otherpayBatchCheckAll').checked = willCheck;
+}
+
+async function bulkLockOtherPayBatches(locked) {
+  const checked = Array.from(document.querySelectorAll('.otherpay-batch-check:checked'));
+  if (checked.length === 0) { alert('마감(또는 마감해제)할 묶음을 먼저 선택해주세요.'); return; }
+  if (!confirm(`선택한 ${checked.length}개 묶음을 ${locked ? '마감' : '마감해제'} 하시겠습니까?`)) return;
+  for (const c of checked) {
+    await lockPeriod('/api/hr_other_payments', c.dataset.key, locked);
+  }
+  loadOtherPayments();
+}
+
+/* ── 묶음 상세(인별) 화면 ── */
+function showOtherPayBatchList() {
+  currentOtherPayBatchKey = null;
+  $('otherpayBatchListWrap').style.display = '';
+  $('otherpayBatchDetailWrap').style.display = 'none';
+}
+
+function showOtherPayBatchDetail(key) {
+  currentOtherPayBatchKey = key;
+  $('otherpayBatchListWrap').style.display = 'none';
+  $('otherpayBatchDetailWrap').style.display = '';
+  renderOtherPayBatchDetail();
+}
+
+function renderOtherPayBatchDetail() {
+  const key = currentOtherPayBatchKey;
+  const list = otherPaymentsCache.filter(p => otherPayBatchKey(p) === key);
+  const tbody = $('otherpayTbody');
+  if (list.length === 0) {
+    $('otherpayBatchDetailTitle').textContent = '해당 묶음 내역이 없습니다.';
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:24px;">내역이 없습니다.</td></tr>`;
+    return;
+  }
+  const first = list[0];
+  const belongsMonth = (first.belongs_month || first.payment_date || '').slice(0, 7);
+  $('otherpayBatchDetailTitle').textContent = `${first.payment_type} · 귀속월 ${belongsMonth} · 지급일 ${first.payment_date || '-'} (${list.length}명)`;
+
+  const locked = isOtherPayBatchLocked(key);
+  $('otherpayBatchDetailLockStatus').innerHTML = locked
+    ? `<span style="display:inline-flex; align-items:center; gap:6px; padding:4px 10px; background:#fdeaea; color:#c82828; border-radius:6px; font-weight:700; font-size:12px;">🔒 마감됨</span>`
+    : `<span style="font-size:12px; color:var(--text-muted);">마감 전</span>`;
+  $('otherpayBatchDetailLockBtn').style.display = locked ? 'none' : 'inline-flex';
+  $('otherpayBatchDetailUnlockBtn').style.display = locked ? 'inline-flex' : 'none';
+
+  tbody.innerHTML = list.map((p, idx) => {
+    const belongsMonth = (p.belongs_month || p.payment_date || '').slice(0, 7);
+    const payDate = p.payment_date || '-';
+    const fy = p.fiscal_year || belongsMonth.slice(0, 4);
+    const fyDiffers = String(fy) !== belongsMonth.slice(0, 4);
+    return `
+      <tr>
+        <td>${idx + 1}</td>
+        <td>${esc(p.employees?.name || '-')}</td>
+        <td>${esc(p.employees?.branch || '-')}</td>
+        <td>${esc(p.employees?.department || '-')}</td>
+        <td>${esc(p.employees?.position || '-')}</td>
+        <td>${esc(p.payment_type)}</td>
+        <td${fyDiffers ? ' style="color:var(--red); font-weight:600;"' : ''}>${esc(belongsMonth)}${fyDiffers ? ' ⚠' : ''}</td>
+        <td>${esc(payDate)}</td>
+        <td class="num">${fmt(p.amount)}</td>
+        <td>${esc(p.note || '-')}</td>
+        <td>
+          ${locked ? '<span style="color:var(--text-muted); font-size:12px;">마감됨</span>' : `
+          <a class="hr-edit-link" onclick="openOtherPayModal('${p.id}')">수정</a>
+          <a class="hr-edit-link" style="margin-left:6px;" onclick="deleteOtherPayment('${p.id}')">삭제</a>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join('');
+  const total = list.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  tbody.innerHTML += `
+    <tr class="hr-total-row">
+      <td colspan="8">합계 (${list.length}건)</td>
+      <td class="num">${fmt(total)}</td>
+      <td colspan="2"></td>
+    </tr>
+  `;
+}
+
+async function lockCurrentOtherPayBatch(locked) {
+  if (!currentOtherPayBatchKey) return;
+  if (!confirm(`이 묶음을 ${locked ? '마감' : '마감해제'} 하시겠습니까?`)) return;
+  const ok = await lockPeriod('/api/hr_other_payments', currentOtherPayBatchKey, locked);
+  if (!ok) return;
+  const key = currentOtherPayBatchKey;
+  await loadOtherPayments();
+  showOtherPayBatchDetail(key);
+}
 
 function openOtherPayModal(id) {
   editingOtherPayId = id || null;
@@ -2616,7 +2716,7 @@ async function saveOtherPayment() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'save failed');
     closeOtherPayModal();
-    loadOtherPayments();
+    await reloadOtherPaymentsPreservingView();
   } catch (e) {
     $('otherPayMsg').textContent = e.message.includes('마감') ? e.message : '저장 중 오류가 발생했습니다.';
   }
@@ -2631,17 +2731,38 @@ async function deleteOtherPayment(id) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'delete failed');
-    loadOtherPayments();
+    await reloadOtherPaymentsPreservingView();
   } catch (e) {
     alert(e.message.includes('마감') ? e.message : '삭제 중 오류가 발생했습니다.');
   }
 }
 
+/* 수정/삭제 후 목록 전체를 다시 불러오되, 상세(묶음)화면을 보고 있었다면
+   가능하면 그 화면으로 돌아감(수정으로 다른 묶음이 됐으면 목록으로). */
+async function reloadOtherPaymentsPreservingView() {
+  const wasKey = currentOtherPayBatchKey;
+  await loadOtherPayments();
+  if (wasKey && otherPaymentsCache.some(p => otherPayBatchKey(p) === wasKey)) {
+    showOtherPayBatchDetail(wasKey);
+  }
+}
+
 function downloadOtherPaymentsExcel() {
+  // 화면(묶음 목록/상세) 상태와 무관하게, 조회된 연도 전체 데이터를 기준으로 내려받음
   const rows = [['순번', '이름', '지사', '부서', '직급', '지급유형', '귀속월', '지급일자', '금액', '비고']];
-  document.querySelectorAll('#otherpayTbody tr:not(.hr-total-row)').forEach(tr => {
-    const cells = Array.from(tr.children).slice(0, 10).map(td => td.textContent.trim());
-    if (cells.length === 10) rows.push(cells);
+  otherPaymentsCache.forEach((p, idx) => {
+    rows.push([
+      idx + 1,
+      p.employees?.name || '-',
+      p.employees?.branch || '-',
+      p.employees?.department || '-',
+      p.employees?.position || '-',
+      p.payment_type,
+      (p.belongs_month || p.payment_date || '').slice(0, 7),
+      p.payment_date || '-',
+      Number(p.amount) || 0,
+      p.note || '-',
+    ]);
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
   const wb = XLSX.utils.book_new();
@@ -5257,7 +5378,11 @@ async function loadBonusReport() {
     bonusReportMetaCache = { year: data.year, round: data.round, y1: data.y1, y2: data.y2, locked: data.locked };
     $('bonusY2GroupHeader').textContent = `${data.y2}년 이력 (전전년도)`;
     $('bonusY1GroupHeader').textContent = `${data.y1}년 이력 (직전년도)`;
-    $('bonusLockStatus').textContent = data.locked ? `🔒 ${year}년 ${round}차 마감됨` : `${year}년 ${round}차 마감 전`;
+    $('bonusLockStatus').innerHTML = data.locked
+      ? `<span style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; background:#fdeaea; color:#c82828; border-radius:6px; font-weight:700; font-size:13px;">🔒 ${year}년 ${round}차 확정(마감) 완료</span>`
+      : `<span style="font-size:12px; color:var(--text-muted);">${year}년 ${round}차 마감 전</span>`;
+    $('bonusFinalizeBtn').style.display = data.locked ? 'none' : '';
+    $('bonusCancelFinalizeBtn').style.display = data.locked ? 'inline-flex' : 'none';
     const parsed = parseBonusCriteriaNote(data.criteria_note || '');
     $('bonusCriteriaNote').value = parsed.freeText;
     bonusCriteriaRows = parsed.rows.length > 0 ? parsed.rows : [{ position: '', criteria: '', note: '' }];
@@ -5466,11 +5591,17 @@ async function finalizeBonusReport() {
 
   const items = collectBonusReportInputs();
   try {
-    await fetch(`${apiBase()}/api/hr_other_payments`, {
+    // 확정은 반드시 "지금 화면에 있는 입력값 저장"이 먼저 성공해야 진행함 —
+    // 저장이 실패한 채로(마감 등 이유) 넘어가면 화면과 다른(예전) 입력값 기준으로
+    // 확정돼버릴 수 있어서, 저장 응답을 확인하고 실패하면 확정을 중단함.
+    const saveRes = await fetch(`${apiBase()}/api/hr_other_payments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
       body: JSON.stringify({ type: 'bonus_save', year, round, items }),
     });
+    const saveData = await saveRes.json();
+    if (!saveRes.ok) { alert('저장 실패: ' + (saveData.error || '') + '\n확정을 중단합니다.'); return; }
+
     const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
@@ -5478,10 +5609,33 @@ async function finalizeBonusReport() {
     });
     const data = await res.json();
     if (!res.ok) { alert('확정 실패: ' + (data.error || '')); return; }
-    alert(`확정 완료! ${data.created}건이 성과급/기타지급에 등록됐습니다.`);
+    alert(`확정 완료! ${data.created}건이 성과급/기타지급에 등록됐습니다.\n이 차수는 이제 마감 상태로 표시되며, 재확정되지 않습니다.`);
     loadBonusReport();
   } catch (e) {
     alert('확정 중 오류가 발생했습니다.');
+  }
+}
+
+/* 성과급보고서 "확정취소" — 확정으로 "성과급/기타지급"에 반영됐던 금액을 지우고
+   이 차수를 다시 입력 가능한 상태로 되돌림(재확정 가능). 단, 그 반영된 묶음이
+   "성과급/기타지급" 화면에서 이미 별도로(묶음) 마감되어 있으면 서버가 거부함 —
+   그 경우엔 먼저 그 화면에서 묶음 마감해제를 해야 함. */
+async function cancelFinalizeBonusReport() {
+  const year = Number($('bonusYear').value);
+  const round = Number($('bonusRound').value);
+  if (!confirm(`${year}년 ${round}차 성과급 확정을 취소하시겠습니까?\n\n"성과급/기타지급"에 반영됐던 금액이 삭제되고, 이 차수는 다시 입력 가능한 상태(마감 전)로 돌아갑니다. 이후 내용을 고쳐서 다시 확정할 수 있습니다.`)) return;
+  try {
+    const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-HR-Password': hrPassword() },
+      body: JSON.stringify({ type: 'bonus_cancel_finalize', year, round }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || '확정취소 실패'); return; }
+    alert(`확정취소되었습니다.${data.deleted ? ` (${data.deleted}건 삭제)` : ''} 다시 입력 후 확정하실 수 있습니다.`);
+    loadBonusReport();
+  } catch (e) {
+    alert('확정취소 중 오류가 발생했습니다.');
   }
 }
 
