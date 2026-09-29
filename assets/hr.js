@@ -5798,7 +5798,11 @@ function _cloneScreenTableForPrint() {
   return clone;
 }
 
-/* ── 인쇄(의사결정용): 화면 그대로 + "당해년도 성과급 결정" 4칸 중 결정성과급 한 칸만 남김 ── */
+/* ── 인쇄(의사결정용): 화면 그대로 + "당해년도 성과급 결정" 부분을 정리.
+   요율 비교(기타기준2)에 입력된 요율이 있으면, 결정성과급 한 칸 대신
+   "성과급의 30% / 성과급의 40% / ... / 비고" 형태로 각 요율별 금액을 나란히
+   보여줘서 대표가 그중에서 고를 수 있게 함(엑셀 의사결정표와 동일한 형태).
+   요율을 입력 안 했으면 기존처럼 결정 성과급 한 칸만 보여줌. */
 function printBonusReportDecision() {
   if (bonusReportCache.length === 0) {
     alert('먼저 조회해주세요.');
@@ -5808,37 +5812,88 @@ function printBonusReportDecision() {
   const round = $('bonusRound').value;
   $('bonus_print_title').textContent = `${year}년 성과급 검토표 - ${round}차 (의사결정용)`;
 
-  const clone = _cloneScreenTableForPrint();
+  const rates = [$('bonusRate1').value, $('bonusRate2').value, $('bonusRate3').value]
+    .map(v => parseFloat(v))
+    .filter(v => !isNaN(v) && v > 0);
 
-  // 헤더 1행: "당해년도 성과급 결정" 그룹(colspan 5 -> 1, 결정성과급만 남김. 비고는 별도 rowspan 컬럼으로 새로 추가)
+  const byId = {};
+  bonusReportCache.forEach(e => { byId[e.employee_id] = e; });
+
+  const clone = _cloneScreenTableForPrint();
+  const decisionColCount = rates.length > 0 ? (rates.length + 1) : 1; // 요율별 칸 + 비고, 또는 결정성과급 1칸
+
+  // 헤더 1행: "당해년도 성과급 결정" 그룹 colspan을 실제 남길 칸 수에 맞춤
   const headRow1 = clone.querySelector('thead tr:nth-child(1)');
   const decisionGroupTh = headRow1.children[headRow1.children.length - 1]; // 마지막 th = 결정 그룹헤더
-  decisionGroupTh.setAttribute('colspan', '1');
+  decisionGroupTh.setAttribute('colspan', String(decisionColCount));
 
-  // 헤더 2행: 결정기준/율(input), 전년대비 증감, 전년대비(%), 비고 서브헤더 중 결정성과급만 남김
+  // 헤더 2행: 결정기준/율(input), 전년대비 증감, 전년대비(%) 서브헤더는 항상 제거.
+  // 비고는 요율모드에서 새로 추가하고, 결정기준율/증감/%는 어느 쪽이든 필요없음.
   const headRow2 = clone.querySelector('thead tr:nth-child(2)');
   const head2Cells = Array.from(headRow2.children);
   // 0-based 순서: [0~3]y2 [4~7]y1 [8~9]현재 [10]결정기준율 [11]결정성과급 [12]전년대비증감 [13]전년대비% [14]비고
-  [head2Cells[10], head2Cells[12], head2Cells[13], head2Cells[14]].forEach(el => el && el.remove());
-  const decidedTh = headRow2.children[10]; // 위 4개 제거 후 이제 10번째가 "결정 성과급(입력)"
-  if (decidedTh) decidedTh.textContent = '결정 성과급';
+  const decidedTh = head2Cells[11];
+  [head2Cells[10], head2Cells[12], head2Cells[13]].forEach(el => el && el.remove());
+  if (rates.length > 0) {
+    const biGoTh = head2Cells[14]; // 비고는 남겨서 맨 뒤로 옮김
+    rates.forEach(r => {
+      const th = document.createElement('th');
+      th.textContent = `성과급의 ${r}%`;
+      decidedTh.parentNode.insertBefore(th, decidedTh);
+    });
+    decidedTh.remove(); // 기존 "결정 성과급(입력)" 칸은 요율 칸들로 대체
+    if (biGoTh) biGoTh.parentNode.appendChild(biGoTh); // 비고를 맨 뒤로 이동
+  } else {
+    head2Cells[14].remove(); // 비고 제거(기존 동작 유지)
+    if (decidedTh) decidedTh.textContent = '결정 성과급';
+  }
 
-  // 데이터 행(개별 직원)만 컬럼 제거: 17,19,20,21번째(1-based) td 제거, 결정성과급(18번째)만 남김
-  Array.from(clone.querySelectorAll('tbody tr')).forEach(tr => {
-    if (tr.classList.contains('bonus-subtotal-row') || tr.classList.contains('bonus-grand-total-row')) return; // 소계/전체합계행은 아래서 별도 처리
+  // 데이터 행(개별 직원): 결정기준율/증감/% 칸은 항상 제거.
+  // 요율모드면 결정성과급 칸을 요율별 계산값들로 바꾸고, 비고는 맨 뒤로 유지.
+  Array.from(clone.querySelectorAll('tbody tr[data-emp-id]')).forEach(tr => {
     const cells = Array.from(tr.children);
     if (cells.length < 21) return;
-    [cells[16], cells[18], cells[19], cells[20]].forEach(td => td && td.remove()); // 0-based: 16=결정기준율,18=증감,19=%,20=비고
+    const decidedTd = cells[17];
+    const noteTd = cells[20];
+    [cells[16], cells[18], cells[19]].forEach(td => td && td.remove()); // 결정기준율,증감,%
+    if (rates.length > 0) {
+      const emp = byId[tr.dataset.empId];
+      const monthly = emp ? emp.monthly_now : null;
+      rates.forEach(r => {
+        const td = document.createElement('td');
+        td.className = 'num';
+        td.textContent = monthly ? fmt(Math.round(monthly * r / 100 / 100) * 100) : '-';
+        decidedTd.parentNode.insertBefore(td, decidedTd);
+      });
+      decidedTd.remove();
+      if (noteTd) noteTd.parentNode.appendChild(noteTd); // 비고를 맨 뒤로
+    } else {
+      if (noteTd) noteTd.remove(); // 기존 동작: 비고 제거
+    }
   });
 
-  // 소계행/전체합계행: colspan 구조라 위와 같은 방식으로 정리
+  // 소계행/전체합계행: colspan 구조라 별도 처리
   // (구조: [colspan9][y2][colspan3][y1][colspan2][빈칸=결정기준율][결정합계][colspan3=증감,%,비고])
   const fixTotalRow = (tr) => {
     const cells = Array.from(tr.children);
     if (cells.length !== 9) return;
+    const decidedSumTd = cells[6];
+    const noteTd = cells[8];
     cells[5].remove(); // 결정기준율 빈칸 제거
     cells[7].remove(); // 증감,% 자리(colspan=2) 제거
-    cells[8].remove(); // 비고 자리 제거
+    if (rates.length > 0) {
+      rates.forEach(r => {
+        const td = document.createElement('td');
+        td.className = 'num';
+        td.textContent = '-'; // 요율별 합계는 의미가 크지 않아 빈칸으로 둠(개별 비교가 목적)
+        decidedSumTd.parentNode.insertBefore(td, decidedSumTd);
+      });
+      decidedSumTd.remove();
+      if (noteTd) noteTd.parentNode.appendChild(noteTd);
+      if (noteTd) noteTd.setAttribute('colspan', '1');
+    } else {
+      if (noteTd) noteTd.remove();
+    }
   };
   clone.querySelectorAll('tbody tr.bonus-subtotal-row').forEach(fixTotalRow);
   const grandTotalRow = clone.querySelector('.bonus-grand-total-row');
