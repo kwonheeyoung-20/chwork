@@ -5407,6 +5407,11 @@ async function loadBonusReport() {
     });
     document.querySelectorAll('#bonusReportTbody tr[data-emp-id]').forEach(tr => updateBonusRowCalc(tr));
     renderBonusReportTotals();
+    // 표를 새로 그리면 요율 참고금액 칸도 비워지므로, 요율이 이미 입력돼 있으면
+    // (저장 후 재조회처럼 화면이 다시 그려질 때도) 자동으로 다시 계산해서 보여줌
+    if ([$('bonusRate1').value, $('bonusRate2').value, $('bonusRate3').value].some(v => parseFloat(v) > 0)) {
+      showBonusRateRefs();
+    }
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="22" style="text-align:center; color:var(--red); padding:24px;">불러오기 실패<br><span style="font-size:11px; color:var(--text-muted);">${esc(e.message || '')}</span></td></tr>`;
   }
@@ -6706,6 +6711,11 @@ async function downloadBonusReportExcel() {
   if (!bonusReportCache || bonusReportCache.length === 0) { alert('먼저 조회해주세요.'); return; }
   const { year, round, y1, y2 } = bonusReportMetaCache;
   const sorted = [...bonusReportCache].sort((a, b) => (a.hire_date || '').localeCompare(b.hire_date || ''));
+  const rates = [$('bonusRate1').value, $('bonusRate2').value, $('bonusRate3').value]
+    .map(v => parseFloat(v))
+    .filter(v => !isNaN(v) && v > 0);
+  const byId = {};
+  bonusReportCache.forEach(e => { byId[e.employee_id] = e; });
 
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet(`${year}년 ${round}차`);
@@ -6738,11 +6748,17 @@ async function downloadBonusReportExcel() {
   ['연봉(천원)', '월급여'].forEach((h, i) => { sheet.getCell(2, col + i).value = h; });
   col += 2;
 
+  // 요율(기타기준2)이 입력돼 있으면 "결정기준/율·결정성과급·전년대비" 대신
+  // "성과급의 30%/성과급의 40%/..." 열을 나란히 보여주고 비고를 맨 뒤에 둠
+  // (인쇄(의사결정용)와 동일한 형태). 요율이 없으면 기존 5칸 그대로.
   const decColStart = col;
-  sheet.mergeCells(1, col, 1, col + 4);
+  const decLabels = rates.length > 0
+    ? [...rates.map(r => `성과급의 ${r}%`), '비고']
+    : ['결정기준/율(입력)', '결정 성과급(입력)', '전년대비 증감', '전년대비(%)', '비고'];
+  sheet.mergeCells(1, col, 1, col + decLabels.length - 1);
   sheet.getCell(1, col).value = '당해년도 성과급 결정';
-  ['결정기준/율(입력)', '결정 성과급(입력)', '전년대비 증감', '전년대비(%)', '비고'].forEach((h, i) => { sheet.getCell(2, col + i).value = h; });
-  col += 5;
+  decLabels.forEach((h, i) => { sheet.getCell(2, col + i).value = h; });
+  col += decLabels.length;
   const totalCols = col - 1;
 
   for (let r = 1; r <= 2; r++) {
@@ -6766,19 +6782,14 @@ async function downloadBonusReportExcel() {
 
   let rowIdx = 3;
   let seq = 0, sumY2 = 0, sumY1 = 0, sumDecided = 0;
+  const rateSums = rates.map(() => 0);
   sorted.forEach(e => {
     const tr = document.querySelector(`#bonusReportTbody tr[data-emp-id="${e.employee_id}"]`);
     const excludeChk = tr ? tr.querySelector('.bonus-exclude-checkbox') : null;
     if (excludeChk && excludeChk.checked) return; // 인쇄 제외 체크된 사람은 엑셀에서도 제외(인쇄본과 일치)
     seq += 1;
-    const criteriaInput = tr ? tr.querySelector('.bonus-criteria-input') : null;
-    const decidedInput = tr ? tr.querySelector('.bonus-decided-input') : null;
     const noteInput = tr ? tr.querySelector('.bonus-note-input') : null;
-    const criteria = criteriaInput ? criteriaInput.value : (e.criteria || '');
-    const decided = decidedInput ? parseAmountInput(decidedInput.value) : e.decided_amount;
     const note = noteInput ? noteInput.value : (e.note || '');
-    const diff = (decided != null) ? decided - (e.bonus_y1 || 0) : null;
-    const pct = (diff != null && e.bonus_y1) ? diff / e.bonus_y1 : null;
 
     const row = sheet.getRow(rowIdx);
     row.getCell(1).value = seq;
@@ -6797,18 +6808,38 @@ async function downloadBonusReportExcel() {
     row.getCell(y1ColStart + 3).value = e.bonus_y1 ?? null;
     row.getCell(nowColStart).value = e.salary_now ?? null;
     row.getCell(nowColStart + 1).value = e.monthly_now ?? null;
-    row.getCell(decColStart).value = criteria;
-    row.getCell(decColStart + 1).value = decided ?? null;
-    row.getCell(decColStart + 2).value = diff;
-    row.getCell(decColStart + 3).value = pct;
-    row.getCell(decColStart + 4).value = note;
 
     [y2ColStart, y2ColStart + 1, y2ColStart + 3, y1ColStart, y1ColStart + 1, y1ColStart + 3,
-     nowColStart, nowColStart + 1, decColStart + 1, decColStart + 2].forEach(c => { row.getCell(c).numFmt = '#,##0'; });
-    row.getCell(decColStart + 3).numFmt = '0.0%';
+     nowColStart, nowColStart + 1].forEach(c => { row.getCell(c).numFmt = '#,##0'; });
+
+    if (rates.length > 0) {
+      rates.forEach((r, i) => {
+        const val = e.monthly_now ? Math.round(e.monthly_now * r / 100 / 100) * 100 : null;
+        row.getCell(decColStart + i).value = val;
+        row.getCell(decColStart + i).numFmt = '#,##0';
+        if (val) rateSums[i] += val;
+      });
+      row.getCell(decColStart + rates.length).value = note;
+    } else {
+      const criteriaInput = tr ? tr.querySelector('.bonus-criteria-input') : null;
+      const decidedInput = tr ? tr.querySelector('.bonus-decided-input') : null;
+      const criteria = criteriaInput ? criteriaInput.value : (e.criteria || '');
+      const decided = decidedInput ? parseAmountInput(decidedInput.value) : e.decided_amount;
+      const diff = (decided != null) ? decided - (e.bonus_y1 || 0) : null;
+      const pct = (diff != null && e.bonus_y1) ? diff / e.bonus_y1 : null;
+      row.getCell(decColStart).value = criteria;
+      row.getCell(decColStart + 1).value = decided ?? null;
+      row.getCell(decColStart + 2).value = diff;
+      row.getCell(decColStart + 3).value = pct;
+      row.getCell(decColStart + 4).value = note;
+      row.getCell(decColStart + 1).numFmt = '#,##0';
+      row.getCell(decColStart + 2).numFmt = '#,##0';
+      row.getCell(decColStart + 3).numFmt = '0.0%';
+      sumDecided += decided || 0;
+    }
     for (let c = 1; c <= totalCols; c++) row.getCell(c).border = allBorder;
 
-    sumY2 += e.bonus_y2 || 0; sumY1 += e.bonus_y1 || 0; sumDecided += decided || 0;
+    sumY2 += e.bonus_y2 || 0; sumY1 += e.bonus_y1 || 0;
     rowIdx += 1;
   });
 
@@ -6818,15 +6849,24 @@ async function downloadBonusReportExcel() {
   totalRow.getCell(1).alignment = { horizontal: 'center' };
   totalRow.getCell(y2ColStart + 3).value = sumY2;
   totalRow.getCell(y1ColStart + 3).value = sumY1;
-  totalRow.getCell(decColStart + 1).value = sumDecided;
-  [y2ColStart + 3, y1ColStart + 3, decColStart + 1].forEach(c => { totalRow.getCell(c).numFmt = '#,##0'; });
+  [y2ColStart + 3, y1ColStart + 3].forEach(c => { totalRow.getCell(c).numFmt = '#,##0'; });
+  if (rates.length > 0) {
+    rateSums.forEach((s, i) => { totalRow.getCell(decColStart + i).value = s; totalRow.getCell(decColStart + i).numFmt = '#,##0'; });
+  } else {
+    totalRow.getCell(decColStart + 1).value = sumDecided;
+    totalRow.getCell(decColStart + 1).numFmt = '#,##0';
+  }
   totalRow.font = { bold: true };
   totalRow.eachCell({ includeEmpty: true }, cell => {
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
     cell.border = allBorder;
   });
 
-  const widths = [6, 10, 10, 10, 8, 12, 12, 10, 12, 12, 12, 10, 12, 12, 12, 10, 14, 14, 12, 10, 18];
+  const fixedWidths = [6, 10, 10, 10, 8, 12, 12, 10, 12, 12, 12, 10, 12, 12, 12, 10];
+  const decWidths = rates.length > 0
+    ? [...rates.map(() => 14), 18]
+    : [14, 14, 12, 10, 18];
+  const widths = [...fixedWidths, ...decWidths];
   widths.forEach((w, i) => { sheet.getColumn(i + 1).width = w; });
   sheet.views = [{ state: 'frozen', ySplit: 2 }];
 
