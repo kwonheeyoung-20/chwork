@@ -5379,7 +5379,7 @@ async function loadBonusReport() {
     $('bonusY2GroupHeader').textContent = `${data.y2}년 이력 (전전년도)`;
     $('bonusY1GroupHeader').textContent = `${data.y1}년 이력 (직전년도)`;
     $('bonusLockStatus').innerHTML = data.locked
-      ? `<span style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; background:#fdeaea; color:#c82828; border-radius:6px; font-weight:700; font-size:13px;">🔒 ${year}년 ${round}차 확정(마감) 완료</span>`
+      ? `<span style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px; background:#fdeaea; color:#c82828; border-radius:6px; font-weight:700; font-size:13px;">✅ ${year}년 ${round}차 확정됨 (이 화면 수정 잠김)</span>`
       : `<span style="font-size:12px; color:var(--text-muted);">${year}년 ${round}차 마감 전</span>`;
     $('bonusFinalizeBtn').style.display = data.locked ? 'none' : '';
     $('bonusCancelFinalizeBtn').style.display = data.locked ? 'inline-flex' : 'none';
@@ -5622,7 +5622,7 @@ async function finalizeBonusReport() {
   const payDate = $('bonusPayDate').value;
   if (!belongsMonth) { alert('귀속월을 먼저 선택해주세요.'); return; }
   if (!payDate) { alert('지급일자를 먼저 선택해주세요.'); return; }
-  if (!confirm(`${year}년 ${round}차 성과급을 확정(마감)하시겠습니까?\n결정된 금액이 "성과급/기타지급"에 자동 등록되고, 이 차수는 잠깁니다.`)) return;
+  if (!confirm(`${year}년 ${round}차 성과급을 확정하시겠습니까?\n결정된 금액이 "성과급/기타지급"에 자동 등록되고, 이 화면(성과급보고서)에서는 재입력이 잠깁니다(재입력하려면 나중에 "확정취소" 필요).\n\n※ 실제 지급 마감(잠금)은 이것과 별개로 "성과급/기타지급" 메뉴에서 진행해주세요.`)) return;
 
   const items = collectBonusReportInputs();
   try {
@@ -5644,7 +5644,7 @@ async function finalizeBonusReport() {
     });
     const data = await res.json();
     if (!res.ok) { alert('확정 실패: ' + (data.error || '')); return; }
-    alert(`확정 완료! ${data.created}건이 성과급/기타지급에 등록됐습니다.\n이 차수는 이제 마감 상태로 표시되며, 재확정되지 않습니다.`);
+    alert(`확정 완료! ${data.created}건이 성과급/기타지급에 등록됐습니다.\n이 화면에서는 재입력이 잠기며, 재확정하려면 "확정취소"를 먼저 눌러주세요.\n실제 지급 마감은 "성과급/기타지급" 메뉴에서 별도로 진행해주세요.`);
     loadBonusReport();
   } catch (e) {
     alert('확정 중 오류가 발생했습니다.');
@@ -5658,7 +5658,7 @@ async function finalizeBonusReport() {
 async function cancelFinalizeBonusReport() {
   const year = Number($('bonusYear').value);
   const round = Number($('bonusRound').value);
-  if (!confirm(`${year}년 ${round}차 성과급 확정을 취소하시겠습니까?\n\n"성과급/기타지급"에 반영됐던 금액이 삭제되고, 이 차수는 다시 입력 가능한 상태(마감 전)로 돌아갑니다. 이후 내용을 고쳐서 다시 확정할 수 있습니다.`)) return;
+  if (!confirm(`${year}년 ${round}차 성과급 확정을 취소하시겠습니까?\n\n"성과급/기타지급"에 반영됐던 금액이 삭제되고, 이 화면은 다시 입력 가능한 상태로 돌아갑니다. 이후 내용을 고쳐서 다시 확정할 수 있습니다.`)) return;
   try {
     const res = await fetch(`${apiBase()}/api/hr_other_payments`, {
       method: 'POST',
