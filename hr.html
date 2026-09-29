@@ -1093,7 +1093,7 @@
           </div>
           <p style="font-size:12px; color:var(--text-muted); margin:-6px 0 12px;">
             직전 2개년도의 연봉·월급·성과급 지급이력을 비교하여 당해년도 성과급을 검토·결정하기 위한 자료예요.
-            1차·2차는 지급 기준이 다르니 각각 따로 입력·마감할 수 있어요. 마감하면 결정된 금액이 "성과급/기타지급"에 자동으로 등록됩니다.
+            1차·2차는 지급 기준이 다르니 각각 따로 입력·확정할 수 있어요. 확정하면 결정된 금액이 "성과급/기타지급"에 자동으로 등록되고 이 화면은 잠깁니다(재입력하려면 "확정취소"). 실제 지급 마감(잠금)은 "성과급/기타지급" 메뉴에서 진행해주세요.
           </p>
 
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:14px; padding:12px; background:var(--bg); border-radius:var(--radius-sm); flex-wrap:wrap;">
@@ -1132,7 +1132,7 @@
             <input id="bonusBelongsMonth" type="month" class="hr-input" style="width:130px;">
             <label style="font-size:13px; color:var(--text-secondary);">지급일자:</label>
             <input id="bonusPayDate" type="date" class="hr-input" style="width:150px;">
-            <button id="bonusFinalizeBtn" class="primary" onclick="finalizeBonusReport()" style="background:var(--red,#c82828);">✅ 확정(마감) — 성과급/기타지급에 반영</button>
+            <button id="bonusFinalizeBtn" class="primary" onclick="finalizeBonusReport()" style="background:var(--red,#c82828);">✅ 확정 — 성과급/기타지급에 반영</button>
           </div>
 
           <div style="display:flex; align-items:center; gap:8px; margin-top:22px; margin-bottom:14px; flex-wrap:wrap;">
